@@ -1,0 +1,82 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 4368d99..1e86155 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -28,7 +28,12 @@ add_library(advanced_network_common SHARED
+   managers/dpdk/adv_network_dpdk_mgr.cpp
+ )
+ 
+-target_include_directories(advanced_network_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/managers ${CMAKE_CURRENT_SOURCE_DIR}/managers/dpdk ${CMAKE_CURRENT_SOURCE_DIR})
++target_include_directories(advanced_network_common PUBLIC
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/managers>
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/managers/dpdk>
++    $<INSTALL_INTERFACE:include/holoscan/operators/advanced_network>
++)
+ 
+ add_library(advanced_network_rx SHARED adv_network_rx.cpp)
+ add_library(advanced_network_tx SHARED adv_network_tx.cpp)
+@@ -60,6 +65,50 @@ target_link_libraries(advanced_network_common PUBLIC holoscan::core)
+ target_link_libraries(advanced_network_rx PUBLIC advanced_network_common)
+ target_link_libraries(advanced_network_tx PUBLIC advanced_network_common)
+ 
+-if(HOLOHUB_BUILD_PYTHON)
+-    add_subdirectory(python)
+-endif()
++### Install Instructions ###
++
++# Cleanup these options.
++set_target_properties(advanced_network_common PROPERTIES INTERFACE_COMPILE_OPTIONS "")
++set_target_properties(advanced_network_rx PROPERTIES INTERFACE_COMPILE_OPTIONS "")
++set_target_properties(advanced_network_tx PROPERTIES INTERFACE_COMPILE_OPTIONS "")
++
++# Install the libraries.
++install(TARGETS advanced_network_common advanced_network_rx advanced_network_tx
++        EXPORT AdvancedNetworkTargets
++        LIBRARY DESTINATION lib
++        ARCHIVE DESTINATION lib
++        RUNTIME DESTINATION bin
++	INCLUDES DESTINATION include)
++
++# Install the public header files.
++install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/adv_network_tx.h
++              ${CMAKE_CURRENT_SOURCE_DIR}/adv_network_rx.h
++              ${CMAKE_CURRENT_SOURCE_DIR}/adv_network_types.h
++              ${CMAKE_CURRENT_SOURCE_DIR}/adv_network_common.h
++              ${CMAKE_CURRENT_SOURCE_DIR}/adv_network_kernels.h
++        DESTINATION include/holoscan/operators/advanced_network)
++
++# Export the targets to a script.
++install(EXPORT AdvancedNetworkTargets
++        FILE AdvancedNetworkTargets.cmake
++        NAMESPACE holoscan::ops::
++        DESTINATION lib/cmake/AdvancedNetwork)
++
++# Install Config and Version files.
++include(CMakePackageConfigHelpers)
++configure_package_config_file(
++	${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in
++	${CMAKE_CURRENT_BINARY_DIR}/AdvancedNetworkConfig.cmake
++	INSTALL_DESTINATION lib/cmake/AdvancedNetwork
++	NO_SET_AND_CHECK_MACRO
++	NO_CHECK_REQUIRED_COMPONENTS_MACRO)
++
++write_basic_package_version_file(
++	${CMAKE_CURRENT_BINARY_DIR}/AdvancedNetworkConfigVersion.cmake
++	VERSION 1.0
++ 	COMPATIBILITY AnyNewerVersion)
++
++install(FILES
++	${CMAKE_CURRENT_BINARY_DIR}/AdvancedNetworkConfig.cmake
++	${CMAKE_CURRENT_BINARY_DIR}/AdvancedNetworkConfigVersion.cmake
++	DESTINATION lib/cmake/AdvancedNetwork)
+diff --git a/Config.cmake.in b/Config.cmake.in
+new file mode 100644
+index 0000000..02d8b6f
+--- /dev/null
++++ b/Config.cmake.in
+@@ -0,0 +1,4 @@
++
++@PACKAGE_INIT@
++
++include ( "${CMAKE_CURRENT_LIST_DIR}/AdvancedNetworkTargets.cmake" )

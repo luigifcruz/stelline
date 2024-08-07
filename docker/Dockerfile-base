@@ -1,0 +1,74 @@
+FROM nvcr.io/nvidia/clara-holoscan/holoscan:v2.0.0-dgpu
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+#
+# Clone Holohub
+#
+
+RUN git clone https://github.com/nvidia-holoscan/holohub.git /workspace/holohub && \
+    cd /workspace/holohub && \
+    git checkout 2fe24a6f91824733c4f37d3a1267e332ce3de1d9 && \
+    git submodule update --init --recursive
+
+#
+# Advanced Network Operator
+#
+
+# Install DPDK (Advanced Network Dependency)
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        build-essential \
+        python3-pyelftools \
+        libnuma-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        python3-dev \
+        python3-pip \
+        && rm -rf /var/lib/apt/lists/*
+RUN python3 -m pip install meson ninja
+
+RUN wget -q https://fast.dpdk.org/rel/dpdk-23.11.tar.xz && \
+    tar xf dpdk-23.11.tar.xz && \
+    cd dpdk-23.11/ && \
+    patch --ignore-whitespace --fuzz 3 \
+        drivers/gpu/cuda/devices.h \
+        /workspace/holohub/operators/advanced_network/dpdk_patches/devices.h.patch && \
+    patch --ignore-whitespace --fuzz 3 \
+        drivers/gpu/cuda/cuda.c \
+        /workspace/holohub/operators/advanced_network/dpdk_patches/cuda.c.patch && \
+    meson build -Dplatform=generic -Dc_args=-I/usr/local/cuda/include && \
+    ninja -C build install
+
+# Install Advanced Network Operator
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        pkg-config \
+        && rm -rf /var/lib/apt/lists/*
+
+COPY ./docker/patches /workspace/patches
+RUN cd /workspace/holohub/operators/advanced_network && \
+    patch -p1 < /workspace/patches/adv_networking_install.patch && \
+    patch -p1 < /workspace/patches/adv_networking_multi.patch && \
+    rm -fr build && \
+    mkdir build && \
+    cd build && \
+    cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release && \
+    ninja install
+
+#
+# Install MatX
+#
+
+RUN git clone https://github.com/NVIDIA/MatX.git /workspace/MatX && \
+    cd /workspace/MatX && \
+    git checkout v0.7.0 && \
+    git submodule update --init --recursive && \
+    mkdir build && cd build &&\
+    cmake -DMATX_BUILD_DOCS=OFF .. && \
+    make -j && \
+    make install

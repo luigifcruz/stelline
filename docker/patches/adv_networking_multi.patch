@@ -1,0 +1,12 @@
+diff --git a/managers/dpdk/adv_network_dpdk_mgr.cpp b/managers/dpdk/adv_network_dpdk_mgr.cpp
+index e0db965..c140881 100644
+--- a/managers/dpdk/adv_network_dpdk_mgr.cpp
++++ b/managers/dpdk/adv_network_dpdk_mgr.cpp
+@@ -204,6 +204,7 @@ std::string DpdkMgr::generate_random_string(int len) {
+     const char tokens[] = "abcdefghijklmnopqrstuvwxyz";
+     std::string tmp;
+ 
++    srand(time(NULL));
+     for (int i = 0; i < len; i++) {
+       tmp += tokens[rand() % (sizeof(tokens) - 1)];
+     }

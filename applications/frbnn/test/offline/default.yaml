@@ -1,0 +1,13 @@
+%YAML 1.2
+---
+extensions:
+  - libgxf_std.so
+
+test_settings:
+  batch_size: 32
+  test_data_path: ./applications/frbnn/test/offline/data/input.bin
+  validation_data_path: ./applications/frbnn/test/offline/data/output.bin
+
+frbnn_inferencee:
+  frbnn_preprocessor_path: ./applications/frbnn/model/frbnn_preprocessor.trt
+  frbnn_path: ./applications/frbnn/model/frbnn.trt

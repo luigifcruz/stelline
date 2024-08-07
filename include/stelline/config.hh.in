@@ -1,0 +1,27 @@
+#define STELLINE_VERSION_STR "@version@"
+#define STELLINE_BUILD_TYPE "@build_type@"
+
+#
+# Dependency Loaders
+#
+
+#mesondefine STELLINE_LOADER_CURL
+#mesondefine STELLINE_LOADER_TENSORRT
+#mesondefine STELLINE_LOADER_HOLOSCAN_CORE
+#mesondefine STELLINE_LOADER_HOLOSCAN_INFERENCE
+#mesondefine STELLINE_LOADER_HOLOSCAN_ANO
+#mesondefine STELLINE_LOADER_MATX
+
+#
+# Operators
+#
+
+#mesondefine STELLINE_OPERATOR_FRBNN
+#mesondefine STELLINE_OPERATOR_TRANSPORT
+
+#
+# Bits
+#
+
+#mesondefine STELLINE_BIT_FRBNN
+#mesondefine STELLINE_BIT_TRANSPORT
