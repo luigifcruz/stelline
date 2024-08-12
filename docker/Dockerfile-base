@@ -54,6 +54,7 @@ COPY ./docker/patches /workspace/patches
 RUN cd /workspace/holohub/operators/advanced_network && \
     patch -p1 < /workspace/patches/adv_networking_install.patch && \
     patch -p1 < /workspace/patches/adv_networking_multi.patch && \
+    patch -p1 < /workspace/patches/adv_networking_free.patch && \
     rm -fr build && \
     mkdir build && \
     cd build && \

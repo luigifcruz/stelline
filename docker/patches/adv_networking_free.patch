@@ -1,0 +1,29 @@
+diff --git a/adv_network_common.cpp b/adv_network_common.cpp
+index 7edcc3a..fc87014 100644
+--- a/adv_network_common.cpp
++++ b/adv_network_common.cpp
+@@ -78,9 +78,6 @@ void adv_net_free_all_burst_pkts_and_burst(AdvNetBurstParams *burst) {
+     g_ano_mgr->free_pkts(burst->cpu_pkts, burst->hdr.hdr.num_pkts);
+   }
+ 
+-  if (burst->gpu_pkts != nullptr) {
+-    g_ano_mgr->free_pkts(burst->gpu_pkts, burst->hdr.hdr.num_pkts);
+-  }
+   g_ano_mgr->free_rx_burst(burst);
+ }
+ 
+diff --git a/managers/dpdk/adv_network_dpdk_mgr.cpp b/managers/dpdk/adv_network_dpdk_mgr.cpp
+index e0db965..589d568 100644
+--- a/managers/dpdk/adv_network_dpdk_mgr.cpp
++++ b/managers/dpdk/adv_network_dpdk_mgr.cpp
+@@ -1493,9 +1493,7 @@ void DpdkMgr::free_pkt(void *pkt) {
+ }
+ 
+ void DpdkMgr::free_pkts(void **pkts, int num_pkts) {
+-  for (int p = 0; p < num_pkts; p++) {
+-    rte_pktmbuf_free_seg(reinterpret_cast<rte_mbuf**>(pkts)[p]);
+-  }
++  rte_pktmbuf_free_bulk(reinterpret_cast<rte_mbuf**>(pkts), num_pkts);
+ }
+ 
+ void DpdkMgr::free_rx_burst(AdvNetBurstParams *burst) {
