@@ -1,6 +1,6 @@
 models = [
-    {'asset': 'frbnn/frbnn_preprocessor.onnx', 'shape': '192x2048'},
-    {'asset': 'frbnn/frbnn.onnx', 'shape': '3x192x2048'},
+    {'asset': 'frbnn/model/frbnn_preprocessor.onnx', 'shape': '192x2048'},
+    {'asset': 'frbnn/model/frbnn.onnx', 'shape': '3x192x2048'},
 ]
 batch_sizes = ['32', '64']
 

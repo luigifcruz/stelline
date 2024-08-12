@@ -12,6 +12,5 @@ endforeach
 
 if all_deps_found
     subdir('test')
-    # TODO: Remove once CDN is up.
-    #subdir('model')
+    subdir('model')
 endif

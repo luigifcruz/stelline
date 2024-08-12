@@ -11,8 +11,7 @@ app_src_lst = [
     'main.cc',
 ]
 
-# TODO: Remove once CDN is up.
-# subdir('data')
+subdir('data')
 
 executable(
     'frbnn-test-offline',

@@ -9,5 +9,5 @@ test_settings:
   validation_data_path: ./applications/frbnn/test/offline/data/output.bin
 
 frbnn_inferencee:
-  frbnn_preprocessor_path: ./applications/frbnn/model/frbnn_preprocessor.trt
-  frbnn_path: ./applications/frbnn/model/frbnn.trt
+  frbnn_preprocessor_path: ./applications/frbnn/model/frbnn_preprocessor_32.trt
+  frbnn_path: ./applications/frbnn/model/frbnn_32.trt

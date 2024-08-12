@@ -12,7 +12,7 @@ project(
 )
 
 is_static = get_option('default_library') == 'static'
-cdn_url = 'https://example.com/' + meson.project_version() + '/'
+cdn_url = 'https://stelline.cdn.luigi.ltd/' + meson.project_version() + '/'
 
 cfg_lst = configuration_data({
     'version': meson.project_version(),
