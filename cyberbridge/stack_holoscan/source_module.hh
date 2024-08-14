@@ -91,7 +91,7 @@ class Source : public Module, public Compute {
 
         void start() override;
 
-        void compute(holoscan::InputContext& op_input, 
+        void compute(holoscan::InputContext& input, 
                      holoscan::OutputContext&, 
                      holoscan::ExecutionContext&) override;
 

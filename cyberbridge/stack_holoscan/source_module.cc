@@ -155,10 +155,10 @@ void Source<D, T>::Op::start() {
 }
 
 template<Device D, typename T>
-void Source<D, T>::Op::compute(holoscan::InputContext& op_input, 
-                         holoscan::OutputContext&, 
-                         holoscan::ExecutionContext&) {
-    auto in_value = op_input.receive<std::shared_ptr<Tensor<D, T>>>("in").value();
+void Source<D, T>::Op::compute(holoscan::InputContext& input, 
+                               holoscan::OutputContext&, 
+                               holoscan::ExecutionContext&) {
+    auto in_value = input.receive<std::shared_ptr<Tensor<D, T>>>("in").value();
 
     buffer.put([&](auto& tensor){
         if (in_value->shape() != tensor.shape()) {
