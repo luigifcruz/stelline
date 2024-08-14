@@ -2,7 +2,6 @@
 #define STELLINE_OPERATORS_FRBNN_BASE_HH
 
 #include <holoscan/holoscan.hpp>
-#include <holoscan/operators/inference/inference.hpp>
 
 #include <stelline/common.hh>
 
@@ -21,7 +20,7 @@ class STELLINE_API ModelPreprocessorOp : public Operator {
     ModelPreprocessorOp() = default;
 
     void setup(OperatorSpec& spec) override;
-    void compute(InputContext& op_input, OutputContext& op_output, ExecutionContext& context) override;
+    void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 };
 
 class STELLINE_API ModelAdapterOp : public Operator {
@@ -31,7 +30,7 @@ class STELLINE_API ModelAdapterOp : public Operator {
     ModelAdapterOp() = default;
 
     void setup(OperatorSpec& spec) override;
-    void compute(InputContext& op_input, OutputContext& op_output, ExecutionContext& context) override;
+    void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 };
 
 class STELLINE_API ModelPostprocessorOp : public Operator {
@@ -41,8 +40,7 @@ class STELLINE_API ModelPostprocessorOp : public Operator {
     ModelPostprocessorOp() = default;
 
     void setup(OperatorSpec& spec) override;
-
-    void compute(InputContext& op_input, OutputContext& op_output, ExecutionContext&) override;
+    void compute(InputContext& input, OutputContext& output, ExecutionContext&) override;
 };
 
 }  // namespace stelline::operators::frbnn

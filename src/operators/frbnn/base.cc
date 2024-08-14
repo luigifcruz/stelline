@@ -9,12 +9,12 @@ void ModelPreprocessorOp::setup(OperatorSpec& spec) {
     spec.output<holoscan::gxf::Entity>("out");
 }
 
-void ModelPreprocessorOp::compute(InputContext& op_input, OutputContext& op_output, ExecutionContext& context) {
-    auto input_tensor = op_input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
+void ModelPreprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
+    auto inputTensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
 
-    auto out_message = holoscan::gxf::Entity::New(&context);
-    out_message.add(input_tensor, "input");
-    op_output.emit(out_message, "out");
+    auto outMessage = holoscan::gxf::Entity::New(&context);
+    outMessage.add(inputTensor, "input");
+    output.emit(outMessage, "out");
 };
 
 void ModelAdapterOp::setup(OperatorSpec& spec) {
@@ -22,13 +22,13 @@ void ModelAdapterOp::setup(OperatorSpec& spec) {
     spec.output<holoscan::gxf::Entity>("out");
 }
 
-void ModelAdapterOp::compute(InputContext& op_input, OutputContext& op_output, ExecutionContext& context) {
-    auto in_message = op_input.receive<holoscan::gxf::Entity>("in").value();
-    auto in_tensor = in_message.get<holoscan::Tensor>("output");
+void ModelAdapterOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
+    auto inputMessage = input.receive<holoscan::gxf::Entity>("in").value();
+    auto inputTensor = inputMessage.get<holoscan::Tensor>("output");
 
-    auto out_message = holoscan::gxf::Entity::New(&context);
-    out_message.add(in_tensor, "input");
-    op_output.emit(out_message, "out");
+    auto outMessage = holoscan::gxf::Entity::New(&context);
+    outMessage.add(inputTensor, "input");
+    output.emit(outMessage, "out");
 };
 
 void ModelPostprocessorOp::setup(OperatorSpec& spec) {
@@ -36,11 +36,11 @@ void ModelPostprocessorOp::setup(OperatorSpec& spec) {
     spec.output<std::shared_ptr<holoscan::Tensor>>("out");
 }
 
-void ModelPostprocessorOp::compute(InputContext& op_input, OutputContext& op_output, ExecutionContext&) {
-    auto in_message = op_input.receive<holoscan::gxf::Entity>("in").value();
-    auto in_tensor = in_message.get<holoscan::Tensor>("output");
+void ModelPostprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
+    auto inputMessage = input.receive<holoscan::gxf::Entity>("in").value();
+    auto inputTensor = inputMessage.get<holoscan::Tensor>("output");
 
-    op_output.emit(in_tensor, "out");
+    output.emit(inputTensor, "out");
 };
 
-}  // namespace stelline::operatos::frbnn
+}  // namespace stelline::operators::frbnn
