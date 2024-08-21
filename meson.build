@@ -3,11 +3,10 @@ project(
     ['cpp', 'cuda'],
     version: '0.0.0',
     default_options: [
-        # TODO: Revert back to C++20 when MatX is fixed.
-        'cpp_std=c++17',
+        'cpp_std=c++20',
         'buildtype=release',
         'b_ndebug=if-release',
-        'cuda_std=c++17',
+        'cuda_std=c++20',
     ]
 )
 

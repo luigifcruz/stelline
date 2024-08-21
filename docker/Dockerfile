@@ -3,17 +3,6 @@ FROM stelline-base
 ARG DEBIAN_FRONTEND=noninteractive
 
 #
-# Global Dependencies
-#
-
-RUN apt update
-
-RUN apt install -y git build-essential pkg-config git cmake
-RUN apt install -y g++-11 gcc-11
-RUN apt install -y python3-dev python3-pip
-RUN python3 -m pip install meson ninja
-
-#
 # CyberEther Dependencies
 #
 
