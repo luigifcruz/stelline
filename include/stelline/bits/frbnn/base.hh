@@ -18,6 +18,10 @@ inline auto FrbnnInferenceBit(auto* app, auto& pool, const std::string& config) 
     auto frbnnPreprocessorPath = FetchArg<std::string>(app, config, "frbnn_preprocessor_path");
     auto frbnnPath = FetchArg<std::string>(app, config, "frbnn_path");
 
+    HOLOSCAN_LOG_INFO("FRBNN Inference Configuration:");
+    HOLOSCAN_LOG_INFO("  Preprocessor Path: {}", frbnnPreprocessorPath);
+    HOLOSCAN_LOG_INFO("  Model Path: {}", frbnnPath);
+
     // Build FRBNN Preprocessor configuration.
 
     ops::InferenceOp::DataMap frbnnPreprocessorPathMap;
