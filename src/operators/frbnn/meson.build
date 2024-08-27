@@ -14,3 +14,5 @@ if all_deps_found
         'base.cc',
     ])
 endif
+
+operator_lst += {'FRBNN': all_deps_found}

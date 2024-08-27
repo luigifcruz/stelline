@@ -14,3 +14,5 @@ if all_deps_found
     subdir('test')
     subdir('model')
 endif
+
+apps_lst += {'FRBNN': all_deps_found}

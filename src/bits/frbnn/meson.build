@@ -10,3 +10,5 @@ endforeach
 if all_deps_found
     cfg_lst.set('STELLINE_BIT_FRBNN', true)
 endif
+
+bits_lst += {'FRBNN': all_deps_found}
