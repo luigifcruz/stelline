@@ -1,20 +1,26 @@
 #ifndef STELLINE_COMMON_HH
 #define STELLINE_COMMON_HH
 
+#include <cuda_runtime.h>
+
+#include <cstdint>
+
 namespace stelline {
 
 #define STELLINE_API __attribute__((visibility("default")))
 #define STELLINE_HIDDEN __attribute__((visibility("hidden")))
 
-#ifndef STELLINE_CUDA_CHECK_THROW
 #define STELLINE_CUDA_CHECK_THROW(f, callback) { \
-    const cudaError_t error = call; \
+    const cudaError_t err = f; \
     if (err != cudaSuccess) { \
         callback(); \
-        throw std::runtime_error("[CUDA] Error Code: " + std::string(cudaGetErrorString(err))); \
+        printf("[CUDA] Error Code: %s", cudaGetErrorString(err)); \
+        throw std::runtime_error("CUDA error occurred."); \
     } \
 }
-#endif  // STELLINE_CUDA_CHECK_THROW
+
+#define STELLINE_IS_CUDA defined(__CUDACC__)
+#define STELLINE_IS_NOT_CUDA !defined(__CUDACC__)
 
 }  // namespace stelline
 
