@@ -10,3 +10,5 @@ endforeach
 if all_deps_found
     cfg_lst.set('STELLINE_BIT_TRANSPORT', true)
 endif
+
+bits_lst += {'Transport': all_deps_found}
