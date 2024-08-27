@@ -10,7 +10,35 @@ namespace stelline {
 
 template<typename T>
 inline T FetchArg(auto* app, const std::string& handle, const std::string& key) {
-    return app->from_config(fmt::format("{}.{}", handle, key)).template as<T>();
+    auto nodes = app->config().yaml_nodes();
+
+    // Check root.
+
+    if (nodes.empty()) {
+        throw std::runtime_error("No configuration nodes found.");
+    }
+
+    if (!nodes[0].IsMap()) {
+        throw std::runtime_error("Configuration node is not a map.");
+    }
+
+    // Check handle.
+
+    if (!nodes[0][handle]) {
+        throw std::runtime_error(fmt::format("Configuration node does not contain handle '{}'.", handle));
+    }
+
+    if (!nodes[0][handle].IsMap()) {
+        throw std::runtime_error(fmt::format("Configuration node '{}' is not a map.", handle));
+    }
+
+    // Check key.
+
+    if (!nodes[0][handle][key]) {
+        throw std::runtime_error(fmt::format("Configuration node '{}' does not contain key '{}'.", handle, key));
+    }
+
+    return nodes[0][handle][key].template as<T>();
 }
 
 }  // namespace stelline
