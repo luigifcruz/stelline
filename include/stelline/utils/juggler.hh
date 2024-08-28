@@ -52,6 +52,24 @@ class Juggler {
     }
 
     /**
+     * @brief Retrieves the available size of the pool.
+     *
+     * @return The available size of the pool.
+     */
+    uint64_t available() const {
+        return pool.size();
+    }
+
+    /**
+     * @brief Retrieves the used size of the pool.
+     *
+     * @return The used size of the pool.
+     */
+    uint64_t referenced() const {
+        return used.size();
+    }
+
+    /**
      * @brief Retrieves a reusable object from the pool.
      * 
      * @return A shared pointer to the retrieved object, or nullptr if the pool is empty.

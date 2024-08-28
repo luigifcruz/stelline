@@ -290,7 +290,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
             pimpl->blockMap.erase(block->timeIndex());
             std::shared_ptr<Tensor> tensor;
             while ((tensor = pimpl->blockTensorPool.get()) == nullptr) {
-                std::this_thread::sleep_for(std::chrono::microseconds(100));
+                throw std::runtime_error("Failed to allocate tensor from pool.");
             }
             block->compute(tensor, pimpl->totalBlock, pimpl->partialBlock, pimpl->slots);
             pimpl->computeQueue.push(block);
@@ -394,6 +394,7 @@ void ReceiverOp::Impl::metricsLoop() {
         HOLOSCAN_LOG_INFO("Packets   : {} evicted, {} received, {} lost", evictedPackets, receivedPackets, lostPackets);
         HOLOSCAN_LOG_INFO("In-Flight : {} idle, {} receive, {} compute", idleQueue.size(), receiveQueue.size(), computeQueue.size());
         HOLOSCAN_LOG_INFO("Bursts    : {} in-flight, {} us average per-burst release time", bursts.size(), avgBurstReleaseTime.count());
+        HOLOSCAN_LOG_INFO("Mem Pool  : {} available, {} referenced", blockTensorPool.available(), blockTensorPool.referenced());
         HOLOSCAN_LOG_INFO("Fine Packet Count:");
         HOLOSCAN_LOG_INFO("   All antennas     : {}", allAntennas);
         HOLOSCAN_LOG_INFO("   Filtered antennas: {}", filteredAntennas);
