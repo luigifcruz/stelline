@@ -5,9 +5,9 @@ extensions:
 
 test_settings:
   batch_size: 32
-  test_data_path: ./applications/frbnn/test/offline/data/input.bin
-  validation_data_path: ./applications/frbnn/test/offline/data/output.bin
+  test_data_path: ./resources/frbnn/test/offline/data/input.bin
+  validation_data_path: ./resources/frbnn/test/offline/data/output.bin
 
 frbnn_inference:
-  frbnn_preprocessor_path: ./applications/frbnn/model/frbnn_preprocessor_32.trt
-  frbnn_path: ./applications/frbnn/model/frbnn_32.trt
+  frbnn_preprocessor_path: ./resources/frbnn/model/frbnn_preprocessor_32.trt
+  frbnn_path: ./resources/frbnn/model/frbnn_32.trt

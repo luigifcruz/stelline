@@ -1,7 +1,6 @@
 deps = [
     'STELLINE_BIT_FRBNN',
-    'STELLINE_LOADER_CURL',
-    'STELLINE_LOADER_TRTEXEC',
+    'STELLINE_RESOURCE_FRBNN_MODEL',
     'STELLINE_LOADER_MATX',
 ]
 
@@ -12,7 +11,6 @@ endforeach
 
 if all_deps_found
     subdir('test')
-    subdir('model')
 endif
 
 apps_lst += {'FRBNN': all_deps_found}

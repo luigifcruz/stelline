@@ -26,3 +26,9 @@
 
 #mesondefine STELLINE_BIT_FRBNN
 #mesondefine STELLINE_BIT_TRANSPORT
+
+#
+# Resources
+#
+
+#mesondefine STELLINE_RESOURCE_FRBNN_MODEL

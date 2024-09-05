@@ -25,6 +25,7 @@ inc_lst = [
 
 subdir('meson')
 subdir('src')
+subdir('resources')
 
 lib_stelline = library(
     'stelline',

@@ -36,7 +36,8 @@ foreach model : models
         configure_file(
             input: engine_filename,
             output: engine_filename,
-            copy: true
+            copy: true,
+            # TODO: Add install.
         )
     endforeach
 endforeach
