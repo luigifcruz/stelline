@@ -54,6 +54,7 @@ RUN cd CyberEther \
 ENV NVCC_PREPEND_FLAGS='-ccbin g++-11'
 RUN git clone https://github.com/luigifcruz/blade.git
 RUN cd blade \
+    && git checkout v1.1 \
     && git submodule update --init --recursive \
     && rm -fr build \
     && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
