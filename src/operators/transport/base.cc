@@ -19,6 +19,8 @@ struct ReceiverOp::Impl {
     BlockShape partialBlock;
     BlockShape offsetBlock;
     uint64_t concurrentBlocks;
+    uint64_t outputPoolSize;
+    bool enableCsvLogging;
 
     // Cache parameters.
 
@@ -95,6 +97,8 @@ void ReceiverOp::setup(OperatorSpec& spec) {
     spec.param(totalBlock_, "total_block");
     spec.param(partialBlock_, "partial_block");
     spec.param(offsetBlock_, "offset_block");
+    spec.param(outputPoolSize_, "output_pool_size");
+    spec.param(enableCsvLogging_, "enable_csv_logging");
 }
 
 void ReceiverOp::start() {
@@ -104,6 +108,8 @@ void ReceiverOp::start() {
     pimpl->partialBlock = partialBlock_.get();
     pimpl->offsetBlock = offsetBlock_.get();
     pimpl->concurrentBlocks = concurrentBlocks_.get();
+    pimpl->outputPoolSize = outputPoolSize_.get();
+    pimpl->enableCsvLogging = enableCsvLogging_.get();
 
     // Validate configuration.
 
@@ -167,7 +173,7 @@ void ReceiverOp::start() {
 
     // Allocate block tensor pool.
 
-    pimpl->blockTensorPool.resize(512, [&]{
+    pimpl->blockTensorPool.resize(pimpl->outputPoolSize, [&]{
         auto tensor = matx::make_tensor<std::complex<float>>({
             static_cast<int64_t>(pimpl->totalBlock.numberOfAntennas),
             static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
@@ -394,6 +400,28 @@ void ReceiverOp::Impl::burstCollectorLoop() {
 }
 
 void ReceiverOp::Impl::metricsLoop() {
+    std::ofstream file;
+
+    if (enableCsvLogging) {
+        file.open("./TRANSPORT-RUN.csv", std::ios::out);
+        std::string csv_header = fmt::format(
+            "{},{},{},{},{},{},{},{},{},{},{}\n",
+            "UNIX Timestamp",
+            "Received Blocks",
+            "Computed Blocks",
+            "Lost Blocks",
+            "Bursts",
+            "Avg Burst Release Time",
+            "Available Blocks",
+            "Idle Queue",
+            "Receive Queue",
+            "Compute Queue",
+            "Latest Block Timestamp"
+        );
+        file.write(csv_header.c_str(), csv_header.size());
+        file.flush();   
+    }
+
     while (metricsThreadRunning) {
         HOLOSCAN_LOG_INFO("Blocks    : {} received, {} computed, {} lost", receivedBlocks, computedBlocks, lostBlocks);
         HOLOSCAN_LOG_INFO("Packets   : {} evicted, {} received, {} lost", evictedPackets, receivedPackets, lostPackets);
@@ -405,6 +433,28 @@ void ReceiverOp::Impl::metricsLoop() {
         HOLOSCAN_LOG_INFO("   Filtered antennas: {}", filteredAntennas);
         HOLOSCAN_LOG_INFO("   All channels     : {}", allChannels);
         HOLOSCAN_LOG_INFO("   Filtered channels: {}", filteredChannels);
+
+        if (enableCsvLogging) {
+            const auto p1 = std::chrono::system_clock::now();
+            const auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(p1.time_since_epoch()).count();
+
+            std::string csv_line = fmt::format(
+                "{},{},{},{},{},{},{},{},{},{},{}\n", 
+                timestamp, 
+                receivedBlocks, 
+                computedBlocks, 
+                lostBlocks, 
+                bursts.size(), 
+                avgBurstReleaseTime.count(), 
+                blockTensorPool.available(), 
+                idleQueue.size(), 
+                receiveQueue.size(), 
+                computeQueue.size(), 
+                latestTimestamp
+            );
+            file.write(csv_line.c_str(), csv_line.size());
+            file.flush();
+        }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }

@@ -2,6 +2,8 @@
 #define STELLINE_HELPERS_HH
 
 #include <string>
+#include <optional>
+
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
@@ -9,7 +11,7 @@
 namespace stelline {
 
 template<typename T>
-inline T FetchArg(auto* app, const std::string& handle, const std::string& key) {
+inline T FetchArg(auto* app, const std::string& handle, const std::string& key, const std::optional<T>& placeholder = {}) {
     auto nodes = app->config().yaml_nodes();
 
     // Check root.
@@ -35,6 +37,9 @@ inline T FetchArg(auto* app, const std::string& handle, const std::string& key) 
     // Check key.
 
     if (!nodes[0][handle][key]) {
+        if (placeholder) {
+            return placeholder.value();
+        }
         throw std::runtime_error(fmt::format("Configuration node '{}' does not contain key '{}'.", handle, key));
     }
 

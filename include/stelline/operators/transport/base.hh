@@ -39,6 +39,8 @@ class STELLINE_API ReceiverOp : public Operator {
     Parameter<BlockShape> partialBlock_;
     Parameter<BlockShape> offsetBlock_;
     Parameter<uint64_t> concurrentBlocks_;
+    Parameter<uint64_t> outputPoolSize_;
+    Parameter<bool> enableCsvLogging_;
 };
 
 }  // namespace stelline::operators::transport

@@ -20,6 +20,8 @@ inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
     auto partial_block = FetchArg<BlockShape>(app, config, "partial_block");
     auto offset_block = FetchArg<BlockShape>(app, config, "offset_block");
     auto concurrent_blocks = FetchArg<uint64_t>(app, config, "concurrent_blocks");
+    auto output_pool_size = FetchArg<uint64_t>(app, config, "output_pool_size");
+    auto enable_csv_logging = FetchArg<bool>(app, config, "enable_csv_logging", false);
 
     auto rdma_gpu = FetchArg<uint64_t>(app, config, "rdma_gpu");
     auto rdma_nic = FetchArg<std::string>(app, config, "rdma_nic");
@@ -37,6 +39,8 @@ inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
     HOLOSCAN_LOG_INFO("    Max Bursts: {}", rdma_max_bursts);
     HOLOSCAN_LOG_INFO("    Burst Size: {}", rdma_burst_size);
     HOLOSCAN_LOG_INFO("  Concurrent Blocks: {}", concurrent_blocks);
+    HOLOSCAN_LOG_INFO("  Output Pool Size: {}", output_pool_size);
+    HOLOSCAN_LOG_INFO("  Enable CSV Logging: {}", enable_csv_logging);
     HOLOSCAN_LOG_INFO("  Total Block: {}", total_block);
     HOLOSCAN_LOG_INFO("  Partial Block: {}", partial_block);
     HOLOSCAN_LOG_INFO("  Offset Block: {}", offset_block);
@@ -94,7 +98,9 @@ inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
         Arg("concurrent_blocks", concurrent_blocks),
         Arg("total_block", total_block),
         Arg("partial_block", partial_block),
-        Arg("offset_block", offset_block)
+        Arg("offset_block", offset_block),
+        Arg("output_pool_size", output_pool_size),
+        Arg("enable_csv_logging", enable_csv_logging)
     );
 
     // Connect operators.
