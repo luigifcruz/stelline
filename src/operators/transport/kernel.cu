@@ -1,5 +1,7 @@
 #include "kernel.hh"
 
+#include <cuda/std/complex>
+
 // TODO: Improve performance.
 
 namespace stelline::operators::transport {
@@ -45,8 +47,8 @@ __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
 
     // Get the source and destination pointers.
 
-    uint16_t* src = ((uint16_t**)input)[idx];
-    uint16_t* dst = &((uint16_t*)output)[defragmentationOffset];
+    cuda::std::complex<int8_t>* src = ((cuda::std::complex<int8_t>**)input)[idx];
+    cuda::std::complex<float>* dst = &((cuda::std::complex<float>*)output)[defragmentationOffset];
 
     // Copy the fragment into the defragmented data.
 
@@ -57,7 +59,10 @@ __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
                     int srcOffset = A * pF * pT * pP + F * pT * pP + T * pP + P;
                     int dstOffset = A * tF * tT * tP + F * tT * tP + T * tP + P;
 
-                    dst[dstOffset] = src[srcOffset];
+                    dst[dstOffset] = {
+                        static_cast<float>(src[srcOffset].real()),
+                        static_cast<float>(src[srcOffset].imag())
+                    };
                 }
             }
         }

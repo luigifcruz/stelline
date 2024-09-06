@@ -163,8 +163,8 @@ void ReceiverOp::start() {
 
     // Allocate block tensor pool.
 
-    pimpl->blockTensorPool.resize(16, [&]{
-        auto tensor = matx::make_tensor<std::complex<int8_t>>({
+    pimpl->blockTensorPool.resize(512, [&]{
+        auto tensor = matx::make_tensor<std::complex<float>>({
             static_cast<int64_t>(pimpl->totalBlock.numberOfAntennas),
             static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
             static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
