@@ -22,6 +22,7 @@ struct ReceiverOp::Impl {
 
     // Cache parameters.
 
+    uint64_t latestTimestamp;
     uint64_t timestampCutoff;
     uint64_t blockDuration;
     uint64_t packetDuration;
@@ -133,6 +134,7 @@ void ReceiverOp::start() {
 
     // Calculate the block duration.
 
+    pimpl->latestTimestamp = 0;
     pimpl->timestampCutoff = 0;
     pimpl->packetDuration = pimpl->partialBlock.numberOfSamples;
     pimpl->blockDuration = pimpl->slots.numberOfSamples * pimpl->packetDuration;
@@ -236,6 +238,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
         pimpl->filteredAntennas.insert(antennaIndex + pimpl->offsetBlock.numberOfAntennas);
         pimpl->filteredChannels.insert(channelIndex + pimpl->offsetBlock.numberOfChannels);
 
+        pimpl->latestTimestamp = std::max(pimpl->latestTimestamp, packet.timestamp);
         if (packet.timestamp < pimpl->timestampCutoff) {
             pimpl->evictedPackets += 1;
             continue;
