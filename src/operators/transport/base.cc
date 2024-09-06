@@ -1,3 +1,4 @@
+#include <stelline/types.hh>
 #include <stelline/operators/transport/base.hh>
 #include <stelline/utils/juggler.hh>
 
@@ -89,7 +90,7 @@ ReceiverOp::~ReceiverOp() {
 
 void ReceiverOp::setup(OperatorSpec& spec) {
     spec.input<AdvNetBurstParams>("burst_in");
-    spec.output<std::shared_ptr<Tensor>>("dsp_block_out")
+    spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer, 
                    holoscan::Arg("capacity", 1024UL));
 
@@ -323,7 +324,11 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
         pimpl->computeQueue.pop();
 
         if (!block->isProcessing()) {
-            output.emit(block->outputTensor(), "dsp_block_out");
+            DspBlock outputBlock = {
+                .timestamp = block->timestamp(),
+                .tensor = block->outputTensor(),
+            };
+            output.emit(outputBlock, "dsp_block_out");
             block->destroy();
             pimpl->idleQueue.push(block);
             pimpl->computedBlocks += 1;
