@@ -87,7 +87,9 @@ ReceiverOp::~ReceiverOp() {
 
 void ReceiverOp::setup(OperatorSpec& spec) {
     spec.input<AdvNetBurstParams>("burst_in");
-    spec.output<std::shared_ptr<Tensor>>("dsp_block_out").connector(IOSpec::ConnectorType::kDoubleBuffer, holoscan::Arg("capacity", 32UL));
+    spec.output<std::shared_ptr<Tensor>>("dsp_block_out")
+        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+                   holoscan::Arg("capacity", 1024UL));
 
     spec.param(concurrentBlocks_, "concurrent_blocks");
     spec.param(totalBlock_, "total_block");
