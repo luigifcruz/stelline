@@ -264,7 +264,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
 
                 auto block = pimpl->receiveQueue.front();
                 pimpl->receiveQueue.pop();
-                pimpl->blockMap.erase(block->timeIndex());
+                pimpl->blockMap.erase(block->index());
                 block->destroy();
                 pimpl->idleQueue.push(block);
                 pimpl->lostBlocks += 1;
@@ -272,7 +272,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
 
             auto block = pimpl->idleQueue.front();
             pimpl->idleQueue.pop();
-            block->create(blockTimeIndex);
+            block->create(blockTimeIndex, packet.timestamp);
             pimpl->receiveQueue.push(block);
             pimpl->blockMap[blockTimeIndex] = block;
         }
@@ -298,7 +298,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
         pimpl->receiveQueue.pop();
 
         if (block->isComplete()) {
-            pimpl->blockMap.erase(block->timeIndex());
+            pimpl->blockMap.erase(block->index());
             std::shared_ptr<Tensor> tensor;
             while ((tensor = pimpl->blockTensorPool.get()) == nullptr) {
                 throw std::runtime_error("Failed to allocate tensor from pool.");

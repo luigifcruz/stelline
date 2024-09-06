@@ -34,16 +34,21 @@ struct Block {
         cudaStreamDestroy(stream);
     }
 
-    constexpr const uint64_t& timeIndex() const {
-        return _timeIndex;
+    constexpr const uint64_t& index() const {
+        return _index;
+    }
+
+    constexpr const uint64_t& timestamp() const {
+        return _timestamp;
     }
 
     constexpr const std::shared_ptr<Tensor>& outputTensor() const {
         return _outputTensor;
     }
 
-    inline void create(const uint64_t& timeIndex) {
-        _timeIndex = timeIndex;
+    inline void create(const uint64_t& index, const uint64_t& timestamp) {
+        _index = index;
+        _timestamp = timestamp;
     }
 
     inline void destroy() {
@@ -81,7 +86,8 @@ struct Block {
     }
 
  private:
-    uint64_t _timeIndex;
+    uint64_t _index;
+    uint64_t _timestamp;
     uint64_t packetsPerBlock;
 
     void** gpuData;
