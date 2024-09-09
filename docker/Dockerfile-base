@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/clara-holoscan/holoscan:v2.0.0-dgpu
+FROM nvcr.io/nvidia/clara-holoscan/holoscan:v2.4.0-dgpu
 
 ARG DEBIAN_FRONTEND=noninteractive
 
