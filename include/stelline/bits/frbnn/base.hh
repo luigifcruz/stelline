@@ -13,6 +13,10 @@ inline auto FrbnnInferenceBit(auto* app, auto& pool, const std::string& config) 
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
+    // Configure app.
+
+    app->is_metadata_enabled(true);
+
     // Fetch configuration YAML.
 
     auto frbnnPreprocessorPath = FetchArg<std::string>(app, config, "frbnn_preprocessor_path");
