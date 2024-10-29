@@ -12,6 +12,7 @@
 #mesondefine STELLINE_LOADER_HOLOSCAN_ANO
 #mesondefine STELLINE_LOADER_MATX
 #mesondefine STELLINE_LOADER_BLADE
+#mesondefine STELLINE_LOADER_CYBERETHER
 
 #
 # Operators

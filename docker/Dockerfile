@@ -40,7 +40,7 @@ WORKDIR /workspace
 
 RUN git clone https://github.com/luigifcruz/CyberEther.git
 RUN cd CyberEther \
-    && git checkout v1.0.0-alpha5 \
+    && git checkout v1.0.0-alpha6 \
     && rm -fr build \
     && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
     && cd build \
@@ -56,18 +56,6 @@ RUN git clone https://github.com/luigifcruz/blade.git
 RUN cd blade \
     && git checkout v1.1 \
     && git submodule update --init --recursive \
-    && rm -fr build \
-    && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
-    && cd build \
-    && ninja \
-    && ninja install
-
-#
-# Build & Install CyberBridge
-#
-
-COPY ./cyberbridge /workspace/cyberbridge
-RUN cd cyberbridge \
     && rm -fr build \
     && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
     && cd build \
