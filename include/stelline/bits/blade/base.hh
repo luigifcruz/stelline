@@ -35,6 +35,17 @@ inline auto BladeBit(auto* app, auto& pool, const std::string& config) {
         );
     };
 
+    auto beamformer_op = [&](){
+        // TODO: Implement options parsing.
+        // TODO: Implement options printing.
+
+        return app->template make_operator<BeamformerOp>(
+            "beamformer",
+            Arg("input_shape", input_shape),
+            Arg("output_shape", output_shape)
+        );
+    };
+
     auto frbnn_op = [&](){
         // TODO: Implement options parsing.
         // TODO: Implement options printing.
@@ -48,6 +59,10 @@ inline auto BladeBit(auto* app, auto& pool, const std::string& config) {
 
     if (mode == "correlator") {
         return static_cast<std::shared_ptr<holoscan::Operator>>(correlator_op());
+    }
+
+    if (mode == "beamformer") {
+        return static_cast<std::shared_ptr<holoscan::Operator>>(beamformer_op());
     }
 
     if (mode == "frbnn") {

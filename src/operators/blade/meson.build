@@ -13,6 +13,7 @@ if all_deps_found
     cfg_lst.set('STELLINE_OPERATOR_BLADE', true)
     src_lst += files([
         'correlator.cc',
+        'beamformer.cc',
         'frbnn.cc',
     ])
 endif

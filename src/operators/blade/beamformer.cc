@@ -1,9 +1,7 @@
 #include <blade/base.hh>
 #include <blade/modules/beamformer/ata.hh>
-#include <blade/modules/integrator.hh>
-#include <blade/modules/stacker.hh>
+#include <blade/modules/channelizer/base.hh>
 #include <blade/modules/caster.hh>
-#include <blade/modules/detector.hh>
 
 #include <stelline/operators/blade/base.hh>
 #include <stelline/types.hh>
@@ -19,27 +17,13 @@ namespace stelline::operators::blade {
 class OpPipeline : public Blade::Runner {
 public:
     using IT = CF32;
-    using OT = F32;
+    using OT = CF32;
 
     struct Config {
         ArrayShape inputShape;
         ArrayShape outputShape;
 
-        U64 integratorSize = 32;
-        U64 integratorRate = 1;
-
-        U64 timeStackerAxis = 2;
-        U64 timeStackerMultiplier = 8;
-
-        U64 batchStackerAxis = 0;
-        U64 batchStackerMultiplier = 32;
-
         U64 inputCasterBlockSize = 512;
-        U64 integratorBlockSize = 512;
-        U64 detectorBlockSize = 512;
-        U64 outputCasterBlockSize = 512;
-        U64 batchStackerBlockSize = 512;
-        U64 timeStackerBlockSize = 512;
     };
 
     explicit OpPipeline(const Config& config)
@@ -77,47 +61,10 @@ public:
             .phasors = inputPhasorBuffer,
         });
 
-        this->connect(integrator, {
-            .size = config.integratorSize,
-            .rate = config.integratorRate,
-
-            .blockSize = config.integratorBlockSize,
+        this->connect(channelizer, {
+            .rate = 8192,
         }, {
             .buf = beamformer->getOutputBuffer(),
-        });
-
-        this->connect(detector, {
-            .integrationRate = 1,
-            .numberOfOutputPolarizations = 1,
-
-            .blockSize = config.detectorBlockSize,
-        }, {
-            .buf = integrator->getOutputBuffer(),
-        });
-
-        this->connect(outputCaster, {
-            .blockSize = config.outputCasterBlockSize,
-        }, {
-            .buf = detector->getOutputBuffer(),
-        });
-
-        this->connect(timeStacker, {
-            .axis = config.timeStackerAxis,
-            .multiplier = config.timeStackerMultiplier,
-            .copySizeThreshold = 256,
-
-            .blockSize = config.timeStackerBlockSize,
-        }, {
-            .buf = outputCaster->getOutputBuffer(),
-        });
-
-        this->connect(batchStacker, {
-            .axis = config.batchStackerAxis,
-            .multiplier = config.batchStackerMultiplier,
-
-            .blockSize = config.batchStackerBlockSize,
-        }, {
-            .buf = timeStacker->getOutputBuffer(),
         });
     }
 
@@ -127,7 +74,7 @@ public:
     }
 
     Result transferResult() {
-        BL_CHECK(this->copy(outputBuffer, batchStacker->getOutputBuffer()));
+        BL_CHECK(this->copy(outputBuffer, channelizer->getOutputBuffer()));
         return Result::SUCCESS;
     }
 
@@ -143,20 +90,8 @@ private:
     using Beamformer = typename Modules::Beamformer::ATA<CF32, CF32>;
     std::shared_ptr<Beamformer> beamformer;
 
-    using Integrator = typename Modules::Integrator<CF32, CF32>;
-    std::shared_ptr<Integrator> integrator;
-
-    using Detector = typename Modules::Detector<CF32, F32>;
-    std::shared_ptr<Detector> detector;
-
-    using OutputCaster = typename Modules::Caster<F32, OT>;
-    std::shared_ptr<OutputCaster> outputCaster;
-
-    using TimeStacker = typename Modules::Stacker<OT, OT>;
-    std::shared_ptr<TimeStacker> timeStacker;
-
-    using BatchStacker = typename Modules::Stacker<OT, OT>;
-    std::shared_ptr<TimeStacker> batchStacker;
+    using Channelizer = typename Modules::Channelizer<CF32, CF32>;
+    std::shared_ptr<Channelizer> channelizer;
 
     Duet<ArrayTensor<Device::CUDA, IT>> inputBuffer;
     Duet<ArrayTensor<Device::CUDA, OT>> outputBuffer;
@@ -164,7 +99,7 @@ private:
     PhasorTensor<Device::CUDA, CF32> inputPhasorBuffer;
 };
 
-struct FrbnnOp::Impl {
+struct BeamformerOp::Impl {
     // Configuration parameters (derived).
 
     BlockShape inputShape;
@@ -178,7 +113,7 @@ struct FrbnnOp::Impl {
     ArrayShape bladeOutputShape;
 };
 
-void FrbnnOp::initialize() {
+void BeamformerOp::initialize() {
     // Register custom types.
     register_converter<BlockShape>();
 
@@ -189,11 +124,11 @@ void FrbnnOp::initialize() {
     Operator::initialize();
 }
 
-FrbnnOp::~FrbnnOp() {
+BeamformerOp::~BeamformerOp() {
     delete pimpl;
 }
 
-void FrbnnOp::setup(OperatorSpec& spec) {
+void BeamformerOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("dsp_block_in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer, 
                    holoscan::Arg("capacity", 1024UL));
@@ -205,7 +140,7 @@ void FrbnnOp::setup(OperatorSpec& spec) {
     spec.param(outputShape_, "output_shape");
 }
 
-void FrbnnOp::start() {
+void BeamformerOp::start() {
     // Convert Parameters to variables.
 
     pimpl->inputShape = inputShape_.get();
@@ -241,10 +176,10 @@ void FrbnnOp::start() {
     // Initialize Dispatcher.
 
     // TODO: Make number of buffers configurable.
-    pimpl->dispatcher.template initialize<F32>(4, pimpl->bladeOutputShape);
+    pimpl->dispatcher.template initialize<CF32>(4, pimpl->bladeOutputShape);
 }
 
-void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
+void BeamformerOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     auto receiveCallback = [&](){
         return input.receive<DspBlock>("dsp_block_in").value();
     };
@@ -255,7 +190,7 @@ void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionConte
     };
 
     auto convertOutputCallback = [&](Dispatcher::Job& job){
-        ArrayTensor<Device::CUDA, F32> deviceOutputBuffer(job.output.tensor->data(), pimpl->bladeOutputShape);
+        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(job.output.tensor->data(), pimpl->bladeOutputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 

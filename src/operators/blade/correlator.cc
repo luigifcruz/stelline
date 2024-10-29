@@ -82,10 +82,10 @@ CorrelatorOp::~CorrelatorOp() {
 void CorrelatorOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("dsp_block_in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer, 
-                    holoscan::Arg("capacity", 1024UL));
+                   holoscan::Arg("capacity", 1024UL));
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
-                    holoscan::Arg("capacity", 1024UL));
+                   holoscan::Arg("capacity", 1024UL));
 
     spec.param(inputShape_, "input_shape");
     spec.param(outputShape_, "output_shape");
