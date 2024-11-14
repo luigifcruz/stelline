@@ -12,7 +12,7 @@ using namespace holoscan::ops;
 
 namespace stelline::operators::blade {
 
-class OpPipeline : public Blade::Runner {
+class OpCorrelatorPipeline : public Blade::Runner {
 public:
     using IT = CF32;
     using OT = CF32;
@@ -20,7 +20,7 @@ public:
     using ModeX = Bundles::Generic::ModeX<IT, OT>;
     using Config = ModeX::Config;
 
-    explicit OpPipeline(const Config& config)
+    explicit OpCorrelatorPipeline(const Config& config)
             : inputBuffer(config.inputShape), 
             outputBuffer(config.outputShape) {
         this->connect(modeX, config, {
@@ -59,7 +59,7 @@ struct CorrelatorOp::Impl {
     // State.
 
     Dispatcher dispatcher;
-    std::shared_ptr<OpPipeline> pipeline;
+    std::shared_ptr<OpCorrelatorPipeline> pipeline;
     ArrayShape bladeInputShape;
     ArrayShape bladeOutputShape;
 };
@@ -118,7 +118,7 @@ void CorrelatorOp::start() {
     // Create pipeline.
     // TODO: Implement configuration parameters.
 
-    OpPipeline::Config config = {
+    OpCorrelatorPipeline::Config config = {
         .inputShape = pimpl->bladeInputShape,
         .outputShape = pimpl->bladeOutputShape,
 
@@ -127,7 +127,7 @@ void CorrelatorOp::start() {
         .correlatorIntegrationRate = 8192,
         .correlatorConjugateAntennaIndex = 1,
     };
-    pimpl->pipeline = std::make_shared<OpPipeline>(config);
+    pimpl->pipeline = std::make_shared<OpCorrelatorPipeline>(config);
 
     // Initialize Dispatcher.
 

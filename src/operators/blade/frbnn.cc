@@ -16,7 +16,7 @@ using namespace holoscan::ops;
 
 namespace stelline::operators::blade {
 
-class OpPipeline : public Blade::Runner {
+class OpFrbnnPipeline : public Blade::Runner {
 public:
     using IT = CF32;
     using OT = F32;
@@ -42,7 +42,7 @@ public:
         U64 timeStackerBlockSize = 512;
     };
 
-    explicit OpPipeline(const Config& config)
+    explicit OpFrbnnPipeline(const Config& config)
             : inputBuffer(config.inputShape), 
               outputBuffer(config.outputShape) {
         // Load input phasor buffer with 1.0+0.0i.
@@ -173,7 +173,7 @@ struct FrbnnOp::Impl {
     // State.
 
     Dispatcher dispatcher;
-    std::shared_ptr<OpPipeline> pipeline;
+    std::shared_ptr<OpFrbnnPipeline> pipeline;
     ArrayShape bladeInputShape;
     ArrayShape bladeOutputShape;
 };
@@ -232,11 +232,11 @@ void FrbnnOp::start() {
     // Create pipeline.
     // TODO: Implement configuration parameters.
 
-    OpPipeline::Config config = {
+    OpFrbnnPipeline::Config config = {
         .inputShape = pimpl->bladeInputShape,
         .outputShape = pimpl->bladeOutputShape
     };
-    pimpl->pipeline = std::make_shared<OpPipeline>(config);
+    pimpl->pipeline = std::make_shared<OpFrbnnPipeline>(config);
 
     // Initialize Dispatcher.
 

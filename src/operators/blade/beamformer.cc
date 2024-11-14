@@ -14,7 +14,7 @@ using namespace holoscan::ops;
 
 namespace stelline::operators::blade {
 
-class OpPipeline : public Blade::Runner {
+class OpBeamformerPipeline : public Blade::Runner {
 public:
     using IT = CF32;
     using OT = CF32;
@@ -26,7 +26,7 @@ public:
         U64 inputCasterBlockSize = 512;
     };
 
-    explicit OpPipeline(const Config& config)
+    explicit OpBeamformerPipeline(const Config& config)
             : inputBuffer(config.inputShape), 
               outputBuffer(config.outputShape) {
         // Load input phasor buffer with 1.0+0.0i.
@@ -108,7 +108,7 @@ struct BeamformerOp::Impl {
     // State.
 
     Dispatcher dispatcher;
-    std::shared_ptr<OpPipeline> pipeline;
+    std::shared_ptr<OpBeamformerPipeline> pipeline;
     ArrayShape bladeInputShape;
     ArrayShape bladeOutputShape;
 };
@@ -167,11 +167,11 @@ void BeamformerOp::start() {
     // Create pipeline.
     // TODO: Implement configuration parameters.
 
-    OpPipeline::Config config = {
+    OpBeamformerPipeline::Config config = {
         .inputShape = pimpl->bladeInputShape,
         .outputShape = pimpl->bladeOutputShape
     };
-    pimpl->pipeline = std::make_shared<OpPipeline>(config);
+    pimpl->pipeline = std::make_shared<OpBeamformerPipeline>(config);
 
     // Initialize Dispatcher.
 
