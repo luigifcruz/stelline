@@ -58,14 +58,17 @@ inline auto BladeBit(auto* app, auto& pool, const std::string& config) {
     };
 
     if (mode == "correlator") {
+        HOLOSCAN_LOG_INFO("Creating Correlator operator.");
         return static_cast<std::shared_ptr<holoscan::Operator>>(correlator_op());
     }
 
     if (mode == "beamformer") {
+        HOLOSCAN_LOG_INFO("Creating Beamformer operator.");
         return static_cast<std::shared_ptr<holoscan::Operator>>(beamformer_op());
     }
 
     if (mode == "frbnn") {
+        HOLOSCAN_LOG_INFO("Creating FRBNN operator.");
         return static_cast<std::shared_ptr<holoscan::Operator>>(frbnn_op());
     }
 
