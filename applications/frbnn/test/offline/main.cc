@@ -1,9 +1,11 @@
 #include <matx.h>
 #include <holoscan/holoscan.hpp>
 
+#include <stelline/types.hh>
 #include <stelline/bits/frbnn/base.hh>
 
 using namespace holoscan;
+using namespace stelline;
 using namespace stelline::bits::frbnn;
 
 class DataGeneratorOp : public Operator {
@@ -22,7 +24,7 @@ class DataGeneratorOp : public Operator {
         // Create data tensor.
 
         auto tensor = matx::make_tensor<float>({batchSize.get(), 192, 2048});
-        data = std::make_shared<Tensor>(tensor.GetDLPackTensor());
+        auto data = std::make_shared<Tensor>(tensor.GetDLPackTensor());
 
         // Load test data from file.
 
@@ -34,14 +36,18 @@ class DataGeneratorOp : public Operator {
 
         file.read(reinterpret_cast<char*>(data->data()), data->size() * sizeof(float));
         file.close();
+
+        // Create block.
+
+        block.tensor = data;
     }
 
     void compute(InputContext& input, OutputContext& output, ExecutionContext&) override {
-        output.emit(data, "out");
+        output.emit(block, "out");
     };
 
  private:
-    std::shared_ptr<Tensor> data;
+    DspBlock block;
     Parameter<int> batchSize;
     Parameter<std::string> testDataPath;
 };
@@ -77,7 +83,7 @@ class DummySinkOp : public Operator {
     }
 
     void compute(InputContext& input, OutputContext&, ExecutionContext&) override {
-        auto tensor = input.receive<std::shared_ptr<Tensor>>("in").value();
+        auto block = input.receive<InferenceBlock>("in").value();
 
         // Measure time between messages.
 
@@ -88,9 +94,9 @@ class DummySinkOp : public Operator {
 
         // Download tensor data to host and compare with golden data.
 
-        cudaMemcpy(hostBuffer.data(), tensor->data(), tensor->size() * sizeof(float), cudaMemcpyDeviceToHost);
+        cudaMemcpy(hostBuffer.data(), block.tensor->data(), block.tensor->size() * sizeof(float), cudaMemcpyDeviceToHost);
 
-        for (size_t i = 0; i < tensor->size(); i++) {
+        for (size_t i = 0; i < block.tensor->size(); i++) {
             if (std::abs(hostBuffer[i] - goldenData[i]) > 0.1 || !std::isfinite(hostBuffer[i]) || !std::isfinite(goldenData[i])) {
                 HOLOSCAN_LOG_ERROR("Mismatch at index {}! Expected: {}, Got: {}", i, goldenData[i], hostBuffer[i]);
             }
@@ -98,7 +104,7 @@ class DummySinkOp : public Operator {
 
         // Print statistics.
 
-        HOLOSCAN_LOG_INFO("Model output shape: {}", tensor->shape());
+        HOLOSCAN_LOG_INFO("Model output shape: {}", block.tensor->shape());
         HOLOSCAN_LOG_INFO("Received message. Took {} ms.", duration.count());
 
         // Reset timer.
