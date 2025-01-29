@@ -102,6 +102,17 @@ class DummySinkOp : public Operator {
             }
         }
 
+        // Check if the output is a valid hit.
+
+        for (size_t i = 0; i < block.tensor->shape()[0]; i++) {
+            const auto& a = hostBuffer[i * 2];
+            const auto& b = hostBuffer[i * 2 + 1];
+
+            if (a > b) {
+                HOLOSCAN_LOG_ERROR("Invalid softmax output at index {}! Expected: a <= b, Got: a = {}, b = {}", i, a, b);
+            }
+        }
+
         // Print statistics.
 
         HOLOSCAN_LOG_INFO("Model output shape: {}", block.tensor->shape());
