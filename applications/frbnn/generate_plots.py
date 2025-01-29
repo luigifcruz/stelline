@@ -145,7 +145,6 @@ def dedisperse_hit(hit, data):
         for i, f in enumerate(freqs):
             dt = 4.148808e-3 * dm * (1/f**2 - 1/f_ref**2)  # Dispersion delay
             shift = int(dt / (times[1] - times[0]))        # Convert to sample shift
-            print(shift)
             dedispersed[i] = np.roll(data[i], -shift)
         
         return dedispersed
@@ -172,7 +171,7 @@ def parse_hits(hits):
             tqdm.write(f'Failed to load data for hit {hit.telescope_timestamp}.')
             if os.getenv('DEBUG'):
                 tqdm.write(f'  {e}')
-            return
+            continue
 
         save_hit(hit, data)
         dedispersed_data = dedisperse_hit(hit, data)
