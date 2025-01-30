@@ -77,28 +77,28 @@ public:
             .phasors = inputPhasorBuffer,
         });
 
-        this->connect(integrator, {
-            .size = config.integratorSize,
-            .rate = config.integratorRate,
-
-            .blockSize = config.integratorBlockSize,
-        }, {
-            .buf = beamformer->getOutputBuffer(),
-        });
-
         this->connect(detector, {
             .integrationRate = 1,
             .numberOfOutputPolarizations = 1,
 
             .blockSize = config.detectorBlockSize,
         }, {
-            .buf = integrator->getOutputBuffer(),
+            .buf = beamformer->getOutputBuffer(),
+        });
+
+        this->connect(integrator, {
+            .size = config.integratorSize,
+            .rate = config.integratorRate,
+
+            .blockSize = config.integratorBlockSize,
+        }, {
+            .buf = detector->getOutputBuffer(),
         });
 
         this->connect(outputCaster, {
             .blockSize = config.outputCasterBlockSize,
         }, {
-            .buf = detector->getOutputBuffer(),
+            .buf = integrator->getOutputBuffer(),
         });
 
         this->connect(timeStacker, {
@@ -143,11 +143,11 @@ private:
     using Beamformer = typename Modules::Beamformer::ATA<CF32, CF32>;
     std::shared_ptr<Beamformer> beamformer;
 
-    using Integrator = typename Modules::Integrator<CF32, CF32>;
-    std::shared_ptr<Integrator> integrator;
-
     using Detector = typename Modules::Detector<CF32, F32>;
     std::shared_ptr<Detector> detector;
+
+    using Integrator = typename Modules::Integrator<F32, F32>;
+    std::shared_ptr<Integrator> integrator;
 
     using OutputCaster = typename Modules::Caster<F32, OT>;
     std::shared_ptr<OutputCaster> outputCaster;
