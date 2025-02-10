@@ -168,10 +168,6 @@ void ReceiverOp::start() {
         pimpl->burstCollectorLoop();
     });
 
-    // Print static variables.
-
-    HOLOSCAN_LOG_INFO("Packets per block: {}", pimpl->packetsPerBlock);
-
     // Allocate block tensor pool.
 
     pimpl->blockTensorPool.resize(pimpl->outputPoolSize, [&]{
@@ -428,16 +424,17 @@ void ReceiverOp::Impl::metricsLoop() {
     }
 
     while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Blocks    : {} received, {} computed, {} lost", receivedBlocks, computedBlocks, lostBlocks);
-        HOLOSCAN_LOG_INFO("Packets   : {} evicted, {} received, {} lost", evictedPackets, receivedPackets, lostPackets);
-        HOLOSCAN_LOG_INFO("In-Flight : {} idle, {} receive, {} compute", idleQueue.size(), receiveQueue.size(), computeQueue.size());
-        HOLOSCAN_LOG_INFO("Bursts    : {} in-flight, {} us average per-burst release time", bursts.size(), avgBurstReleaseTime.count());
-        HOLOSCAN_LOG_INFO("Mem Pool  : {} available, {} referenced", blockTensorPool.available(), blockTensorPool.referenced());
-        HOLOSCAN_LOG_INFO("Fine Packet Count:");
-        HOLOSCAN_LOG_INFO("   All antennas     : {}", allAntennas);
-        HOLOSCAN_LOG_INFO("   Filtered antennas: {}", filteredAntennas);
-        HOLOSCAN_LOG_INFO("   All channels     : {}", allChannels);
-        HOLOSCAN_LOG_INFO("   Filtered channels: {}", filteredChannels);
+        HOLOSCAN_LOG_INFO("Transport Operator:");
+        HOLOSCAN_LOG_INFO("  Blocks    : {} received, {} computed, {} lost", receivedBlocks, computedBlocks, lostBlocks);
+        HOLOSCAN_LOG_INFO("  Packets   : {} evicted, {} received, {} lost", evictedPackets, receivedPackets, lostPackets);
+        HOLOSCAN_LOG_INFO("  In-Flight : {} idle, {} receive, {} compute", idleQueue.size(), receiveQueue.size(), computeQueue.size());
+        HOLOSCAN_LOG_INFO("  Bursts    : {} in-flight, {} us average per-burst release time", bursts.size(), avgBurstReleaseTime.count());
+        HOLOSCAN_LOG_INFO("  Mem Pool  : {} available, {} referenced", blockTensorPool.available(), blockTensorPool.referenced());
+        HOLOSCAN_LOG_INFO("  Fine Packet Count:");
+        HOLOSCAN_LOG_INFO("    All antennas     : {}", allAntennas);
+        HOLOSCAN_LOG_INFO("    Filtered antennas: {}", filteredAntennas);
+        HOLOSCAN_LOG_INFO("    All channels     : {}", allChannels);
+        HOLOSCAN_LOG_INFO("    Filtered channels: {}", filteredChannels);
 
         if (enableCsvLogging) {
             const auto p1 = std::chrono::system_clock::now();

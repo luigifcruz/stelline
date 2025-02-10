@@ -49,10 +49,10 @@ public:
 
         auto inputPhasorShape = PhasorShape({
             1,
-            inputBuffer[0].shape().numberOfAspects(),
-            inputBuffer[0].shape().numberOfFrequencyChannels(),
-            inputBuffer[0].shape().numberOfTimeSamples(),
-            inputBuffer[0].shape().numberOfPolarizations()
+            inputBuffer.at(0).shape().numberOfAspects(),
+            inputBuffer.at(0).shape().numberOfFrequencyChannels(),
+            inputBuffer.at(0).shape().numberOfTimeSamples(),
+            inputBuffer.at(0).shape().numberOfPolarizations()
         }); 
 
         inputPhasorBuffer = PhasorTensor<Device::CUDA, CF32>(inputPhasorShape);
@@ -176,6 +176,12 @@ struct FrbnnOp::Impl {
     std::shared_ptr<OpFrbnnPipeline> pipeline;
     ArrayShape bladeInputShape;
     ArrayShape bladeOutputShape;
+
+    // Metrics.
+
+    std::thread metricsThread;
+    bool metricsThreadRunning;
+    void metricsLoop();
 };
 
 void FrbnnOp::initialize() {
@@ -242,6 +248,22 @@ void FrbnnOp::start() {
 
     // TODO: Make number of buffers configurable.
     pimpl->dispatcher.template initialize<F32>(4, pimpl->bladeOutputShape);
+
+    // Start metrics thread.
+
+    pimpl->metricsThreadRunning = true;
+    pimpl->metricsThread = std::thread([&]{
+        pimpl->metricsLoop();
+    });
+}
+
+void FrbnnOp::stop() {
+    // Stop metrics thread.
+
+    pimpl->metricsThreadRunning = false;
+    if (pimpl->metricsThread.joinable()) {
+        pimpl->metricsThread.join();
+    }
 }
 
 void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -249,21 +271,36 @@ void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionConte
         return input.receive<DspBlock>("dsp_block_in").value();
     };
 
-    auto convertInputCallback = [&](Dispatcher::Job& job){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(job.input.tensor->data(), pimpl->bladeInputShape);
+    auto convertInputCallback = [&](DspBlock& data){
+        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->bladeInputShape);
         return pimpl->pipeline->transferIn(deviceInputBuffer);
     };
 
-    auto convertOutputCallback = [&](Dispatcher::Job& job){
-        ArrayTensor<Device::CUDA, F32> deviceOutputBuffer(job.output.tensor->data(), pimpl->bladeOutputShape);
+    auto convertOutputCallback = [&](DspBlock& data){
+        ArrayTensor<Device::CUDA, F32> deviceOutputBuffer(data.tensor->data(), pimpl->bladeOutputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 
-    auto emitCallback = [&](Dispatcher::Job& job){
-        output.emit(job.output, "dsp_block_out");
+    auto emitCallback = [&](DspBlock& data){
+        output.emit(data, "dsp_block_out");
     };
 
-    pimpl->dispatcher.run(pimpl->pipeline, receiveCallback, convertInputCallback, convertOutputCallback, emitCallback);
+    if (pimpl->dispatcher.run(pimpl->pipeline, 
+                              receiveCallback, 
+                              convertInputCallback, 
+                              convertOutputCallback, 
+                              emitCallback) != Result::SUCCESS) {
+        throw std::runtime_error("Dispatcher failed.");
+    }
+}
+
+void FrbnnOp::Impl::metricsLoop() {
+    while (metricsThreadRunning) {
+        HOLOSCAN_LOG_INFO("Frbnn Operator:");
+        dispatcher.metrics();
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
 }
 
 }  // namespace stelline::operators::blade

@@ -24,6 +24,7 @@ class STELLINE_API CorrelatorOp : public Operator {
     void initialize() override;
     void setup(OperatorSpec& spec) override;
     void start() override;
+    void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
  private:
@@ -43,6 +44,7 @@ class STELLINE_API FrbnnOp : public Operator {
     void initialize() override;
     void setup(OperatorSpec& spec) override;
     void start() override;
+    void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
  private:
@@ -62,6 +64,7 @@ class STELLINE_API BeamformerOp : public Operator {
     void initialize() override;
     void setup(OperatorSpec& spec) override;
     void start() override;
+    void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
  private:

@@ -20,6 +20,7 @@ ata_standard_rx:
   rdma_burst_size: 8192
   concurrent_blocks: 4
   output_pool_size: 32
+  sorter_depth: 16
   enable_csv_logging: true
   total_block:
     number_of_antennas: 28
@@ -46,6 +47,7 @@ ata_hires_rx:
   rdma_burst_size: 8192
   concurrent_blocks: 8
   output_pool_size: 512
+  sorter_depth: 16
   total_block:
     number_of_antennas: 28
     number_of_channels: 1
@@ -61,3 +63,17 @@ ata_hires_rx:
     number_of_channels: 32
     number_of_samples: 0
     number_of_polarizations: 0
+
+blade_frbnn:
+  input_shape:
+    number_of_antennas: 28
+    number_of_channels: 192
+    number_of_samples: 8192
+    number_of_polarizations: 2
+  output_shape:
+    number_of_antennas: 32
+    number_of_channels: 192
+    number_of_samples: 2048
+    number_of_polarizations: 1
+  mode: frbnn
+  options:

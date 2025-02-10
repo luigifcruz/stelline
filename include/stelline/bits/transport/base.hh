@@ -22,6 +22,7 @@ inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
     auto concurrent_blocks = FetchArg<uint64_t>(app, config, "concurrent_blocks");
     auto output_pool_size = FetchArg<uint64_t>(app, config, "output_pool_size");
     auto enable_csv_logging = FetchArg<bool>(app, config, "enable_csv_logging", false);
+    auto sorter_depth = FetchArg<uint64_t>(app, config, "sorter_depth", 16);
 
     auto rdma_gpu = FetchArg<uint64_t>(app, config, "rdma_gpu");
     auto rdma_nic = FetchArg<std::string>(app, config, "rdma_nic");
@@ -44,6 +45,7 @@ inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
     HOLOSCAN_LOG_INFO("  Total Block: {}", total_block);
     HOLOSCAN_LOG_INFO("  Partial Block: {}", partial_block);
     HOLOSCAN_LOG_INFO("  Offset Block: {}", offset_block);
+    HOLOSCAN_LOG_INFO("  Sorter Depth: {}", sorter_depth);
 
     // Build RDMA configuration.
 
@@ -102,12 +104,18 @@ inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
         Arg("output_pool_size", output_pool_size),
         Arg("enable_csv_logging", enable_csv_logging)
     );
+    
+    auto sorter = app->template make_operator<SorterOp>(
+        "sorter",
+        Arg("depth", sorter_depth)
+    );
 
     // Connect operators.
 
     app->add_flow(ano_rx, receiver, {{"bench_rx_out", "burst_in"}});
+    app->add_flow(receiver, sorter, {{"dsp_block_out", "dsp_block_in"}});
 
-    return receiver;
+    return sorter;
 }
 
 }  // namespace stelline::bits::transport

@@ -111,6 +111,12 @@ struct BeamformerOp::Impl {
     std::shared_ptr<OpBeamformerPipeline> pipeline;
     ArrayShape bladeInputShape;
     ArrayShape bladeOutputShape;
+
+    // Metrics.
+
+    std::thread metricsThread;
+    bool metricsThreadRunning;
+    void metricsLoop();
 };
 
 void BeamformerOp::initialize() {
@@ -177,6 +183,22 @@ void BeamformerOp::start() {
 
     // TODO: Make number of buffers configurable.
     pimpl->dispatcher.template initialize<CF32>(4, pimpl->bladeOutputShape);
+
+    // Start metrics thread.
+
+    pimpl->metricsThreadRunning = true;
+    pimpl->metricsThread = std::thread([&]{
+        pimpl->metricsLoop();
+    });
+}
+
+void BeamformerOp::stop() {
+    // Stop metrics thread.
+
+    pimpl->metricsThreadRunning = false;
+    if (pimpl->metricsThread.joinable()) {
+        pimpl->metricsThread.join();
+    } 
 }
 
 void BeamformerOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -184,21 +206,36 @@ void BeamformerOp::compute(InputContext& input, OutputContext& output, Execution
         return input.receive<DspBlock>("dsp_block_in").value();
     };
 
-    auto convertInputCallback = [&](Dispatcher::Job& job){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(job.input.tensor->data(), pimpl->bladeInputShape);
+    auto convertInputCallback = [&](DspBlock& data){
+        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->bladeInputShape);
         return pimpl->pipeline->transferIn(deviceInputBuffer);
     };
 
-    auto convertOutputCallback = [&](Dispatcher::Job& job){
-        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(job.output.tensor->data(), pimpl->bladeOutputShape);
+    auto convertOutputCallback = [&](DspBlock& data){
+        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(data.tensor->data(), pimpl->bladeOutputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 
-    auto emitCallback = [&](Dispatcher::Job& job){
-        output.emit(job.output, "dsp_block_out");
+    auto emitCallback = [&](DspBlock& data){
+        output.emit(data, "dsp_block_out");
     };
 
-    pimpl->dispatcher.run(pimpl->pipeline, receiveCallback, convertInputCallback, convertOutputCallback, emitCallback);
+    if (pimpl->dispatcher.run(pimpl->pipeline, 
+                              receiveCallback, 
+                              convertInputCallback, 
+                              convertOutputCallback, 
+                              emitCallback) != Result::SUCCESS) {
+        throw std::runtime_error("Dispatcher failed.");
+    }
+}
+
+void BeamformerOp::Impl::metricsLoop() {
+    while (metricsThreadRunning) {
+        HOLOSCAN_LOG_INFO("Beamformer Operator:");
+        dispatcher.metrics();
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
 }
 
 }  // namespace stelline::operators::blade

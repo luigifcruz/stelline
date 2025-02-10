@@ -43,6 +43,25 @@ class STELLINE_API ReceiverOp : public Operator {
     Parameter<bool> enableCsvLogging_;
 };
 
+class STELLINE_API SorterOp : public Operator {
+ public:
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)
+
+    ~SorterOp();
+
+    void initialize() override;
+    void setup(OperatorSpec& spec) override;
+    void start() override;
+    void stop() override;
+    void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+ private:
+    struct Impl;
+    Impl* pimpl;
+
+    Parameter<uint64_t> depth_;
+};
+
 }  // namespace stelline::operators::transport
 
 #endif  // STELLINE_OPERATORS_TRANSPORT_BASE_HH
