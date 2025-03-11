@@ -34,7 +34,7 @@ ata_standard_rx:
     number_of_polarizations: 2
   offset_block:
     number_of_antennas: 0
-    number_of_channels: 928
+    number_of_channels: 1120
     number_of_samples: 0
     number_of_polarizations: 0
 
@@ -63,6 +63,15 @@ ata_hires_rx:
     number_of_channels: 32
     number_of_samples: 0
     number_of_polarizations: 0
+
+file_writer:
+  mode: simple_writer
+  enable_rdma: false
+  file_path: /workspace/stelline/build/output.bin
+
+frbnn_inference:
+  frbnn_preprocessor_path: ./resources/frbnn/model/frbnn_preprocessor_32.trt
+  frbnn_path: ./resources/frbnn/model/frbnn_32.trt
 
 blade_frbnn:
   input_shape:

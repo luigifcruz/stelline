@@ -18,7 +18,9 @@ cfg_lst = configuration_data({
     'build_type': get_option('buildtype'),
 })
 src_lst = []
-dep_lst = []
+dep_lst = [
+    dependency('cuda', version: '>=11', modules: ['cuda', 'culibos', 'cufile']),
+]
 inc_lst = [
     include_directories('include'),
 ]

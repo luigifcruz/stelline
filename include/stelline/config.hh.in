@@ -21,6 +21,7 @@
 #mesondefine STELLINE_OPERATOR_FRBNN
 #mesondefine STELLINE_OPERATOR_TRANSPORT
 #mesondefine STELLINE_OPERATOR_BLADE
+#mesondefine STELLINE_OPERATOR_IO
 
 #
 # Bits
@@ -29,6 +30,7 @@
 #mesondefine STELLINE_BIT_FRBNN
 #mesondefine STELLINE_BIT_TRANSPORT
 #mesondefine STELLINE_BIT_BLADE
+#mesondefine STELLINE_BIT_IO
 
 #
 # Resources

@@ -24,6 +24,8 @@ inline auto BladeBit(auto* app, auto& pool, const std::string& config) {
     HOLOSCAN_LOG_INFO("  Output Shape: {}", output_shape);
     HOLOSCAN_LOG_INFO("  Mode: {}", mode);
 
+    // Declare modes.
+
     auto correlator_op = [&](){
         // TODO: Implement options parsing.
         // TODO: Implement options printing.
@@ -56,6 +58,8 @@ inline auto BladeBit(auto* app, auto& pool, const std::string& config) {
             Arg("output_shape", output_shape)
         );
     };
+
+    // Select configuration mode.
 
     if (mode == "correlator") {
         HOLOSCAN_LOG_INFO("Creating Correlator operator.");

@@ -28,8 +28,10 @@ $ sudo docker run -it --rm -u root \
     --gpus=all \
     --cap-add CAP_SYS_PTRACE \
     --ipc=host \
+    --volume /run/udev:/run/udev:ro \
     --ulimit memlock=-1 \
     --ulimit stack=67108864 \
+    --device=/dev/nvidia-fs* \
     -v /dev/bus/usb:/dev/bus/usb \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v /mnt/huge:/mnt/huge \
