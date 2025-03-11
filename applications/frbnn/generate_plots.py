@@ -12,12 +12,12 @@ from scipy.special import softmax
 BSIZE = 32
 NCHAN = 192
 NSAMPLES = 2048
-TIME_LENGTH = 128e-3
-SYNC_TIME = 1725998555
+TIME_LENGTH = 131.072e-3
+SYNC_TIME = 1732927136
 
-CENTER_FREQ = 1800e6
+CENTER_FREQ = 1236e6
 BANDWIDTH = 96e6
-SOURCE_DM = 56.7
+SOURCE_DM = 56.77118
 
 @dataclass
 class Hit:
@@ -166,6 +166,7 @@ def parse_hits(hits):
 
             data = data.reshape((BSIZE, NCHAN, NSAMPLES))
             data = data[hit.batch_index, :, :]
+            data /= np.mean(data, axis=1, keepdims=True)
             f.close()
         except Exception as e:
             tqdm.write(f'Failed to load data for hit {hit.telescope_timestamp}.')
