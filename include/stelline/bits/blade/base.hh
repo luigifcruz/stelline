@@ -9,7 +9,7 @@
 
 namespace stelline::bits::blade {
 
-inline auto BladeBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface BladeBit(auto* app, auto& pool, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::blade;
 
@@ -63,17 +63,20 @@ inline auto BladeBit(auto* app, auto& pool, const std::string& config) {
 
     if (mode == "correlator") {
         HOLOSCAN_LOG_INFO("Creating Correlator operator.");
-        return static_cast<std::shared_ptr<holoscan::Operator>>(correlator_op());
+        const auto& op = correlator_op();
+        return {op, op};
     }
 
     if (mode == "beamformer") {
         HOLOSCAN_LOG_INFO("Creating Beamformer operator.");
-        return static_cast<std::shared_ptr<holoscan::Operator>>(beamformer_op());
+        const auto& op = beamformer_op();
+        return {op, op};
     }
 
     if (mode == "frbnn") {
         HOLOSCAN_LOG_INFO("Creating FRBNN operator.");
-        return static_cast<std::shared_ptr<holoscan::Operator>>(frbnn_op());
+        const auto& op = frbnn_op();
+        return {op, op};
     }
 
     HOLOSCAN_LOG_ERROR("Unsupported mode: {}", mode);

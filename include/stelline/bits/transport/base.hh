@@ -10,7 +10,7 @@
 
 namespace stelline::bits::transport {
 
-inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface TransportBit(auto* app, auto& pool, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::transport;
 
@@ -115,7 +115,7 @@ inline auto TransportBit(auto* app, auto& pool, const std::string& config) {
     app->add_flow(ano_rx, receiver, {{"bench_rx_out", "burst_in"}});
     app->add_flow(receiver, sorter, {{"dsp_block_out", "dsp_block_in"}});
 
-    return sorter;
+    return {sorter, sorter};
 }
 
 }  // namespace stelline::bits::transport

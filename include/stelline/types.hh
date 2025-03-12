@@ -35,6 +35,8 @@ struct InferenceBlock {
     }
 };
 
+typedef std::pair<std::shared_ptr<holoscan::Operator>, std::shared_ptr<holoscan::Operator>> BitInterface;
+
 }  // namespace stelline
 
 #endif  // STELLINE_TYPES_HH

@@ -8,7 +8,7 @@
 
 namespace stelline::bits::frbnn {
 
-inline auto IoSinkBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::io;
 
@@ -37,7 +37,8 @@ inline auto IoSinkBit(auto* app, auto& pool, const std::string& config) {
 
     if (mode == "simple_writer") {
         HOLOSCAN_LOG_INFO("Creating Simple Writer operator.");
-        return static_cast<std::shared_ptr<holoscan::Operator>>(simple_writer_op());
+        const auto& op = simple_writer_op();
+        return {op, op};
     }
 
     HOLOSCAN_LOG_ERROR("Unsupported mode: {}", mode);

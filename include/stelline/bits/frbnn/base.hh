@@ -9,7 +9,7 @@
 
 namespace stelline::bits::frbnn {
 
-inline auto FrbnnInferenceBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
@@ -93,7 +93,7 @@ inline auto FrbnnInferenceBit(auto* app, auto& pool, const std::string& config) 
     app->add_flow(modelAdapter, frbnnInference, {{"out", "receivers"}});
     app->add_flow(frbnnInference, modelPostprocessor, {{"transmitter", "in"}});
 
-    return std::pair{modelPreprocessor, modelPostprocessor};
+    return {modelPreprocessor, modelPostprocessor};
 }
 
 }  // namespace stelline::bits::frbnn
