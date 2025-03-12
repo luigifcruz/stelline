@@ -25,6 +25,7 @@ struct ReceiverOp::Impl {
 
     // Cache parameters.
 
+    uint64_t latestBlockTimeIndex;
     uint64_t latestTimestamp;
     uint64_t timestampCutoff;
     uint64_t blockDuration;
@@ -62,6 +63,11 @@ struct ReceiverOp::Impl {
     std::set<uint64_t> filteredAntennas;
     std::set<uint64_t> filteredChannels;
     std::chrono::microseconds avgBurstReleaseTime;
+
+    // Release helpers.
+
+    void releaseReceivedBlocks();
+    void releaseComputedBlocks(OutputContext& output);
 
     // Burst collector.
 
@@ -251,6 +257,8 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
 
         uint64_t blockTimeIndex = packet.timestamp / pimpl->blockDuration;
         uint64_t blockPacketTimeIndex = (packet.timestamp % pimpl->blockDuration) / pimpl->partialBlock.numberOfSamples;
+        
+        pimpl->latestBlockTimeIndex = std::max(pimpl->latestBlockTimeIndex, blockTimeIndex);
 
         if (!pimpl->blockMap.contains(blockTimeIndex)) {
             if (pimpl->idleQueue.empty()) {
@@ -288,55 +296,10 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
         pimpl->receivedPackets += 1;
     }
 
-    // Scan receive queue for complete blocks.
+    // Run release helpers.
 
-    while (!pimpl->receiveQueue.empty()) {
-        auto block = pimpl->receiveQueue.front();
-        pimpl->receiveQueue.pop();
-
-        if (block->isComplete()) {
-            pimpl->blockMap.erase(block->index());
-            std::shared_ptr<Tensor> tensor;
-            while ((tensor = pimpl->blockTensorPool.get()) == nullptr) {
-                throw std::runtime_error("Failed to allocate tensor from pool.");
-            }
-            block->compute(tensor, pimpl->totalBlock, pimpl->partialBlock, pimpl->slots);
-            pimpl->computeQueue.push(block);
-            pimpl->receivedBlocks += 1;
-        } else {
-            pimpl->swapQueue.push(block);
-        }
-    }
-
-    while (!pimpl->swapQueue.empty()) {
-        pimpl->receiveQueue.push(pimpl->swapQueue.front());
-        pimpl->swapQueue.pop();
-    }
-
-    // Scan compute queue for blocks ready to be released.
-
-    while (!pimpl->computeQueue.empty()) {
-        auto block = pimpl->computeQueue.front();
-        pimpl->computeQueue.pop();
-
-        if (!block->isProcessing()) {
-            DspBlock outputBlock = {
-                .timestamp = block->timestamp(),
-                .tensor = block->outputTensor(),
-            };
-            output.emit(outputBlock, "dsp_block_out");
-            block->destroy();
-            pimpl->idleQueue.push(block);
-            pimpl->computedBlocks += 1;
-        } else {
-            pimpl->swapQueue.push(block);
-        }
-    }
-
-    while (!pimpl->swapQueue.empty()) {
-        pimpl->computeQueue.push(pimpl->swapQueue.front());
-        pimpl->swapQueue.pop();
-    }
+    pimpl->releaseReceivedBlocks();
+    pimpl->releaseComputedBlocks(output);
 
     // Check for execution errors.
 
@@ -353,6 +316,56 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
 
         // Throw exception.
         throw std::runtime_error(err);
+    }
+}
+
+void ReceiverOp::Impl::releaseReceivedBlocks() {
+    while (!receiveQueue.empty()) {
+        auto block = receiveQueue.front();
+        receiveQueue.pop();
+
+        if (block->isComplete()) {
+            blockMap.erase(block->index());
+            std::shared_ptr<Tensor> tensor;
+            while ((tensor = blockTensorPool.get()) == nullptr) {
+                throw std::runtime_error("Failed to allocate tensor from pool.");
+            }
+            block->compute(tensor, totalBlock, partialBlock, slots);
+            computeQueue.push(block);
+            receivedBlocks += 1;
+        } else {
+            swapQueue.push(block);
+        }
+    }
+
+    while (!swapQueue.empty()) {
+        receiveQueue.push(swapQueue.front());
+        swapQueue.pop();
+    }
+}
+
+void ReceiverOp::Impl::releaseComputedBlocks(OutputContext& output) {
+    while (!computeQueue.empty()) {
+        auto block = computeQueue.front();
+        computeQueue.pop();
+
+        if (!block->isProcessing()) {
+            DspBlock outputBlock = {
+                .timestamp = block->timestamp(),
+                .tensor = block->outputTensor(),
+            };
+            output.emit(outputBlock, "dsp_block_out");
+            block->destroy();
+            idleQueue.push(block);
+            computedBlocks += 1;
+        } else {
+            swapQueue.push(block);
+        }
+    }
+
+    while (!swapQueue.empty()) {
+        computeQueue.push(swapQueue.front());
+        swapQueue.pop();
     }
 }
 
@@ -430,6 +443,13 @@ void ReceiverOp::Impl::metricsLoop() {
         HOLOSCAN_LOG_INFO("  In-Flight : {} idle, {} receive, {} compute", idleQueue.size(), receiveQueue.size(), computeQueue.size());
         HOLOSCAN_LOG_INFO("  Bursts    : {} in-flight, {} us average per-burst release time", bursts.size(), avgBurstReleaseTime.count());
         HOLOSCAN_LOG_INFO("  Mem Pool  : {} available, {} referenced", blockTensorPool.available(), blockTensorPool.referenced());
+
+        std::set<uint64_t> allBlockTimes;
+        for (const auto& [time, _] : blockMap) {
+            allBlockTimes.insert(time);
+        }
+        HOLOSCAN_LOG_INFO("  Block Map : latest time index {}, all block times {}", latestBlockTimeIndex, allBlockTimes);
+
         HOLOSCAN_LOG_INFO("  Fine Packet Count:");
         HOLOSCAN_LOG_INFO("    All antennas     : {}", allAntennas);
         HOLOSCAN_LOG_INFO("    Filtered antennas: {}", filteredAntennas);
