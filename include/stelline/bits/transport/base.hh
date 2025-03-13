@@ -5,7 +5,7 @@
 #include <holoscan/operators/advanced_network/adv_network_rx.h>
 
 #include <stelline/helpers.hh>
-#include <stelline/yaml/block_shape.hh>
+#include <stelline/yaml/types/block_shape.hh>
 #include <stelline/operators/transport/base.hh>
 
 namespace stelline::bits::transport {

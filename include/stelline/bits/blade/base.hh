@@ -4,7 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/helpers.hh>
-#include <stelline/yaml/block_shape.hh>
+#include <stelline/yaml/types/block_shape.hh>
 #include <stelline/operators/blade/base.hh>
 
 namespace stelline::bits::blade {

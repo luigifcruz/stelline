@@ -4,7 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
-#include <stelline/yaml/block_shape.hh>
+#include <stelline/yaml/types/block_shape.hh>
 
 namespace stelline::operators::transport {
 
