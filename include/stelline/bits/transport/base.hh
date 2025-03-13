@@ -16,20 +16,20 @@ inline BitInterface TransportBit(auto* app, auto& pool, const std::string& confi
 
     // Fetch configuration YAML.
 
-    auto total_block = FetchArg<BlockShape>(app, config, "total_block");
-    auto partial_block = FetchArg<BlockShape>(app, config, "partial_block");
-    auto offset_block = FetchArg<BlockShape>(app, config, "offset_block");
-    auto concurrent_blocks = FetchArg<uint64_t>(app, config, "concurrent_blocks");
-    auto output_pool_size = FetchArg<uint64_t>(app, config, "output_pool_size");
-    auto enable_csv_logging = FetchArg<bool>(app, config, "enable_csv_logging", false);
-    auto sorter_depth = FetchArg<uint64_t>(app, config, "sorter_depth", 16);
+    auto total_block = FetchNodeArg<BlockShape>(app, config, "total_block");
+    auto partial_block = FetchNodeArg<BlockShape>(app, config, "partial_block");
+    auto offset_block = FetchNodeArg<BlockShape>(app, config, "offset_block");
+    auto concurrent_blocks = FetchNodeArg<uint64_t>(app, config, "concurrent_blocks");
+    auto output_pool_size = FetchNodeArg<uint64_t>(app, config, "output_pool_size");
+    auto enable_csv_logging = FetchNodeArg<bool>(app, config, "enable_csv_logging", false);
+    auto sorter_depth = FetchNodeArg<uint64_t>(app, config, "sorter_depth", 16);
 
-    auto rdma_gpu = FetchArg<uint64_t>(app, config, "rdma_gpu");
-    auto rdma_nic = FetchArg<std::string>(app, config, "rdma_nic");
-    auto rdma_master_core = FetchArg<uint64_t>(app, config, "rdma_master_core");
-    auto rdma_worker_cores = FetchArg<std::vector<uint64_t>>(app, config, "rdma_worker_cores");
-    auto rdma_max_bursts = FetchArg<uint64_t>(app, config, "rdma_max_bursts");
-    auto rdma_burst_size = FetchArg<uint64_t>(app, config, "rdma_burst_size");
+    auto rdma_gpu = FetchNodeArg<uint64_t>(app, config, "rdma_gpu");
+    auto rdma_nic = FetchNodeArg<std::string>(app, config, "rdma_nic");
+    auto rdma_master_core = FetchNodeArg<uint64_t>(app, config, "rdma_master_core");
+    auto rdma_worker_cores = FetchNodeArg<std::vector<uint64_t>>(app, config, "rdma_worker_cores");
+    auto rdma_max_bursts = FetchNodeArg<uint64_t>(app, config, "rdma_max_bursts");
+    auto rdma_burst_size = FetchNodeArg<uint64_t>(app, config, "rdma_burst_size");
 
     HOLOSCAN_LOG_INFO("Transport Configuration:");
     HOLOSCAN_LOG_INFO("  RDMA:");

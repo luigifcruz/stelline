@@ -15,9 +15,9 @@ inline BitInterface BladeBit(auto* app, auto& pool, const std::string& config) {
 
     // Fetch configuration YAML.
 
-    auto input_shape = FetchArg<BlockShape>(app, config, "input_shape");
-    auto output_shape = FetchArg<BlockShape>(app, config, "output_shape");
-    auto mode = FetchArg<std::string>(app, config, "mode");
+    auto input_shape = FetchNodeArg<BlockShape>(app, config, "input_shape");
+    auto output_shape = FetchNodeArg<BlockShape>(app, config, "output_shape");
+    auto mode = FetchNodeArg<std::string>(app, config, "mode");
 
     HOLOSCAN_LOG_INFO("Blade Configuration:");
     HOLOSCAN_LOG_INFO("  Input Shape: {}", input_shape);

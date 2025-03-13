@@ -19,8 +19,8 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& 
 
     // Fetch configuration YAML.
 
-    auto frbnnPreprocessorPath = FetchArg<std::string>(app, config, "frbnn_preprocessor_path");
-    auto frbnnPath = FetchArg<std::string>(app, config, "frbnn_path");
+    auto frbnnPreprocessorPath = FetchNodeArg<std::string>(app, config, "frbnn_preprocessor_path");
+    auto frbnnPath = FetchNodeArg<std::string>(app, config, "frbnn_path");
 
     HOLOSCAN_LOG_INFO("FRBNN Inference Configuration:");
     HOLOSCAN_LOG_INFO("  Preprocessor Path: {}", frbnnPreprocessorPath);

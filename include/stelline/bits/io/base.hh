@@ -14,9 +14,9 @@ inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) 
 
     // Fetch configuration YAML.
 
-    auto mode = FetchArg<std::string>(app, config, "mode");
-    auto enableRdma = FetchArg<bool>(app, config, "enable_rdma");
-    auto filePath = FetchArg<std::string>(app, config, "file_path");
+    auto mode = FetchNodeArg<std::string>(app, config, "mode");
+    auto enableRdma = FetchNodeArg<bool>(app, config, "enable_rdma");
+    auto filePath = FetchNodeArg<std::string>(app, config, "file_path");
 
     HOLOSCAN_LOG_INFO("I/O Sink Configuration:");
     HOLOSCAN_LOG_INFO("  Mode: {}", mode);

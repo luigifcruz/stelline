@@ -24,7 +24,7 @@ class STELLINE_API ModelPreprocessorOp : public Operator {
 };
 
 class STELLINE_API ModelAdapterOp : public Operator {
-    public:
+ public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(ModelAdapterOp)
 
     ModelAdapterOp() = default;
@@ -34,7 +34,7 @@ class STELLINE_API ModelAdapterOp : public Operator {
 };
 
 class STELLINE_API ModelPostprocessorOp : public Operator {
-    public:
+ public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(ModelPostprocessorOp)
 
     ModelPostprocessorOp() = default;
