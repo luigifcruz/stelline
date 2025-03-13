@@ -9,6 +9,10 @@
 
 namespace stelline::bits::frbnn {
 
+//
+// FrbnnInferenceBit
+//
+
 inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
@@ -94,6 +98,38 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& 
     app->add_flow(frbnnInference, modelPostprocessor, {{"transmitter", "in"}});
 
     return {modelPreprocessor, modelPostprocessor};
+}
+
+//
+// FrbnnDetectionBit
+//
+
+inline BitInterface FrbnnDetectionBit(auto* app, auto& pool, const std::string& config) {
+    using namespace holoscan;
+    using namespace stelline::operators::frbnn;
+
+    // Configure app.
+
+    app->is_metadata_enabled(true);
+
+    // Fetch configuration YAML.
+
+    auto frbnnCsvFilePath = FetchNodeArg<std::string>(app, config, "csv_file_path");
+    auto frbnnHitsDirectory = FetchNodeArg<std::string>(app, config, "hits_directory");
+
+    HOLOSCAN_LOG_INFO("FRBNN Detection Configuration:");
+    HOLOSCAN_LOG_INFO("  CSV File Path: {}", frbnnCsvFilePath);
+    HOLOSCAN_LOG_INFO("  Hits Directory: {}", frbnnHitsDirectory);
+
+    // Instantiate operators.
+
+    auto frbnnSimpleDetection = app->template make_operator<SimpleDetectionOp>(
+        "frbnn-simple-detection",
+        Arg("csv_file_path", frbnnCsvFilePath),
+        Arg("hits_directory", frbnnHitsDirectory)
+    );
+
+    return {frbnnSimpleDetection, frbnnSimpleDetection};
 }
 
 }  // namespace stelline::bits::frbnn

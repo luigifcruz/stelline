@@ -8,6 +8,7 @@
 namespace stelline::operators::frbnn {
 
 using holoscan::Operator;
+using holoscan::Parameter;
 using holoscan::OperatorSpec;
 using holoscan::InputContext;
 using holoscan::OutputContext;
@@ -42,6 +43,26 @@ class STELLINE_API ModelPostprocessorOp : public Operator {
     void setup(OperatorSpec& spec) override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext&) override;
 };
+
+class STELLINE_API SimpleDetectionOp : public Operator {
+    public:
+       HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleDetectionOp)
+   
+       ~SimpleDetectionOp();
+   
+       void initialize() override;
+       void setup(OperatorSpec& spec) override;
+       void start() override;
+       void stop() override;
+       void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+   
+    private:
+       struct Impl;
+       Impl* pimpl;
+   
+       Parameter<std::string> csvFilePath_;
+       Parameter<std::string> hitsDirectory_;
+   };
 
 }  // namespace stelline::operators::frbnn
 
