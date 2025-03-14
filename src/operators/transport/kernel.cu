@@ -2,12 +2,15 @@
 
 #include <cuda/std/complex>
 
+//#define ENABLE_KERNEL_DEBUG_MODE
+
 // TODO: Improve performance.
 
 namespace stelline::operators::transport {
 
 __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
-                       BlockShape totalShape, BlockShape partialShape, BlockShape slots) {
+                       BlockShape totalShape, BlockShape partialShape, BlockShape slots, 
+                       int counter) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= numberOfPackets) {
@@ -57,12 +60,26 @@ __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
             for (int T = 0; T < pT; T++) {
                 for (int P = 0; P < pP; P++) {
                     int srcOffset = A * pF * pT * pP + F * pT * pP + T * pP + P;
-                    int dstOffset = A * tF * tT * tP + F * tT * tP + T * tP + P;
+                    int dstOffset = A * tF * tT * tP + F * tT * tP + T * tP + P;  
 
+#ifndef ENABLE_KERNEL_DEBUG_MODE
                     dst[dstOffset] = {
                         static_cast<float>(src[srcOffset].real()),
                         static_cast<float>(src[srcOffset].imag())
                     };
+#else
+                    if ((counter % 2) == 0) {
+                        dst[dstOffset] = {
+                            static_cast<float>(src[srcOffset].real()),
+                            static_cast<float>(src[srcOffset].imag())
+                        };
+                    } else {
+                        dst[dstOffset] = {
+                            static_cast<float>((counter % 8) * 2.0),
+                            static_cast<float>(0.0)
+                        };
+                    }
+#endif
                 }
             }
         }
@@ -79,8 +96,16 @@ cudaError_t LaunchKernel(void* output, void** input, uint64_t numberOfPackets,
         1
     };
 
-    Kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(output, input, numberOfPackets,
-                                                          totalShape, partialShape, slots);
+    static int counter = 0;
+    counter++;
+
+    Kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(output, 
+                                                          input, 
+                                                          numberOfPackets,
+                                                          totalShape, 
+                                                          partialShape, 
+                                                          slots, 
+                                                          counter);
 
     return cudaGetLastError();
 }
