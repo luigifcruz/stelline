@@ -1,6 +1,13 @@
 # Stelline
 This repository contains all the parts of the next-generation data processing pipeline of the Allen Telescope Array.
 
+## Project Structure
+This project aggregates all the custom Holoscan operators and glue code.
+
+- `operators`: Contains all the custom Holoscan operators (e.g., `transport`, `blade`, `frbnn`, `io`, etc.).
+- `bits`: Contains glue code between the YAML configuration file and the custom Holoscan operators (e.g. `BladeBit`, `FrbnnInferenceBit`, `FrbnnDetectionBit`, `IoSinkBit`, `TransportBit`, etc.). Its purpose is to reduce the amount of boilerplate code needed to create custom pipelines.
+- `recipes`: Contains the YAML configuration files that define the data processing pipelines without the need to write any glue code or compile any C++ code.
+
 ## Build Development Image
 
 ### 1. Clone this repository
@@ -52,4 +59,4 @@ $ ninja
 ```
 
 ### 6. Fun!
-Check each application README for further instructions. Or start developing your own application using the library.
+Now you can use the Stelline API to create your own application with `Bit` and `Operator` classes. Or, even better, use the `stelline` executable to run your recipes. Check out the recipes directory for examples.

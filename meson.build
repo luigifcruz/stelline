@@ -52,3 +52,9 @@ if not is_static
         libraries: dep_lst,
     )
 endif
+
+executable(
+    'stelline', 
+    ['stelline.cc'],
+    dependencies: lib_stelline_dep,
+)
