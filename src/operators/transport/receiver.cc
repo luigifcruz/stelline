@@ -177,7 +177,7 @@ void ReceiverOp::start() {
     // Allocate block tensor pool.
 
     pimpl->blockTensorPool.resize(pimpl->outputPoolSize, [&]{
-        auto tensor = matx::make_tensor<std::complex<float>>({
+        auto tensor = matx::make_tensor<cuda::std::complex<float>>({
             static_cast<int64_t>(pimpl->totalBlock.numberOfAntennas),
             static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
             static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
