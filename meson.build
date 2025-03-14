@@ -28,6 +28,7 @@ inc_lst = [
 subdir('meson')
 subdir('src')
 subdir('resources')
+subdir('include')
 
 lib_stelline = library(
     'stelline',
@@ -43,8 +44,6 @@ lib_stelline_dep = declare_dependency(
     dependencies: dep_lst,
     link_with: lib_stelline,
 )
-
-subdir('applications')
 
 if not is_static
     pkg = import('pkgconfig')

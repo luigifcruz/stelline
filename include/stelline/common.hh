@@ -5,6 +5,8 @@
 
 #include <cstdint>
 
+#include <stelline/config.hh>
+
 namespace stelline {
 
 #define STELLINE_API __attribute__((visibility("default")))

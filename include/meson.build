@@ -1,4 +1,4 @@
-subdir('jetstream')
+subdir('stelline')
 
 if not is_static
    install_subdir(

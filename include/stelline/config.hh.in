@@ -1,9 +1,9 @@
 #define STELLINE_VERSION_STR "@version@"
 #define STELLINE_BUILD_TYPE "@build_type@"
 
-#
-# Dependency Loaders
-#
+//
+// Dependency Loaders
+//
 
 #mesondefine STELLINE_LOADER_CURL
 #mesondefine STELLINE_LOADER_TENSORRT
@@ -14,26 +14,26 @@
 #mesondefine STELLINE_LOADER_BLADE
 #mesondefine STELLINE_LOADER_CYBERETHER
 
-#
-# Operators
-#
+//
+// Operators
+//
 
 #mesondefine STELLINE_OPERATOR_FRBNN
 #mesondefine STELLINE_OPERATOR_TRANSPORT
 #mesondefine STELLINE_OPERATOR_BLADE
 #mesondefine STELLINE_OPERATOR_IO
 
-#
-# Bits
-#
+//
+// Bits
+//
 
 #mesondefine STELLINE_BIT_FRBNN
 #mesondefine STELLINE_BIT_TRANSPORT
 #mesondefine STELLINE_BIT_BLADE
 #mesondefine STELLINE_BIT_IO
 
-#
-# Resources
-#
+//
+// Resources
+//
 
 #mesondefine STELLINE_RESOURCE_FRBNN_MODEL
