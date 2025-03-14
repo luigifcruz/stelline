@@ -1,6 +1,5 @@
 deps = [
     'STELLINE_LOADER_HOLOSCAN_CORE',
-    'STELLINE_LOADER_HOLOSCAN_INFERENCE',
 ]
 
 all_deps_found = true
@@ -12,6 +11,7 @@ if all_deps_found
     cfg_lst.set('STELLINE_OPERATOR_IO', true)
     src_lst += files([
         'simple_sink.cc',
+        'dummy_sink.cc',
     ])
 endif
 

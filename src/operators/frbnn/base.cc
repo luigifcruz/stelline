@@ -227,7 +227,7 @@ void SimpleDetectionOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
         HOLOSCAN_LOG_INFO("Simple Detector Operator:");
         HOLOSCAN_LOG_INFO("  Iterations: {}", iterations);
-        HOLOSCAN_LOG_INFO("  Hits: {}", numberOfHits);
+        HOLOSCAN_LOG_INFO("  Hits      : {}", numberOfHits);
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }

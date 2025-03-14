@@ -45,7 +45,7 @@ class STELLINE_API ModelPostprocessorOp : public Operator {
 };
 
 class STELLINE_API SimpleDetectionOp : public Operator {
-    public:
+ public:
        HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleDetectionOp)
    
        ~SimpleDetectionOp();
@@ -56,13 +56,13 @@ class STELLINE_API SimpleDetectionOp : public Operator {
        void stop() override;
        void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
    
-    private:
+ private:
        struct Impl;
        Impl* pimpl;
    
        Parameter<std::string> csvFilePath_;
        Parameter<std::string> hitsDirectory_;
-   };
+};
 
 }  // namespace stelline::operators::frbnn
 

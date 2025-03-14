@@ -34,6 +34,24 @@ class STELLINE_API SimpleSinkOp : public Operator {
     Parameter<bool> enableRdma_;
 };
 
+class STELLINE_API DummySinkOp : public Operator {
+ public:
+      HOLOSCAN_OPERATOR_FORWARD_ARGS(DummySinkOp)
+  
+      DummySinkOp() = default;
+      ~DummySinkOp();
+  
+      void initialize() override;
+      void setup(OperatorSpec& spec) override;
+      void start() override;
+      void stop() override;
+      void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+  
+ private:
+      struct Impl;
+      Impl* pimpl;
+};
+
 }  // namespace stelline::operators::io
 
 #endif  // STELLINE_OPERATORS_IO_BASE_HH
