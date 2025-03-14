@@ -6,7 +6,7 @@
 #include <stelline/helpers.hh>
 #include <stelline/operators/io/base.hh>
 
-namespace stelline::bits::frbnn {
+namespace stelline::bits::io {
 
 inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) {
     using namespace holoscan;
