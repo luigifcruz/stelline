@@ -17,10 +17,11 @@ struct SimpleSinkOp::Impl {
     // File Implementation
 
     struct {
-        int bytesWritten;
         int fileDescriptor;
         int64_t bytesWritten;
         CUfileHandle_t cufileHandle;
+        uint64_t bufferedRegistrations = 0;
+        std::unordered_set<void*> registeredBuffers;
     } Gds;
 
     struct {
@@ -128,6 +129,14 @@ void SimpleSinkOp::stop() {
     // Close file.
 
     if (pimpl->enableRdma) {
+        // Deregister buffers with GDS driver.
+
+        for (const auto& buffer : pimpl->Gds.registeredBuffers) {
+            GDS_CHECK_THROW(cuFileBufDeregister(buffer), [&]{
+                HOLOSCAN_LOG_ERROR("Failed to deregister buffer with GDS driver.");
+            });
+        }
+
         // Deregister file descriptor.
         cuFileHandleDeregister(&pimpl->Gds.cufileHandle);
 
@@ -160,7 +169,19 @@ void SimpleSinkOp::compute(InputContext& input, OutputContext&, ExecutionContext
     // Write tensor to file.
 
     if (pimpl->enableRdma) {
-        // Write tensor directly to file. 
+        // Register buffer with GDS driver.
+
+        if (!pimpl->Gds.registeredBuffers.contains(tensor->data())) {
+            pimpl->Gds.registeredBuffers.insert(tensor->data());
+
+            GDS_CHECK_THROW(cuFileBufRegister(tensor->data(), tensorBytes, 0), [&]{
+                HOLOSCAN_LOG_ERROR("Failed to register buffer with GDS driver.");
+            });
+        } else {
+            pimpl->Gds.bufferedRegistrations++;
+        }
+
+        // Write tensor directly to file.
 
         const auto res = cuFileWrite(pimpl->Gds.cufileHandle, 
                                      tensor->data(), 
@@ -201,7 +222,10 @@ void SimpleSinkOp::compute(InputContext& input, OutputContext&, ExecutionContext
 void SimpleSinkOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
         HOLOSCAN_LOG_INFO("Simple Sink Operator:");
-        // TODO: Add metrics.
+        if (enableRdma) {
+            HOLOSCAN_LOG_INFO("  GDS Registered Buffers: {}", Gds.registeredBuffers.size());
+            HOLOSCAN_LOG_INFO("  GDS Buffered Registrations: {}", Gds.bufferedRegistrations);
+        }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
