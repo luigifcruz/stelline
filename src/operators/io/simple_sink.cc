@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -18,6 +19,7 @@ struct SimpleSinkOp::Impl {
     struct {
         int bytesWritten;
         int fileDescriptor;
+        int64_t bytesWritten;
         CUfileHandle_t cufileHandle;
     } Gds;
 
@@ -166,7 +168,7 @@ void SimpleSinkOp::compute(InputContext& input, OutputContext&, ExecutionContext
                                      pimpl->Gds.bytesWritten, 
                                      0);
         if (res != tensorBytes) {
-            HOLOSCAN_LOG_ERROR("Failed to write to file. Expected {} bytes, but wrote {}.", tensorBytes, res);
+            HOLOSCAN_LOG_ERROR("Failed to write to file. Expected {} bytes, but wrote {}. Errno {}.", tensorBytes, res, errno); 
             throw std::runtime_error("Failed to write to file.");
         }
         pimpl->Gds.bytesWritten += tensorBytes;
