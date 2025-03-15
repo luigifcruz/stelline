@@ -40,7 +40,7 @@ class Dispatcher {
                 static_cast<I64>(inputShape.numberOfFrequencyChannels()),
                 static_cast<I64>(inputShape.numberOfTimeSamples()),
                 static_cast<I64>(inputShape.numberOfPolarizations())
-            });
+            }, matx::MATX_DEVICE_MEMORY);
             return std::make_shared<holoscan::Tensor>(tensor.GetDLPackTensor());
         });
     }

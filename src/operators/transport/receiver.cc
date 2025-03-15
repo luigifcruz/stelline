@@ -182,7 +182,7 @@ void ReceiverOp::start() {
             static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
             static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
             static_cast<int64_t>(pimpl->totalBlock.numberOfPolarizations)
-        });
+        }, matx::MATX_DEVICE_MEMORY);
         return std::make_shared<Tensor>(tensor.GetDLPackTensor());
     });
 }
