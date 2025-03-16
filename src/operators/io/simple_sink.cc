@@ -13,6 +13,8 @@ using namespace holoscan;
 
 namespace stelline::operators::io {
 
+// TODO: Implement asynchronous GDS writes.
+
 struct SimpleSinkOp::Impl {
     // File Implementation
 
