@@ -15,12 +15,10 @@ inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) 
     // Fetch configuration YAML.
 
     auto mode = FetchNodeArg<std::string>(app, config, "mode");
-    auto enableRdma = FetchNodeArg<bool>(app, config, "enable_rdma", false);
     auto filePath = FetchNodeArg<std::string>(app, config, "file_path", "./output.bin");
 
     HOLOSCAN_LOG_INFO("I/O Sink Configuration:");
     HOLOSCAN_LOG_INFO("  Mode: {}", mode);
-    HOLOSCAN_LOG_INFO("  Enable RDMA: {}", enableRdma);
     HOLOSCAN_LOG_INFO("  File Path: {}", filePath);
 
     // Declare modes.
@@ -28,7 +26,13 @@ inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) 
     auto simple_writer_op = [&](){
         return app->template make_operator<SimpleSinkOp>(
             "simple-writer",
-            Arg("enable_rdma", enableRdma),
+            Arg("file_path", filePath)
+        );
+    };
+
+    auto simple_writer_rdma_op = [&](){
+        return app->template make_operator<SimpleSinkRdmaOp>(
+            "simple-writer-rdma",
             Arg("file_path", filePath)
         );
     };
@@ -42,6 +46,12 @@ inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) 
     if (mode == "simple_writer") {
         HOLOSCAN_LOG_INFO("Creating Simple Writer operator.");
         const auto& op = simple_writer_op();
+        return {op, op};
+    }
+
+    if (mode == "simple_writer_rdma") {
+        HOLOSCAN_LOG_INFO("Creating Simple Writer RDMA operator.");
+        const auto& op = simple_writer_rdma_op();
         return {op, op};
     }
 

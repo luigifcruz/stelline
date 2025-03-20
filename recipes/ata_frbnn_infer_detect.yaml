@@ -1,6 +1,5 @@
 %YAML 1.2
 ---
-
 # Holoscan Configuration
 
 multithreaded: true
@@ -9,81 +8,81 @@ delay: 0.1
 delay_step: 0.01
 
 scheduler:
-  check_recession_period_ms: 0
-  worker_thread_number: 4
-  stop_on_deadlock: true
-  stop_on_deadlock_timeout: 500
+    check_recession_period_ms: 0
+    worker_thread_number: 4
+    stop_on_deadlock: true
+    stop_on_deadlock_timeout: 500
 
 # Graph
 
 stelline:
-  graph:
-    transport:
-      bit: transport_bit
-      configuration: ata_standard_rx
-    blade:
-      bit: blade_bit
-      configuration: blade_frbnn
-      input: 
-        in: transport
-    frbnn_inference:
-      bit: frbnn_inference_bit
-      configuration: frbnn_inference
-      input: 
-        in: blade
-    frbnn_detection:
-      bit: frbnn_detection_bit
-      configuration: frbnn_detection
-      input: 
-        in: frbnn_inference
+    graph:
+        transport:
+            bit: transport_bit
+            configuration: ata_standard_rx
+        blade:
+            bit: blade_bit
+            configuration: blade_frbnn
+            input:
+                in: transport
+        frbnn_inference:
+            bit: frbnn_inference_bit
+            configuration: frbnn_inference
+            input:
+                in: blade
+        frbnn_detection:
+            bit: frbnn_detection_bit
+            configuration: frbnn_detection
+            input:
+                in: frbnn_inference
 
 # Nodes
 
 ata_standard_rx:
-  rdma_gpu: 0
-  rdma_nic: 0005:03:00.1
-  rdma_master_core: 5
-  rdma_worker_cores: [7]
-  rdma_max_bursts: 30
-  rdma_burst_size: 8192
-  concurrent_blocks: 4
-  output_pool_size: 32
-  sorter_depth: 16
-  enable_csv_logging: true
-  total_block:
-    number_of_antennas: 28
-    number_of_channels: 192
-    number_of_samples: 8192
-    number_of_polarizations: 2
-  partial_block:
-    number_of_antennas: 1
-    number_of_channels: 96
-    number_of_samples: 16
-    number_of_polarizations: 2
-  offset_block:
-    number_of_antennas: 0
-    number_of_channels: 1120
-    number_of_samples: 0
-    number_of_polarizations: 0
+    rdma_gpu: 0
+    rdma_nic: 0005:03:00.1
+    rdma_master_core: 5
+    rdma_worker_cores: [7]
+    rdma_max_bursts: 30
+    rdma_burst_size: 8192
+    concurrent_blocks: 4
+    output_pool_size: 32
+    sorter_depth: 16
+    enable_csv_logging: true
+    total_block:
+        number_of_antennas: 28
+        number_of_channels: 192
+        number_of_samples: 8192
+        number_of_polarizations: 2
+    partial_block:
+        number_of_antennas: 1
+        number_of_channels: 96
+        number_of_samples: 16
+        number_of_polarizations: 2
+    offset_block:
+        number_of_antennas: 0
+        number_of_channels: 1120
+        number_of_samples: 0
+        number_of_polarizations: 0
 
 blade_frbnn:
-  input_shape:
-    number_of_antennas: 28
-    number_of_channels: 192
-    number_of_samples: 8192
-    number_of_polarizations: 2
-  output_shape:
-    number_of_antennas: 32
-    number_of_channels: 192
-    number_of_samples: 2048
-    number_of_polarizations: 1
-  mode: frbnn
-  options:
+    input_shape:
+        number_of_antennas: 28
+        number_of_channels: 192
+        number_of_samples: 8192
+        number_of_polarizations: 2
+    output_shape:
+        number_of_antennas: 32
+        number_of_channels: 192
+        number_of_samples: 2048
+        number_of_polarizations: 1
+    mode: frbnn
+    options:
 
 frbnn_inference:
-  frbnn_preprocessor_path: ./resources/frbnn/model/frbnn_preprocessor_32.trt
-  frbnn_path: ./resources/frbnn/model/frbnn_32.trt
+    frbnn_preprocessor_path: ./resources/frbnn/model/frbnn_preprocessor_32.trt
+    frbnn_path: ./resources/frbnn/model/frbnn_32.trt
 
 frbnn_detection:
-  csv_file_path: ./FRBNN-RUN.csv
-  hits_directory: ./hits
+    csv_file_path: ./FRBNN-RUN.csv
+    hits_directory: ./hits

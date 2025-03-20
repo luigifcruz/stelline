@@ -11,6 +11,7 @@ if all_deps_found
     cfg_lst.set('STELLINE_OPERATOR_IO', true)
     src_lst += files([
         'simple_sink.cc',
+        'simple_sink_rdma.cc',
         'dummy_sink.cc',
     ])
 endif
