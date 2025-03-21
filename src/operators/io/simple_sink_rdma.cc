@@ -25,6 +25,10 @@ struct SimpleSinkRdmaOp::Impl {
 
     // Metrics.
 
+    std::chrono::time_point<std::chrono::steady_clock> lastMeasurementTime;
+    std::atomic<int64_t> bytesSinceLastMeasurement{0};
+    std::atomic<double> currentBandwidthMBps{0.0};
+
     std::thread metricsThread;
     bool metricsThreadRunning;
     void metricsLoop();
@@ -83,6 +87,9 @@ void SimpleSinkRdmaOp::start() {
     // Reset counters.
 
     pimpl->bytesWritten = 0;
+    pimpl->bytesSinceLastMeasurement = 0;
+    pimpl->lastMeasurementTime = std::chrono::steady_clock::now();
+    pimpl->currentBandwidthMBps = 0.0;
 
     // Start metrics thread.
 
@@ -149,14 +156,27 @@ void SimpleSinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
         HOLOSCAN_LOG_ERROR("Failed to write to file. Expected {} bytes, but wrote {}. Errno {}.", tensorBytes, res, errno);
         throw std::runtime_error("Failed to write to file.");
     }
+
     pimpl->bytesWritten += tensorBytes;
+    pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
 void SimpleSinkRdmaOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
+
+        if (elapsedSeconds > 0.0) {
+            int64_t bytes = bytesSinceLastMeasurement.exchange(0);
+            currentBandwidthMBps = static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsedSeconds;
+            lastMeasurementTime = now;
+        }
+
         HOLOSCAN_LOG_INFO("Simple Sink RDMA Operator:");
         HOLOSCAN_LOG_INFO("  Registered Buffers: {}", registeredBuffers.size());
         HOLOSCAN_LOG_INFO("  Buffered Registrations: {}", bufferedRegistrations);
+        HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
+        HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
