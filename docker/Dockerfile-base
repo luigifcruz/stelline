@@ -110,3 +110,30 @@ RUN git clone https://github.com/NVIDIA/MatX.git /workspace/MatX && \
     cmake -DMATX_BUILD_DOCS=OFF .. && \
     make -j && \
     make install
+
+#
+# Install HDF5 and GDS-VFD
+#
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        libopenmpi-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/HDFGroup/hdf5.git /workspace/hdf5 && \
+    cd /workspace/hdf5 && \
+    git checkout d4525d758f49da5972f34b1c53d189dcd9bcc3d0 && \
+    git submodule update --init --recursive && \
+    mkdir build && cd build &&\
+    cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr -DHDF5_ENABLE_PARALLEL=YES .. && \
+    make -j && \
+    make install
+
+RUN git clone https://github.com/hpc-io/vfd-gds.git /workspace/vfd-gds && \
+    cd /workspace/vfd-gds && \
+    git checkout e33bae67a16238c2677f23abac76b9fe30b99869 && \
+    git submodule update --init --recursive && \
+    mkdir build && cd build &&\
+    cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr .. && \
+    make -j && \
+    make install
