@@ -3,6 +3,32 @@ FROM nvcr.io/nvidia/clara-holoscan/holoscan:v2.4.0-dgpu
 ARG DEBIAN_FRONTEND=noninteractive
 
 #
+# Add PPAs (cmake)
+#
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        ca-certificates \
+        gpg \
+        wget \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN test -f /usr/share/doc/kitware-archive-keyring/copyright || \
+    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
+    gpg --dearmor - | \
+    tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+
+RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | \
+    tee /etc/apt/sources.list.d/kitware.list >/dev/null
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        kitware-archive-keyring \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN rm -fr $(whereis cmake)
+
+#
 # Global Dependencies
 #
 
@@ -78,7 +104,7 @@ RUN cd /workspace/holohub/operators/advanced_network && \
 
 RUN git clone https://github.com/NVIDIA/MatX.git /workspace/MatX && \
     cd /workspace/MatX && \
-    git checkout main && \
+    git checkout 419a1c3f840f64168b2a276b44e56cabfe7c36d9 && \
     git submodule update --init --recursive && \
     mkdir build && cd build &&\
     cmake -DMATX_BUILD_DOCS=OFF .. && \
