@@ -20,7 +20,7 @@ struct SimpleSinkRdmaOp::Impl {
     int fileDescriptor;
     int64_t bytesWritten;
     CUfileHandle_t cufileHandle;
-    uint64_t bufferedRegistrations = 0;
+    uint64_t cachedBufferedRegistrations = 0;
     std::unordered_set<void*> registeredBuffers;
 
     // Metrics.
@@ -142,7 +142,7 @@ void SimpleSinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
             HOLOSCAN_LOG_ERROR("Failed to register buffer with GDS driver.");
         });
     } else {
-        pimpl->bufferedRegistrations++;
+        pimpl->cachedBufferedRegistrations++;
     }
 
     // Write tensor directly to file.
@@ -174,7 +174,7 @@ void SimpleSinkRdmaOp::Impl::metricsLoop() {
 
         HOLOSCAN_LOG_INFO("Simple Sink RDMA Operator:");
         HOLOSCAN_LOG_INFO("  Registered Buffers: {}", registeredBuffers.size());
-        HOLOSCAN_LOG_INFO("  Buffered Registrations: {}", bufferedRegistrations);
+        HOLOSCAN_LOG_INFO("  Cached Buffered Registrations: {}", cachedBufferedRegistrations);
         HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
         HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
 
