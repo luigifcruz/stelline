@@ -41,13 +41,13 @@ class Dispatcher {
                 static_cast<I64>(inputShape.numberOfTimeSamples()),
                 static_cast<I64>(inputShape.numberOfPolarizations())
             }, matx::MATX_DEVICE_MEMORY);
-            return std::make_shared<holoscan::Tensor>(tensor.GetDLPackTensor());
+            return std::make_shared<holoscan::Tensor>(tensor.ToDlPack());
         });
     }
 
-    Result run(auto& pipeline, 
+    Result run(auto& pipeline,
                auto& receiveCallback,
-               auto& convertInputCallback, 
+               auto& convertInputCallback,
                auto& convertOutputCallback,
                auto& emitCallback) {
         // Receive block.
@@ -123,10 +123,10 @@ class Dispatcher {
         };
 
         while (true) {
-            const auto& enqueueResult = pipeline->enqueue(inputCallback, 
-                                                          resultCallback, 
-                                                          outputCallback, 
-                                                          inputPoolPhase, 
+            const auto& enqueueResult = pipeline->enqueue(inputCallback,
+                                                          resultCallback,
+                                                          outputCallback,
+                                                          inputPoolPhase,
                                                           outputPoolPhase);
 
             // Block was queued successfully.
@@ -202,7 +202,7 @@ class Dispatcher {
 
             return enqueueResult;
         }
-            
+
         return Result::SUCCESS;
     };
 

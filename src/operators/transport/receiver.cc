@@ -97,7 +97,7 @@ ReceiverOp::~ReceiverOp() {
 void ReceiverOp::setup(OperatorSpec& spec) {
     spec.input<AdvNetBurstParams>("burst_in");
     spec.output<DspBlock>("dsp_block_out")
-        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+        .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
     spec.param(concurrentBlocks_, "concurrent_blocks");
@@ -183,7 +183,7 @@ void ReceiverOp::start() {
             static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
             static_cast<int64_t>(pimpl->totalBlock.numberOfPolarizations)
         }, matx::MATX_DEVICE_MEMORY);
-        return std::make_shared<Tensor>(tensor.GetDLPackTensor());
+        return std::make_shared<Tensor>(tensor.ToDlPack());
     });
 }
 
@@ -257,7 +257,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
 
         uint64_t blockTimeIndex = packet.timestamp / pimpl->blockDuration;
         uint64_t blockPacketTimeIndex = (packet.timestamp % pimpl->blockDuration) / pimpl->partialBlock.numberOfSamples;
-        
+
         pimpl->latestBlockTimeIndex = std::max(pimpl->latestBlockTimeIndex, blockTimeIndex);
 
         if (!pimpl->blockMap.contains(blockTimeIndex)) {
@@ -433,7 +433,7 @@ void ReceiverOp::Impl::metricsLoop() {
             "Latest Block Timestamp"
         );
         file.write(csv_header.c_str(), csv_header.size());
-        file.flush();   
+        file.flush();
     }
 
     while (metricsThreadRunning) {
@@ -461,17 +461,17 @@ void ReceiverOp::Impl::metricsLoop() {
             const auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(p1.time_since_epoch()).count();
 
             std::string csv_line = fmt::format(
-                "{},{},{},{},{},{},{},{},{},{},{}\n", 
-                timestamp, 
-                receivedBlocks, 
-                computedBlocks, 
-                lostBlocks, 
-                bursts.size(), 
-                avgBurstReleaseTime.count(), 
-                blockTensorPool.available(), 
-                idleQueue.size(), 
-                receiveQueue.size(), 
-                computeQueue.size(), 
+                "{},{},{},{},{},{},{},{},{},{},{}\n",
+                timestamp,
+                receivedBlocks,
+                computedBlocks,
+                lostBlocks,
+                bursts.size(),
+                avgBurstReleaseTime.count(),
+                blockTensorPool.available(),
+                idleQueue.size(),
+                receiveQueue.size(),
+                computeQueue.size(),
                 latestTimestamp
             );
             file.write(csv_line.c_str(), csv_line.size());
