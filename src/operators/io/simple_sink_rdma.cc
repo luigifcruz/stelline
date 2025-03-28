@@ -63,7 +63,7 @@ void SimpleSinkRdmaOp::start() {
 
     // Open Unix file.
 
-    pimpl->fileDescriptor = open(pimpl->filePath.c_str(), O_CREAT | O_WRONLY | O_DIRECT, 0644);
+    pimpl->fileDescriptor = open(pimpl->filePath.c_str(), O_CREAT | O_WRONLY | O_DIRECT | O_TRUNC, 0644);
     if (pimpl->fileDescriptor < 0) {
         HOLOSCAN_LOG_ERROR("Unable to open file '{}'. Error number '{}'.",
             pimpl->filePath, pimpl->fileDescriptor);

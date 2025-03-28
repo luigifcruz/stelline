@@ -61,7 +61,7 @@ void SimpleSinkOp::start() {
     pimpl->filePath = filePath_.get();
 
     // Open Unix file.
-    pimpl->file.open(pimpl->filePath.c_str(), std::ios::out | std::ios::binary);
+    pimpl->file.open(pimpl->filePath.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
 
     // Create stream.
     cudaStreamCreateWithFlags(&pimpl->stream, cudaStreamNonBlocking);
