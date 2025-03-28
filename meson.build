@@ -11,6 +11,7 @@ project(
 )
 
 is_static = get_option('default_library') == 'static'
+cuda_args = ['-arch', 'compute_70', '--expt-relaxed-constexpr', '-diag-suppress', '815']
 cdn_url = 'https://stelline.cdn.luigi.ltd/' + meson.project_version() + '/'
 
 cfg_lst = configuration_data({
@@ -37,6 +38,7 @@ lib_stelline = library(
     dependencies: dep_lst,
     gnu_symbol_visibility: 'hidden',
     install: not is_static,
+    cuda_args: cuda_args,
 )
 
 lib_stelline_dep = declare_dependency(
@@ -54,7 +56,7 @@ if not is_static
 endif
 
 executable(
-    'stelline', 
+    'stelline',
     ['stelline.cc'],
     dependencies: lib_stelline_dep,
 )

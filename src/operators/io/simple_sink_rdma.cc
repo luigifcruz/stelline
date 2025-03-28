@@ -7,6 +7,7 @@
 #include <stelline/operators/io/base.hh>
 
 #include "helpers.hh"
+#include "permute.hh"
 
 using namespace gxf;
 using namespace holoscan;
@@ -22,6 +23,7 @@ struct SimpleSinkRdmaOp::Impl {
     CUfileHandle_t cufileHandle;
     uint64_t cachedBufferedRegistrations = 0;
     std::unordered_set<void*> registeredBuffers;
+    std::shared_ptr<holoscan::Tensor> permutedTensor;
 
     // Metrics.
 
@@ -133,6 +135,14 @@ void SimpleSinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     const auto& tensor = input.receive<DspBlock>("in").value().tensor;
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
+    // Allocate permuted tensor.
+
+    if (pimpl->bytesWritten == 0) {
+        CUDA_CHECK_THROW(DspBlockAlloc(tensor, pimpl->permutedTensor), [&]{
+            HOLOSCAN_LOG_ERROR("Failed to allocate permuted tensor.");
+        });
+    }
+
     // Register buffer with GDS driver.
 
     if (!pimpl->registeredBuffers.contains(tensor->data())) {
@@ -145,10 +155,16 @@ void SimpleSinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
         pimpl->cachedBufferedRegistrations++;
     }
 
+    // Permute tensor.
+
+    CUDA_CHECK_THROW(DspBlockPermutation(pimpl->permutedTensor->to_dlpack(), tensor->to_dlpack()), [&]{
+        HOLOSCAN_LOG_ERROR("Failed to permute tensor.");
+    });
+
     // Write tensor directly to file.
 
     const auto res = cuFileWrite(pimpl->cufileHandle,
-                                 tensor->data(),
+                                 pimpl->permutedTensor->data(),
                                  tensorBytes,
                                  pimpl->bytesWritten,
                                  0);

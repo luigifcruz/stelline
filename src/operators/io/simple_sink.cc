@@ -7,6 +7,7 @@
 #include <stelline/operators/io/base.hh>
 
 #include "helpers.hh"
+#include "permute.hh"
 
 using namespace gxf;
 using namespace holoscan;
@@ -21,6 +22,7 @@ struct SimpleSinkOp::Impl {
     void* bounceBuffer;
     cudaStream_t stream;
     std::ofstream file;
+    std::shared_ptr<holoscan::Tensor> permutedTensor;
 
     // Metrics.
 
@@ -108,6 +110,14 @@ void SimpleSinkOp::compute(InputContext& input, OutputContext&, ExecutionContext
     const auto& tensor = input.receive<DspBlock>("in").value().tensor;
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
+    // Allocate permuted tensor.
+
+    if (pimpl->bytesWritten == 0) {
+        CUDA_CHECK_THROW(DspBlockAlloc(tensor, pimpl->permutedTensor), [&]{
+            HOLOSCAN_LOG_ERROR("Failed to allocate permuted tensor.");
+        });
+    }
+
     // Allocate host bounce buffer.
 
     if (pimpl->bounceBuffer == nullptr) {
@@ -117,10 +127,16 @@ void SimpleSinkOp::compute(InputContext& input, OutputContext&, ExecutionContext
         }
     }
 
+    // Permute tensor.
+
+    CUDA_CHECK_THROW(DspBlockPermutation(pimpl->permutedTensor->to_dlpack(), tensor->to_dlpack()), [&]{
+        HOLOSCAN_LOG_ERROR("Failed to permute tensor.");
+    });
+
     // Transfer tensor to host.
 
     cudaMemcpyAsync(pimpl->bounceBuffer,
-                    tensor->data(),
+                    pimpl->permutedTensor->data(),
                     tensorBytes,
                     cudaMemcpyDeviceToHost,
                     pimpl->stream);
