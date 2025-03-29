@@ -21,8 +21,6 @@ struct SimpleSinkRdmaOp::Impl {
     int fileDescriptor;
     int64_t bytesWritten;
     CUfileHandle_t cufileHandle;
-    uint64_t cachedBufferedRegistrations = 0;
-    std::unordered_set<void*> registeredBuffers;
     std::shared_ptr<holoscan::Tensor> permutedTensor;
 
     // Metrics.
@@ -111,10 +109,10 @@ void SimpleSinkRdmaOp::stop() {
         pimpl->metricsThread.join();
     }
 
-    // Deregister buffers with GDS driver.
+    // Deregister buffer with GDS driver.
 
-    for (const auto& buffer : pimpl->registeredBuffers) {
-        GDS_CHECK_THROW(cuFileBufDeregister(buffer), [&]{
+    if (pimpl->bytesWritten != 0) {
+        GDS_CHECK_THROW(cuFileBufDeregister(pimpl->permutedTensor->data()), [&]{
             HOLOSCAN_LOG_ERROR("Failed to deregister buffer with GDS driver.");
         });
     }
@@ -141,18 +139,10 @@ void SimpleSinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
         CUDA_CHECK_THROW(DspBlockAlloc(tensor, pimpl->permutedTensor), [&]{
             HOLOSCAN_LOG_ERROR("Failed to allocate permuted tensor.");
         });
-    }
 
-    // Register buffer with GDS driver.
-
-    if (!pimpl->registeredBuffers.contains(tensor->data())) {
-        pimpl->registeredBuffers.insert(tensor->data());
-
-        GDS_CHECK_THROW(cuFileBufRegister(tensor->data(), tensorBytes, 0), [&]{
+        GDS_CHECK_THROW(cuFileBufRegister(pimpl->permutedTensor->data(), tensorBytes, 0), [&]{
             HOLOSCAN_LOG_ERROR("Failed to register buffer with GDS driver.");
         });
-    } else {
-        pimpl->cachedBufferedRegistrations++;
     }
 
     // Permute tensor.
@@ -189,8 +179,6 @@ void SimpleSinkRdmaOp::Impl::metricsLoop() {
         }
 
         HOLOSCAN_LOG_INFO("Simple Sink RDMA Operator:");
-        HOLOSCAN_LOG_INFO("  Registered Buffers: {}", registeredBuffers.size());
-        HOLOSCAN_LOG_INFO("  Cached Buffered Registrations: {}", cachedBufferedRegistrations);
         HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
         HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
 
