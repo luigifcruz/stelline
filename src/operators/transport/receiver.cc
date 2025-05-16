@@ -371,7 +371,7 @@ void ReceiverOp::Impl::releaseComputedBlocks(OutputContext& output) {
 
 void ReceiverOp::Impl::burstCollectorLoop() {
     std::chrono::microseconds totalRuntime(0);
-    uint64_t numIterations = 0;
+    uint64_t numIterations = 1;
 
     while (burstCollectorThreadRunning) {
         auto startTime = std::chrono::steady_clock::now();
