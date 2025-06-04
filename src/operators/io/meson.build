@@ -13,8 +13,8 @@ if all_deps_found
         'simple_sink.cc',
         'simple_sink_rdma.cc',
         'dummy_sink.cc',
-        'permute.cu',
-        'permute.cc',
+        'modifiers.cu',
+        'modifiers.cc',
     ])
 endif
 

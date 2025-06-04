@@ -1,4 +1,4 @@
-#include "permute.hh"
+#include "modifiers.hh"
 
 template<typename T, int32_t RANK>
 cudaError_t Permutation(DLManagedTensor* dst, const DLManagedTensor* src) {

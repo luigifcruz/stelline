@@ -1,5 +1,5 @@
-#ifndef STELLINE_OPERATORS_IO_PERMUTE_HH
-#define STELLINE_OPERATORS_IO_PERMUTE_HH
+#ifndef STELLINE_OPERATORS_IO_MODIFIERS_HH
+#define STELLINE_OPERATORS_IO_MODIFIERS_HH
 
 #include <stelline/common.hh>
 
@@ -17,7 +17,8 @@ cudaError DspBlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
 #endif  // __CUDACC__
 
 cudaError_t DspBlockPermutation(DLManagedTensor* dst, const DLManagedTensor* src);
+// TODO: Add DspBlockTypeCast method.
 
 }  // namespace stelline::operators::io
 
-#endif // STELLINE_OPERATORS_IO_PERMUTE_HH
+#endif // STELLINE_OPERATORS_IO_MODIFIERS_HH

@@ -7,7 +7,7 @@
 #include <stelline/operators/io/base.hh>
 
 #include "helpers.hh"
-#include "permute.hh"
+#include "modifiers.hh"
 
 using namespace gxf;
 using namespace holoscan;
