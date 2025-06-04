@@ -1,6 +1,6 @@
 #include "modifiers.hh"
 
-namespace stelline::operators::io {
+namespace stelline::operators::filesystem {
 
 template<typename T>
 auto CreateTensor(auto& t) {
@@ -30,4 +30,4 @@ cudaError DspBlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
     return cudaSuccess;
 }
 
-}  // namespace stelline::operators::io
+}  // namespace stelline::operators::filesystem

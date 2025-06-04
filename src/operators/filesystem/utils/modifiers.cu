@@ -15,7 +15,7 @@ cudaError_t Permutation(DLManagedTensor* dst, const DLManagedTensor* src) {
     return cudaSuccess;
 }
 
-namespace stelline::operators::io {
+namespace stelline::operators::filesystem {
 
 cudaError_t DspBlockPermutation(DLManagedTensor* dst, const DLManagedTensor* src) {
     if (src->dl_tensor.ndim != 4) {
@@ -32,4 +32,4 @@ cudaError_t DspBlockPermutation(DLManagedTensor* dst, const DLManagedTensor* src
     }
 }
 
-}  // namespace stelline::operators::io
+}  // namespace stelline::operators::filesystem

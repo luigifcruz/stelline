@@ -15,8 +15,8 @@ using namespace stelline;
 #ifdef STELLINE_BIT_BLADE
 #include <stelline/bits/blade/base.hh>
 #endif
-#ifdef STELLINE_BIT_IO
-#include <stelline/bits/io/base.hh>
+#ifdef STELLINE_BIT_FILESYSTEM
+#include <stelline/bits/filesystem/base.hh>
 #endif
 
 #ifdef STELLINE_BIT_TRANSPORT
@@ -28,8 +28,8 @@ using namespace stelline::bits::frbnn;
 #ifdef STELLINE_BIT_BLADE
 using namespace stelline::bits::blade;
 #endif
-#ifdef STELLINE_BIT_IO
-using namespace stelline::bits::io;
+#ifdef STELLINE_BIT_FILESYSTEM
+using namespace stelline::bits::filesystem;
 #endif
 
 class DefaultOp : public holoscan::Application {
@@ -56,9 +56,9 @@ class DefaultOp : public holoscan::Application {
             }
 #endif
 
-#ifdef STELLINE_BIT_IO
-            if (node.bit == "io_sink_bit") {
-                map[node.id] = IoSinkBit(this, pool, node.configuration);
+#ifdef STELLINE_BIT_FILESYSTEM
+            if (node.bit == "filesystem_bit") {
+                map[node.id] = FilesystemBit(this, pool, node.configuration);
             }
 #endif
 
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
         std::cout << "Stelline v" << STELLINE_VERSION_STR << " (build type: " << STELLINE_BUILD_TYPE << ")\n";
         return 0;
     }
-    
+
     // Check configuration file.
 
     const std::string configurationFilePath = argv[1];

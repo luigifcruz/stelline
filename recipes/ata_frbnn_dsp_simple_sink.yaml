@@ -26,7 +26,7 @@ stelline:
             input:
                 in: transport
         writer:
-            bit: io_sink_bit
+            bit: filesystem_bit
             configuration: file_writer
             input:
                 in: blade

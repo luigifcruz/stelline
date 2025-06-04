@@ -21,7 +21,7 @@ stelline:
             bit: transport_bit
             configuration: ata_standard_rx
         writer:
-            bit: io_sink_bit
+            bit: filesystem_bit
             configuration: dummy_writer
             input:
                 in: transport

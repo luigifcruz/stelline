@@ -8,14 +8,13 @@ foreach x_dep : deps
 endforeach
 
 if all_deps_found
-    cfg_lst.set('STELLINE_OPERATOR_IO', true)
+    cfg_lst.set('STELLINE_OPERATOR_FILESYSTEM', true)
     src_lst += files([
-        'simple_sink.cc',
-        'simple_sink_rdma.cc',
-        'dummy_sink.cc',
-        'modifiers.cu',
-        'modifiers.cc',
+        'simple_writer.cc',
+        'simple_writer_rdma.cc',
+        'dummy_writer.cc',
     ])
+    subdir('utils')
 endif
 
-operator_lst += {'I/O': all_deps_found}
+operator_lst += {'Filesystem': all_deps_found}

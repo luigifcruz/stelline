@@ -1,5 +1,5 @@
 deps = [
-    'STELLINE_OPERATOR_IO',
+    'STELLINE_OPERATOR_FILESYSTEM',
 ]
 
 all_deps_found = true
@@ -8,7 +8,7 @@ foreach x_dep : deps
 endforeach
 
 if all_deps_found
-    cfg_lst.set('STELLINE_BIT_IO', true)
+    cfg_lst.set('STELLINE_BIT_FILESYSTEM', true)
 endif
 
-bits_lst += {'I/O': all_deps_found}
+bits_lst += {'Filesystem': all_deps_found}

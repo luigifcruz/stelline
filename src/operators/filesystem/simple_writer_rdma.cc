@@ -4,17 +4,17 @@
 #include <sys/stat.h>
 
 #include <stelline/types.hh>
-#include <stelline/operators/io/base.hh>
+#include <stelline/operators/filesystem/base.hh>
 
-#include "helpers.hh"
-#include "modifiers.hh"
+#include "utils/helpers.hh"
+#include "utils/modifiers.hh"
 
 using namespace gxf;
 using namespace holoscan;
 
-namespace stelline::operators::io {
+namespace stelline::operators::filesystem {
 
-struct SimpleSinkRdmaOp::Impl {
+struct SimpleWriterRdmaOp::Impl {
     // State.
 
     std::string filePath;
@@ -34,7 +34,7 @@ struct SimpleSinkRdmaOp::Impl {
     void metricsLoop();
 };
 
-void SimpleSinkRdmaOp::initialize() {
+void SimpleWriterRdmaOp::initialize() {
     // Allocate memory.
     pimpl = new Impl();
 
@@ -42,11 +42,11 @@ void SimpleSinkRdmaOp::initialize() {
     Operator::initialize();
 }
 
-SimpleSinkRdmaOp::~SimpleSinkRdmaOp() {
+SimpleWriterRdmaOp::~SimpleWriterRdmaOp() {
     delete pimpl;
 }
 
-void SimpleSinkRdmaOp::setup(OperatorSpec& spec) {
+void SimpleWriterRdmaOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
@@ -54,7 +54,7 @@ void SimpleSinkRdmaOp::setup(OperatorSpec& spec) {
     spec.param(filePath_, "file_path");
 }
 
-void SimpleSinkRdmaOp::start() {
+void SimpleWriterRdmaOp::start() {
     // Convert Parameters to variables.
 
     pimpl->filePath = filePath_.get();
@@ -101,7 +101,7 @@ void SimpleSinkRdmaOp::start() {
     HOLOSCAN_LOG_INFO("Successfully opened file '{}'.", pimpl->filePath);
 }
 
-void SimpleSinkRdmaOp::stop() {
+void SimpleWriterRdmaOp::stop() {
     // Stop metrics thread.
 
     pimpl->metricsThreadRunning = false;
@@ -129,7 +129,7 @@ void SimpleSinkRdmaOp::stop() {
     HOLOSCAN_LOG_INFO("Successfully closed file '{}'.", pimpl->filePath);
 }
 
-void SimpleSinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
+void SimpleWriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     const auto& tensor = input.receive<DspBlock>("in").value().tensor;
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
@@ -167,7 +167,7 @@ void SimpleSinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-void SimpleSinkRdmaOp::Impl::metricsLoop() {
+void SimpleWriterRdmaOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
         auto now = std::chrono::steady_clock::now();
         auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
@@ -178,7 +178,7 @@ void SimpleSinkRdmaOp::Impl::metricsLoop() {
             lastMeasurementTime = now;
         }
 
-        HOLOSCAN_LOG_INFO("Simple Sink RDMA Operator:");
+        HOLOSCAN_LOG_INFO("Simple Writer RDMA Operator:");
         HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
         HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
 
@@ -186,4 +186,4 @@ void SimpleSinkRdmaOp::Impl::metricsLoop() {
     }
 }
 
-}  // namespace stelline::operators::io
+}  // namespace stelline::operators::filesystem

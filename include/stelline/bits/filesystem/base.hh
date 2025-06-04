@@ -1,44 +1,44 @@
-#ifndef STELLINE_BITS_IO_BASE_HH
-#define STELLINE_BITS_IO_BASE_HH
+#ifndef STELLINE_BITS_FILESYSTEM_BASE_HH
+#define STELLINE_BITS_FILESYSTEM_BASE_HH
 
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/helpers.hh>
-#include <stelline/operators/io/base.hh>
+#include <stelline/operators/filesystem/base.hh>
 
-namespace stelline::bits::io {
+namespace stelline::bits::filesystem {
 
-inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface FilesystemBit(auto* app, auto& pool, const std::string& config) {
     using namespace holoscan;
-    using namespace stelline::operators::io;
+    using namespace stelline::operators::filesystem;
 
     // Fetch configuration YAML.
 
     auto mode = FetchNodeArg<std::string>(app, config, "mode");
-    auto filePath = FetchNodeArg<std::string>(app, config, "file_path", "./output.bin");
+    auto filePath = FetchNodeArg<std::string>(app, config, "file_path", "./file.bin");
 
-    HOLOSCAN_LOG_INFO("I/O Sink Configuration:");
+    HOLOSCAN_LOG_INFO("Filesystem Configuration:");
     HOLOSCAN_LOG_INFO("  Mode: {}", mode);
     HOLOSCAN_LOG_INFO("  File Path: {}", filePath);
 
     // Declare modes.
 
     auto simple_writer_op = [&](){
-        return app->template make_operator<SimpleSinkOp>(
+        return app->template make_operator<SimpleWriterOp>(
             "simple-writer",
             Arg("file_path", filePath)
         );
     };
 
     auto simple_writer_rdma_op = [&](){
-        return app->template make_operator<SimpleSinkRdmaOp>(
+        return app->template make_operator<SimpleWriterRdmaOp>(
             "simple-writer-rdma",
             Arg("file_path", filePath)
         );
     };
 
     auto dummy_writer_op = [&](){
-        return app->template make_operator<DummySinkOp>("dummy-writer");
+        return app->template make_operator<DummyWriterOp>("dummy-writer");
     };
 
     // Select configuration mode.
@@ -65,6 +65,6 @@ inline BitInterface IoSinkBit(auto* app, auto& pool, const std::string& config) 
     throw std::runtime_error("Unsupported mode.");
 }
 
-}  // namespace stelline::bits::io
+}  // namespace stelline::bits::filesystem
 
-#endif  // STELLINE_BITS_IO_BASE_HH
+#endif  // STELLINE_BITS_FILESYSTEM_BASE_HH

@@ -4,17 +4,17 @@
 #include <sys/stat.h>
 
 #include <stelline/types.hh>
-#include <stelline/operators/io/base.hh>
+#include <stelline/operators/filesystem/base.hh>
 
-#include "helpers.hh"
-#include "modifiers.hh"
+#include "utils/helpers.hh"
+#include "utils/modifiers.hh"
 
 using namespace gxf;
 using namespace holoscan;
 
-namespace stelline::operators::io {
+namespace stelline::operators::filesystem {
 
-struct SimpleSinkOp::Impl {
+struct SimpleWriterOp::Impl {
     // State.
 
     std::string filePath;
@@ -35,7 +35,7 @@ struct SimpleSinkOp::Impl {
     void metricsLoop();
 };
 
-void SimpleSinkOp::initialize() {
+void SimpleWriterOp::initialize() {
     // Allocate memory.
     pimpl = new Impl();
 
@@ -43,11 +43,11 @@ void SimpleSinkOp::initialize() {
     Operator::initialize();
 }
 
-SimpleSinkOp::~SimpleSinkOp() {
+SimpleWriterOp::~SimpleWriterOp() {
     delete pimpl;
 }
 
-void SimpleSinkOp::setup(OperatorSpec& spec) {
+void SimpleWriterOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
@@ -55,7 +55,7 @@ void SimpleSinkOp::setup(OperatorSpec& spec) {
     spec.param(filePath_, "file_path");
 }
 
-void SimpleSinkOp::start() {
+void SimpleWriterOp::start() {
     // Convert Parameters to variables.
 
     pimpl->filePath = filePath_.get();
@@ -83,7 +83,7 @@ void SimpleSinkOp::start() {
     HOLOSCAN_LOG_INFO("Successfully opened file '{}'.", pimpl->filePath);
 }
 
-void SimpleSinkOp::stop() {
+void SimpleWriterOp::stop() {
     // Stop metrics thread.
 
     pimpl->metricsThreadRunning = false;
@@ -106,7 +106,7 @@ void SimpleSinkOp::stop() {
     HOLOSCAN_LOG_INFO("Successfully closed file '{}'.", pimpl->filePath);
 }
 
-void SimpleSinkOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
+void SimpleWriterOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     const auto& tensor = input.receive<DspBlock>("in").value().tensor;
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
@@ -151,7 +151,7 @@ void SimpleSinkOp::compute(InputContext& input, OutputContext&, ExecutionContext
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-void SimpleSinkOp::Impl::metricsLoop() {
+void SimpleWriterOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
         auto now = std::chrono::steady_clock::now();
         auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
@@ -162,7 +162,7 @@ void SimpleSinkOp::Impl::metricsLoop() {
             lastMeasurementTime = now;
         }
 
-        HOLOSCAN_LOG_INFO("Simple Sink Operator:");
+        HOLOSCAN_LOG_INFO("Simple Writer Operator:");
         HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
         HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
 
@@ -170,4 +170,4 @@ void SimpleSinkOp::Impl::metricsLoop() {
     }
 }
 
-}  // namespace stelline::operators::io
+}  // namespace stelline::operators::filesystem

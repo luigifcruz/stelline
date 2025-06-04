@@ -1,11 +1,11 @@
-#ifndef STELLINE_OPERATORS_IO_BASE_HH
-#define STELLINE_OPERATORS_IO_BASE_HH
+#ifndef STELLINE_OPERATORS_FILESYSTEM_BASE_HH
+#define STELLINE_OPERATORS_FILESYSTEM_BASE_HH
 
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
 
-namespace stelline::operators::io {
+namespace stelline::operators::filesystem {
 
 using holoscan::Operator;
 using holoscan::Parameter;
@@ -14,11 +14,11 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API SimpleSinkOp : public Operator {
+class STELLINE_API SimpleWriterOp : public Operator {
  public:
-    HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleSinkOp)
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleWriterOp)
 
-    ~SimpleSinkOp();
+    ~SimpleWriterOp();
 
     void initialize() override;
     void setup(OperatorSpec& spec) override;
@@ -33,11 +33,11 @@ class STELLINE_API SimpleSinkOp : public Operator {
     Parameter<std::string> filePath_;
 };
 
-class STELLINE_API SimpleSinkRdmaOp : public Operator {
+class STELLINE_API SimpleWriterRdmaOp : public Operator {
  public:
-    HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleSinkRdmaOp)
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleWriterRdmaOp)
 
-    ~SimpleSinkRdmaOp();
+    ~SimpleWriterRdmaOp();
 
     void initialize() override;
     void setup(OperatorSpec& spec) override;
@@ -52,12 +52,12 @@ class STELLINE_API SimpleSinkRdmaOp : public Operator {
     Parameter<std::string> filePath_;
 };
 
-class STELLINE_API DummySinkOp : public Operator {
+class STELLINE_API DummyWriterOp : public Operator {
  public:
-      HOLOSCAN_OPERATOR_FORWARD_ARGS(DummySinkOp)
+      HOLOSCAN_OPERATOR_FORWARD_ARGS(DummyWriterOp)
 
-      DummySinkOp() = default;
-      ~DummySinkOp();
+      DummyWriterOp() = default;
+      ~DummyWriterOp();
 
       void initialize() override;
       void setup(OperatorSpec& spec) override;
@@ -70,6 +70,6 @@ class STELLINE_API DummySinkOp : public Operator {
       Impl* pimpl;
 };
 
-}  // namespace stelline::operators::io
+}  // namespace stelline::operators::filesystem
 
-#endif  // STELLINE_OPERATORS_IO_BASE_HH
+#endif  // STELLINE_OPERATORS_FILESYSTEM_BASE_HH

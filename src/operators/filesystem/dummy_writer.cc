@@ -1,14 +1,14 @@
 #include <stelline/types.hh>
-#include <stelline/operators/io/base.hh>
+#include <stelline/operators/filesystem/base.hh>
 
-#include "helpers.hh"
+#include "utils/helpers.hh"
 
 using namespace gxf;
 using namespace holoscan;
 
-namespace stelline::operators::io {
+namespace stelline::operators::filesystem {
 
-struct DummySinkOp::Impl {
+struct DummyWriterOp::Impl {
     // State.
 
     std::chrono::time_point<std::chrono::system_clock> lastTime;
@@ -22,7 +22,7 @@ struct DummySinkOp::Impl {
     void metricsLoop();
 };
 
-void DummySinkOp::initialize() {
+void DummyWriterOp::initialize() {
     // Allocate memory.
     pimpl = new Impl();
 
@@ -30,17 +30,17 @@ void DummySinkOp::initialize() {
     Operator::initialize();
 }
 
-DummySinkOp::~DummySinkOp() {
+DummyWriterOp::~DummyWriterOp() {
     delete pimpl;
 }
 
-void DummySinkOp::setup(OperatorSpec& spec) {
+void DummyWriterOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("in")
-        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+        .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 }
 
-void DummySinkOp::start() {
+void DummyWriterOp::start() {
     // Start metrics thread.
 
     pimpl->metricsThreadRunning = true;
@@ -49,7 +49,7 @@ void DummySinkOp::start() {
     });
 }
 
-void DummySinkOp::stop() {
+void DummyWriterOp::stop() {
     // Stop metrics thread.
 
     pimpl->metricsThreadRunning = false;
@@ -58,7 +58,7 @@ void DummySinkOp::stop() {
     }
 }
 
-void DummySinkOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
+void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     // Receive tensor.
 
     input.receive<std::shared_ptr<int>>("in");
@@ -81,9 +81,9 @@ void DummySinkOp::compute(InputContext& input, OutputContext&, ExecutionContext&
     pimpl->lastTime = std::chrono::system_clock::now();
 }
 
-void DummySinkOp::Impl::metricsLoop() {
+void DummyWriterOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Dummy Sink Operator:");
+        HOLOSCAN_LOG_INFO("Dummy Writer Operator:");
         HOLOSCAN_LOG_INFO("  Iterations      : {}", numIterations);
         HOLOSCAN_LOG_INFO("  Average Duration: {} ms", duration.count() / 100);
 

@@ -1,5 +1,5 @@
-#ifndef STELLINE_OPERATORS_IO_MODIFIERS_HH
-#define STELLINE_OPERATORS_IO_MODIFIERS_HH
+#ifndef STELLINE_OPERATORS_FILESYSTEM_MODIFIERS_HH
+#define STELLINE_OPERATORS_FILESYSTEM_MODIFIERS_HH
 
 #include <stelline/common.hh>
 
@@ -9,7 +9,7 @@
 #include <holoscan/holoscan.hpp>
 #endif  // __CUDACC__
 
-namespace stelline::operators::io {
+namespace stelline::operators::filesystem {
 
 #ifndef __CUDACC__
 cudaError DspBlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
@@ -19,6 +19,6 @@ cudaError DspBlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
 cudaError_t DspBlockPermutation(DLManagedTensor* dst, const DLManagedTensor* src);
 // TODO: Add DspBlockTypeCast method.
 
-}  // namespace stelline::operators::io
+}  // namespace stelline::operators::filesystem
 
-#endif // STELLINE_OPERATORS_IO_MODIFIERS_HH
+#endif // STELLINE_OPERATORS_FILESYSTEM_MODIFIERS_HH
