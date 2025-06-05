@@ -6,5 +6,6 @@ subdir('holoscan_ano')
 subdir('matx')
 subdir('blade')
 subdir('cyberether')
+subdir('zmq')
 
 summary(ldr_lst, section: 'Loaders', bool_yn: true)

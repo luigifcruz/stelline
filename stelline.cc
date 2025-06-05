@@ -6,6 +6,9 @@
 using namespace holoscan;
 using namespace stelline;
 
+#ifdef STELLINE_BIT_SOCKET
+#include <stelline/bits/socket/base.hh>
+#endif
 #ifdef STELLINE_BIT_TRANSPORT
 #include <stelline/bits/transport/base.hh>
 #endif
@@ -19,6 +22,9 @@ using namespace stelline;
 #include <stelline/bits/filesystem/base.hh>
 #endif
 
+#ifdef STELLINE_BIT_SOCKET
+using namespace stelline::bits::socket;
+#endif
 #ifdef STELLINE_BIT_TRANSPORT
 using namespace stelline::bits::transport;
 #endif
@@ -44,6 +50,12 @@ class DefaultOp : public holoscan::Application {
         std::vector<std::pair<std::string, std::string>> flows;
 
         for (const auto& node : descriptor.graph) {
+#ifdef STELLINE_BIT_SOCKET
+            if (node.bit == "socket_bit") {
+                map[node.id] = SocketBit(this, pool, map.size(), node.configuration);
+            }
+#endif
+
 #ifdef STELLINE_BIT_TRANSPORT
             if (node.bit == "transport_bit") {
                 map[node.id] = TransportBit(this, pool, map.size(), node.configuration);
