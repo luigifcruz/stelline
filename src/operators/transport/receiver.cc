@@ -451,7 +451,7 @@ void ReceiverOp::Impl::metricsLoop() {
         for (const auto& [time, _] : blockMap) {
             allBlockTimes.insert(time);
         }
-        HOLOSCAN_LOG_INFO("  Block Map : latest time index {}, all block times {}", latestBlockTimeIndex, allBlockTimes);
+        HOLOSCAN_LOG_INFO("  Block Map : latest time index {}, usage {}/{}, all block times {}", latestBlockTimeIndex, allBlockTimes.size(), concurrentBlocks, allBlockTimes);
 
         HOLOSCAN_LOG_INFO("  Fine Packet Count:");
         HOLOSCAN_LOG_INFO("    Payload Sizes:   : {}", payloadSizes);
