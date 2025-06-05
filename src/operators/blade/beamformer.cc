@@ -6,7 +6,7 @@
 #include <stelline/operators/blade/base.hh>
 #include <stelline/types.hh>
 
-#include "dispatcher.hh"
+#include "utils/dispatcher.hh"
 
 using namespace Blade;
 using namespace holoscan;
