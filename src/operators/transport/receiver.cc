@@ -60,6 +60,7 @@ struct ReceiverOp::Impl {
     uint64_t lostBlocks;
     std::set<uint64_t> allAntennas;
     std::set<uint64_t> allChannels;
+    std::set<uint64_t> payloadSizes;
     std::set<uint64_t> filteredAntennas;
     std::set<uint64_t> filteredChannels;
     std::chrono::microseconds avgBurstReleaseTime;
@@ -232,6 +233,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
 
         pimpl->allAntennas.insert(antennaIndex);
         pimpl->allChannels.insert(channelIndex);
+        pimpl->payloadSizes.insert(adv_net_get_gpu_pkt_len(burst, burstPacketIndex));
 
         antennaIndex -= pimpl->offsetBlock.numberOfAntennas;
         channelIndex -= pimpl->offsetBlock.numberOfChannels;
@@ -328,6 +330,7 @@ void ReceiverOp::Impl::releaseReceivedBlocks() {
             blockMap.erase(block->index());
             std::shared_ptr<Tensor> tensor;
             while ((tensor = blockTensorPool.get()) == nullptr) {
+                HOLOSCAN_LOG_ERROR("Failed to allocate tensor from pool.");
                 throw std::runtime_error("Failed to allocate tensor from pool.");
             }
             block->compute(tensor, totalBlock, partialBlock, slots);
@@ -451,6 +454,7 @@ void ReceiverOp::Impl::metricsLoop() {
         HOLOSCAN_LOG_INFO("  Block Map : latest time index {}, all block times {}", latestBlockTimeIndex, allBlockTimes);
 
         HOLOSCAN_LOG_INFO("  Fine Packet Count:");
+        HOLOSCAN_LOG_INFO("    Payload Sizes:   : {}", payloadSizes);
         HOLOSCAN_LOG_INFO("    All antennas     : {}", allAntennas);
         HOLOSCAN_LOG_INFO("    Filtered antennas: {}", filteredAntennas);
         HOLOSCAN_LOG_INFO("    All channels     : {}", allChannels);
