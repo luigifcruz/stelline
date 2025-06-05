@@ -13,7 +13,7 @@ namespace stelline::bits::frbnn {
 // FrbnnInferenceBit
 //
 
-inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
@@ -55,10 +55,10 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& 
     // Instantiate operators.
 
     auto modelPreprocessor = app->template make_operator<ModelPreprocessorOp>(
-        "model-preprocessor"
+        fmt::format("model-preprocessor_{}", id)
     );
     auto frbnnPreprocessorInference = app->template make_operator<ops::InferenceOp>(
-        "frbnn-preprocessor-inference",
+        fmt::format("frbnn-preprocessor-inference_{}", id),
         Arg("backend") = std::string("trt"),
         Arg("model_path_map", frbnnPreprocessorPathMap),
         Arg("pre_processor_map", frbnnPreprocessorInputMap),
@@ -71,10 +71,10 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& 
         Arg("allocator") = pool
     );
     auto modelAdapter = app->template make_operator<ModelAdapterOp>(
-        "model-adapter"
+        fmt::format("model-adapter_{}", id)
     );
     auto frbnnInference = app->template make_operator<ops::InferenceOp>(
-        "frbnn-inference",
+        fmt::format("frbnn-inference_{}", id),
         Arg("backend") = std::string("trt"),
         Arg("model_path_map", frbnnPathMap),
         Arg("pre_processor_map", frbnnInputMap),
@@ -87,7 +87,7 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& 
         Arg("allocator") = pool
     );
     auto modelPostprocessor = app->template make_operator<ModelPostprocessorOp>(
-        "model-postprocessor"
+        fmt::format("model-postprocessor_{}", id)
     );
 
     // Connect operators.
@@ -104,7 +104,7 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, const std::string& 
 // FrbnnDetectionBit
 //
 
-inline BitInterface FrbnnDetectionBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface FrbnnDetectionBit(auto* app, auto& pool, uint64_t id, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
@@ -124,7 +124,7 @@ inline BitInterface FrbnnDetectionBit(auto* app, auto& pool, const std::string& 
     // Instantiate operators.
 
     auto frbnnSimpleDetection = app->template make_operator<SimpleDetectionOp>(
-        "frbnn-simple-detection",
+        fmt::format("frbnn-simple-detection_{}", id),
         Arg("csv_file_path", frbnnCsvFilePath),
         Arg("hits_directory", frbnnHitsDirectory)
     );

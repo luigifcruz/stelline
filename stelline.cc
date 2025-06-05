@@ -46,29 +46,29 @@ class DefaultOp : public holoscan::Application {
         for (const auto& node : descriptor.graph) {
 #ifdef STELLINE_BIT_TRANSPORT
             if (node.bit == "transport_bit") {
-                map[node.id] = TransportBit(this, pool, node.configuration);
+                map[node.id] = TransportBit(this, pool, map.size(), node.configuration);
             }
 #endif
 
 #ifdef STELLINE_BIT_BLADE
             if (node.bit == "blade_bit") {
-                map[node.id] = BladeBit(this, pool, node.configuration);
+                map[node.id] = BladeBit(this, pool, map.size(), node.configuration);
             }
 #endif
 
 #ifdef STELLINE_BIT_FILESYSTEM
             if (node.bit == "filesystem_bit") {
-                map[node.id] = FilesystemBit(this, pool, node.configuration);
+                map[node.id] = FilesystemBit(this, pool, map.size(), node.configuration);
             }
 #endif
 
 #ifdef STELLINE_BIT_FRBNN
             if (node.bit == "frbnn_inference_bit") {
-                map[node.id] = FrbnnInferenceBit(this, pool, node.configuration);
+                map[node.id] = FrbnnInferenceBit(this, pool, map.size(), node.configuration);
             }
 
             if (node.bit == "frbnn_detection_bit") {
-                map[node.id] = FrbnnDetectionBit(this, pool, node.configuration);
+                map[node.id] = FrbnnDetectionBit(this, pool, map.size(), node.configuration);
             }
 #endif
 

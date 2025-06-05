@@ -10,7 +10,7 @@
 
 namespace stelline::bits::transport {
 
-inline BitInterface TransportBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface TransportBit(auto* app, auto& pool, uint64_t id, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::transport;
 
@@ -90,13 +90,13 @@ inline BitInterface TransportBit(auto* app, auto& pool, const std::string& confi
     // Instantiate operators.
 
     auto ano_rx = app->template make_operator<ops::AdvNetworkOpRx>(
-        "ano_rx",
+        fmt::format("ano_rx_{}", id),
         Arg("cfg", ano_cfg),
         app->template make_condition<BooleanCondition>("is_alive", true)
     );
 
     auto receiver = app->template make_operator<ReceiverOp>(
-        "receiver",
+        fmt::format("receiver_{}", id),
         Arg("concurrent_blocks", concurrent_blocks),
         Arg("total_block", total_block),
         Arg("partial_block", partial_block),
@@ -104,9 +104,9 @@ inline BitInterface TransportBit(auto* app, auto& pool, const std::string& confi
         Arg("output_pool_size", output_pool_size),
         Arg("enable_csv_logging", enable_csv_logging)
     );
-    
+
     auto sorter = app->template make_operator<SorterOp>(
-        "sorter",
+        fmt::format("sorter_{}", id),
         Arg("depth", sorter_depth)
     );
 

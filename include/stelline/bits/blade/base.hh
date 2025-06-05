@@ -9,7 +9,7 @@
 
 namespace stelline::bits::blade {
 
-inline BitInterface BladeBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface BladeBit(auto* app, auto& pool, uint64_t id, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::blade;
 
@@ -31,7 +31,7 @@ inline BitInterface BladeBit(auto* app, auto& pool, const std::string& config) {
         // TODO: Implement options printing.
 
         return app->template make_operator<CorrelatorOp>(
-            "correlator",
+            fmt::format("correlator_{}", id),
             Arg("input_shape", input_shape),
             Arg("output_shape", output_shape)
         );
@@ -42,7 +42,7 @@ inline BitInterface BladeBit(auto* app, auto& pool, const std::string& config) {
         // TODO: Implement options printing.
 
         return app->template make_operator<BeamformerOp>(
-            "beamformer",
+            fmt::format("beamformer_{}", id),
             Arg("input_shape", input_shape),
             Arg("output_shape", output_shape)
         );
@@ -53,7 +53,7 @@ inline BitInterface BladeBit(auto* app, auto& pool, const std::string& config) {
         // TODO: Implement options printing.
 
         return app->template make_operator<FrbnnOp>(
-            "frbnn",
+            fmt::format("frbnn_{}", id),
             Arg("input_shape", input_shape),
             Arg("output_shape", output_shape)
         );

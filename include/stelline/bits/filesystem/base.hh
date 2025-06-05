@@ -8,7 +8,7 @@
 
 namespace stelline::bits::filesystem {
 
-inline BitInterface FilesystemBit(auto* app, auto& pool, const std::string& config) {
+inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::filesystem;
 
@@ -25,20 +25,22 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, const std::string& conf
 
     auto simple_writer_op = [&](){
         return app->template make_operator<SimpleWriterOp>(
-            "simple-writer",
+            fmt::format("simple-writer_{}", id),
             Arg("file_path", filePath)
         );
     };
 
     auto simple_writer_rdma_op = [&](){
         return app->template make_operator<SimpleWriterRdmaOp>(
-            "simple-writer-rdma",
+            fmt::format("simple-writer-rdma_{}", id),
             Arg("file_path", filePath)
         );
     };
 
     auto dummy_writer_op = [&](){
-        return app->template make_operator<DummyWriterOp>("dummy-writer");
+        return app->template make_operator<DummyWriterOp>(
+            fmt::format("dummy-writer_{}", id)
+        );
     };
 
     // Select configuration mode.
