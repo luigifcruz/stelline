@@ -33,10 +33,10 @@ ata_standard_rx:
     rdma_nic: 01:00.0
     rdma_master_core: 0
     rdma_worker_cores: [1]
-    rdma_max_bursts: 32
+    rdma_max_bursts: 16
     rdma_burst_size: 8192
     concurrent_blocks: 8
-    output_pool_size: 128
+    output_pool_size: 32
     sorter_depth: 8
     enable_csv_logging: true
     total_block:
