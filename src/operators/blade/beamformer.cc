@@ -27,7 +27,7 @@ public:
     };
 
     explicit OpBeamformerPipeline(const Config& config)
-            : inputBuffer(config.inputShape), 
+            : inputBuffer(config.inputShape),
               outputBuffer(config.outputShape) {
         // Load input phasor buffer with 1.0+0.0i.
 
@@ -37,7 +37,7 @@ public:
             inputBuffer[0].shape().numberOfFrequencyChannels(),
             inputBuffer[0].shape().numberOfTimeSamples(),
             inputBuffer[0].shape().numberOfPolarizations()
-        }); 
+        });
 
         inputPhasorBuffer = PhasorTensor<Device::CUDA, CF32>(inputPhasorShape);
         auto hostInputPhasorBuffer = PhasorTensor<Device::CPU, CF32>(inputPhasorBuffer.shape());
@@ -136,7 +136,7 @@ BeamformerOp::~BeamformerOp() {
 
 void BeamformerOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("dsp_block_in")
-        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+        .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
@@ -182,7 +182,7 @@ void BeamformerOp::start() {
     // Initialize Dispatcher.
 
     // TODO: Make number of buffers configurable.
-    pimpl->dispatcher.template initialize<CF32>(4, pimpl->bladeOutputShape);
+    pimpl->dispatcher.template initialize<CF32>(8, pimpl->bladeOutputShape);
 
     // Start metrics thread.
 
@@ -198,7 +198,7 @@ void BeamformerOp::stop() {
     pimpl->metricsThreadRunning = false;
     if (pimpl->metricsThread.joinable()) {
         pimpl->metricsThread.join();
-    } 
+    }
 }
 
 void BeamformerOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -220,10 +220,10 @@ void BeamformerOp::compute(InputContext& input, OutputContext& output, Execution
         output.emit(data, "dsp_block_out");
     };
 
-    if (pimpl->dispatcher.run(pimpl->pipeline, 
-                              receiveCallback, 
-                              convertInputCallback, 
-                              convertOutputCallback, 
+    if (pimpl->dispatcher.run(pimpl->pipeline,
+                              receiveCallback,
+                              convertInputCallback,
+                              convertOutputCallback,
                               emitCallback) != Result::SUCCESS) {
         throw std::runtime_error("Dispatcher failed.");
     }

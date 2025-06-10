@@ -21,7 +21,7 @@ public:
     using Config = ModeX::Config;
 
     explicit OpCorrelatorPipeline(const Config& config)
-            : inputBuffer(config.inputShape), 
+            : inputBuffer(config.inputShape),
             outputBuffer(config.outputShape) {
         this->connect(modeX, config, {
             .buffer = inputBuffer,
@@ -87,7 +87,7 @@ CorrelatorOp::~CorrelatorOp() {
 
 void CorrelatorOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("dsp_block_in")
-        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+        .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
@@ -176,10 +176,10 @@ void CorrelatorOp::compute(InputContext& input, OutputContext& output, Execution
         output.emit(data, "dsp_block_out");
     };
 
-    if (pimpl->dispatcher.run(pimpl->pipeline, 
-                              receiveCallback, 
-                              convertInputCallback, 
-                              convertOutputCallback, 
+    if (pimpl->dispatcher.run(pimpl->pipeline,
+                              receiveCallback,
+                              convertInputCallback,
+                              convertOutputCallback,
                               emitCallback) != Result::SUCCESS) {
         throw std::runtime_error("Dispatcher failed.");
     }

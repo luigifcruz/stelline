@@ -43,7 +43,7 @@ public:
     };
 
     explicit OpFrbnnPipeline(const Config& config)
-            : inputBuffer(config.inputShape), 
+            : inputBuffer(config.inputShape),
               outputBuffer(config.outputShape) {
         // Load input phasor buffer with 1.0+0.0i.
 
@@ -53,7 +53,7 @@ public:
             inputBuffer.at(0).shape().numberOfFrequencyChannels(),
             inputBuffer.at(0).shape().numberOfTimeSamples(),
             inputBuffer.at(0).shape().numberOfPolarizations()
-        }); 
+        });
 
         inputPhasorBuffer = PhasorTensor<Device::CUDA, CF32>(inputPhasorShape);
         auto hostInputPhasorBuffer = PhasorTensor<Device::CPU, CF32>(inputPhasorBuffer.shape());
@@ -201,7 +201,7 @@ FrbnnOp::~FrbnnOp() {
 
 void FrbnnOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("dsp_block_in")
-        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+        .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
@@ -285,10 +285,10 @@ void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionConte
         output.emit(data, "dsp_block_out");
     };
 
-    if (pimpl->dispatcher.run(pimpl->pipeline, 
-                              receiveCallback, 
-                              convertInputCallback, 
-                              convertOutputCallback, 
+    if (pimpl->dispatcher.run(pimpl->pipeline,
+                              receiveCallback,
+                              convertInputCallback,
+                              convertOutputCallback,
                               emitCallback) != Result::SUCCESS) {
         throw std::runtime_error("Dispatcher failed.");
     }
