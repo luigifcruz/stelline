@@ -3,29 +3,42 @@ FROM stelline-base
 ARG DEBIAN_FRONTEND=noninteractive
 
 #
+# Socket Bit Dependencies
+#
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        libzmq3-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+#
 # CyberEther Dependencies
 #
 
-RUN apt update
-RUN apt install -y libxkbcommon-dev
-RUN apt install -y spirv-cross glslang-tools libglfw3-dev
-RUN apt install -y libvulkan-dev vulkan-validationlayers
-RUN apt install -y python3-yaml
-
-RUN apt install -y libgstreamer1.0-dev gstreamer1.0-libav
-RUN apt install -y gstreamer1.0-plugins-base libgstreamer-plugins-bad1.0-dev
-RUN apt install -y libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev
-RUN apt install -y gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
-
-RUN apt install -y libsoapysdr-dev soapysdr-module-rtlsdr soapysdr-module-uhd
-RUN apt install -y soapysdr-module-airspy soapysdr-module-lms7 soapysdr-tools
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        libxkbcommon-dev \
+        spirv-cross glslang-tools libglfw3-dev \
+        libvulkan-dev vulkan-validationlayers \
+        python3-yaml \
+        libgstreamer1.0-dev gstreamer1.0-libav \
+        gstreamer1.0-plugins-base libgstreamer-plugins-bad1.0-dev \
+        libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev \
+        gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+        libsoapysdr-dev soapysdr-module-rtlsdr soapysdr-module-uhd \
+        soapysdr-module-airspy soapysdr-module-lms7 soapysdr-tools \
+        && rm -rf /var/lib/apt/lists/*
 
 #
 # BLADE Dependencies
 #
 
-RUN apt install -y liberfa-dev libhdf5-dev
-RUN apt install -y libbenchmark-dev libgtest-dev
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        liberfa-dev libhdf5-dev \
+        libbenchmark-dev libgtest-dev \
+        && rm -rf /var/lib/apt/lists/*
+
 RUN python3 -m pip install numpy astropy pandas
 
 #
