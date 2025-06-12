@@ -2,11 +2,7 @@
 ---
 # Holoscan Configuration
 
-multithreaded: true
-num_delay_ops: 32
-delay: 0.1
-delay_step: 0.01
-
+scheduler_type: greedy
 scheduler:
     check_recession_period_ms: 0
     worker_thread_number: 4
@@ -20,16 +16,28 @@ stelline:
         transport:
             bit: transport_bit
             configuration: ata_standard_rx
-        blade:
+
+        beamformer:
             bit: blade_bit
-            configuration: blade_correlator
+            configuration: beamformer
             input:
                 in: transport
-        writer:
+        beamformer_writer:
             bit: filesystem_bit
-            configuration: file_writer
+            configuration: beamformer_writer
             input:
-                in: blade
+                in: beamformer
+
+        correlator:
+            bit: blade_bit
+            configuration: correlator
+            input:
+                in: transport
+        correlator_writer:
+            bit: filesystem_bit
+            configuration: correlator_writer
+            input:
+                in: correlator
 
 # Nodes
 
@@ -60,7 +68,26 @@ ata_standard_rx:
         number_of_samples: 0
         number_of_polarizations: 0
 
-blade_correlator:
+beamformer:
+    input_shape:
+        number_of_antennas: 28
+        number_of_channels: 1
+        number_of_samples: 65536
+        number_of_polarizations: 2
+    output_shape:
+        number_of_antennas: 1
+        number_of_channels: 1
+        number_of_samples: 65536
+        number_of_polarizations: 2
+    number_of_buffers: 4
+    mode: beamformer
+    options:
+
+beamformer_writer:
+    mode: simple_writer
+    file_path: ./output_beamformer.bin
+
+correlator:
     input_shape:
         number_of_antennas: 28
         number_of_channels: 1
@@ -71,9 +98,10 @@ blade_correlator:
         number_of_channels: 65536
         number_of_samples: 1
         number_of_polarizations: 4
+    number_of_buffers: 4
     mode: correlator
     options:
 
-file_writer:
-    mode: simple_writer
-    file_path: ./output.bin
+correlator_writer:
+    mode: simple_writer_rdma
+    file_path: ./output_correlator.bin

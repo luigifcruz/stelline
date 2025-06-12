@@ -2,11 +2,7 @@
 ---
 # Holoscan Configuration
 
-multithreaded: true
-num_delay_ops: 32
-delay: 0.1
-delay_step: 0.01
-
+scheduler_type: greedy
 scheduler:
     check_recession_period_ms: 0
     worker_thread_number: 4
@@ -20,11 +16,16 @@ stelline:
         transport:
             bit: transport_bit
             configuration: ata_standard_rx
+        blade:
+            bit: blade_bit
+            configuration: blade_beamformer
+            input:
+                in: transport
         writer:
             bit: filesystem_bit
             configuration: file_writer
             input:
-                in: transport
+                in: blade
 
 # Nodes
 
@@ -33,7 +34,7 @@ ata_standard_rx:
     rdma_nic: 01:00.0
     rdma_master_core: 0
     rdma_worker_cores: [1]
-    rdma_max_bursts: 16
+    rdma_max_bursts: 32
     rdma_burst_size: 8192
     concurrent_blocks: 8
     output_pool_size: 32
@@ -55,6 +56,21 @@ ata_standard_rx:
         number_of_samples: 0
         number_of_polarizations: 0
 
+blade_beamformer:
+    input_shape:
+        number_of_antennas: 28
+        number_of_channels: 192
+        number_of_samples: 8192
+        number_of_polarizations: 2
+    output_shape:
+        number_of_antennas: 1
+        number_of_channels: 192
+        number_of_samples: 8192
+        number_of_polarizations: 2
+    mode: beamformer
+    number_of_buffers: 4
+    options:
+
 file_writer:
-    mode: simple_writer
-    file_path: ./output.bin
+    mode: simple_writer_rdma
+    file_path: /mnt/raid/output.bin

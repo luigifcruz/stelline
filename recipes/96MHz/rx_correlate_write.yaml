@@ -2,11 +2,7 @@
 ---
 # Holoscan Configuration
 
-multithreaded: true
-num_delay_ops: 32
-delay: 0.1
-delay_step: 0.01
-
+scheduler_type: greedy
 scheduler:
     check_recession_period_ms: 0
     worker_thread_number: 4
@@ -22,19 +18,14 @@ stelline:
             configuration: ata_standard_rx
         blade:
             bit: blade_bit
-            configuration: blade_frbnn
+            configuration: blade_correlator
             input:
                 in: transport
-        frbnn_inference:
-            bit: frbnn_inference_bit
-            configuration: frbnn_inference
+        writer:
+            bit: filesystem_bit
+            configuration: file_writer
             input:
                 in: blade
-        frbnn_detection:
-            bit: frbnn_detection_bit
-            configuration: frbnn_detection
-            input:
-                in: frbnn_inference
 
 # Nodes
 
@@ -43,7 +34,7 @@ ata_standard_rx:
     rdma_nic: 01:00.0
     rdma_master_core: 0
     rdma_worker_cores: [1]
-    rdma_max_bursts: 16
+    rdma_max_bursts: 32
     rdma_burst_size: 8192
     concurrent_blocks: 8
     output_pool_size: 32
@@ -65,24 +56,30 @@ ata_standard_rx:
         number_of_samples: 0
         number_of_polarizations: 0
 
-blade_frbnn:
+blade_correlator:
     input_shape:
         number_of_antennas: 28
         number_of_channels: 192
         number_of_samples: 8192
         number_of_polarizations: 2
     output_shape:
-        number_of_antennas: 32
+        number_of_antennas: 406
         number_of_channels: 192
-        number_of_samples: 2048
-        number_of_polarizations: 1
-    mode: frbnn
+        number_of_samples: 1
+        number_of_polarizations: 4
+    mode: correlator
+    number_of_buffers: 4
     options:
+        pre_channelizer_stacker_multiplier: 1
 
-frbnn_inference:
-    frbnn_preprocessor_path: ./resources/frbnn/model/frbnn_preprocessor_32.trt
-    frbnn_path: ./resources/frbnn/model/frbnn_32.trt
+        channelizer_bypass: true
 
-frbnn_detection:
-    csv_file_path: ./FRBNN-RUN.csv
-    hits_directory: ./hits
+        pre_correlator_stacker_multiplier: 1
+
+        correlator_integration_rate: 8192
+        correlator_conjugate_antenna_index: 1
+        correlator_use_shared_memory: false
+
+file_writer:
+    mode: simple_writer
+    file_path: ./output.bin

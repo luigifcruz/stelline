@@ -2,11 +2,7 @@
 ---
 # Holoscan Configuration
 
-multithreaded: true
-num_delay_ops: 32
-delay: 0.1
-delay_step: 0.01
-
+scheduler_type: greedy
 scheduler:
     check_recession_period_ms: 0
     worker_thread_number: 4
@@ -22,7 +18,7 @@ stelline:
             configuration: ata_standard_rx
         writer:
             bit: filesystem_bit
-            configuration: dummy_writer
+            configuration: file_writer
             input:
                 in: transport
 
@@ -33,7 +29,7 @@ ata_standard_rx:
     rdma_nic: 01:00.0
     rdma_master_core: 0
     rdma_worker_cores: [1]
-    rdma_max_bursts: 16
+    rdma_max_bursts: 32
     rdma_burst_size: 8192
     concurrent_blocks: 8
     output_pool_size: 32
@@ -55,5 +51,6 @@ ata_standard_rx:
         number_of_samples: 0
         number_of_polarizations: 0
 
-dummy_writer:
-    mode: dummy_writer
+file_writer:
+    mode: simple_writer_rdma
+    file_path: /mnt/raid/output.bin

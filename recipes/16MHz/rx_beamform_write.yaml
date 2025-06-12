@@ -2,11 +2,7 @@
 ---
 # Holoscan Configuration
 
-multithreaded: true
-num_delay_ops: 32
-delay: 0.1
-delay_step: 0.01
-
+scheduler_type: greedy
 scheduler:
     check_recession_period_ms: 0
     worker_thread_number: 4
@@ -22,7 +18,7 @@ stelline:
             configuration: ata_standard_rx
         blade:
             bit: blade_bit
-            configuration: blade_frbnn
+            configuration: blade_beamformer
             input:
                 in: transport
         writer:
@@ -38,40 +34,41 @@ ata_standard_rx:
     rdma_nic: 01:00.0
     rdma_master_core: 0
     rdma_worker_cores: [1]
-    rdma_max_bursts: 16
+    rdma_max_bursts: 64
     rdma_burst_size: 8192
-    concurrent_blocks: 8
-    output_pool_size: 32
+    concurrent_blocks: 32
+    output_pool_size: 128
     sorter_depth: 8
     enable_csv_logging: true
     total_block:
         number_of_antennas: 28
-        number_of_channels: 192
-        number_of_samples: 8192
+        number_of_channels: 1
+        number_of_samples: 65536
         number_of_polarizations: 2
     partial_block:
         number_of_antennas: 1
-        number_of_channels: 96
-        number_of_samples: 16
+        number_of_channels: 1
+        number_of_samples: 512
         number_of_polarizations: 2
     offset_block:
         number_of_antennas: 0
-        number_of_channels: 1120
+        number_of_channels: 33
         number_of_samples: 0
         number_of_polarizations: 0
 
-blade_frbnn:
+blade_beamformer:
     input_shape:
         number_of_antennas: 28
-        number_of_channels: 192
-        number_of_samples: 8192
+        number_of_channels: 1
+        number_of_samples: 65536
         number_of_polarizations: 2
     output_shape:
-        number_of_antennas: 32
-        number_of_channels: 192
-        number_of_samples: 2048
-        number_of_polarizations: 1
-    mode: frbnn
+        number_of_antennas: 1
+        number_of_channels: 1
+        number_of_samples: 65536
+        number_of_polarizations: 2
+    mode: beamformer
+    number_of_buffers: 4
     options:
 
 file_writer:
