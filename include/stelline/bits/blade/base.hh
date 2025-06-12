@@ -1,10 +1,14 @@
 #ifndef STELLINE_BITS_BLADE_BASE_HH
 #define STELLINE_BITS_BLADE_BASE_HH
 
+#include <climits>
+#include <unordered_map>
+
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/helpers.hh>
 #include <stelline/yaml/types/block_shape.hh>
+#include <stelline/yaml/types/map.hh>
 #include <stelline/operators/blade/base.hh>
 
 namespace stelline::bits::blade {
@@ -18,44 +22,45 @@ inline BitInterface BladeBit(auto* app, auto& pool, uint64_t id, const std::stri
     auto input_shape = FetchNodeArg<BlockShape>(app, config, "input_shape");
     auto output_shape = FetchNodeArg<BlockShape>(app, config, "output_shape");
     auto mode = FetchNodeArg<std::string>(app, config, "mode");
+    auto numberOfBuffers = FetchNodeArg<uint64_t>(app, config, "number_of_buffers", 4);
+    auto options = FetchNodeArg<Map>(app, config, "options");
 
     HOLOSCAN_LOG_INFO("Blade Configuration:");
     HOLOSCAN_LOG_INFO("  Input Shape: {}", input_shape);
     HOLOSCAN_LOG_INFO("  Output Shape: {}", output_shape);
     HOLOSCAN_LOG_INFO("  Mode: {}", mode);
+    HOLOSCAN_LOG_INFO("  Number of Buffers: {}", numberOfBuffers);
+    HOLOSCAN_LOG_INFO("  Options: {}", options);
 
     // Declare modes.
 
     auto correlator_op = [&](){
-        // TODO: Implement options parsing.
-        // TODO: Implement options printing.
-
         return app->template make_operator<CorrelatorOp>(
             fmt::format("correlator_{}", id),
+            Arg("number_of_buffers", numberOfBuffers),
             Arg("input_shape", input_shape),
-            Arg("output_shape", output_shape)
+            Arg("output_shape", output_shape),
+            Arg("options", options)
         );
     };
 
     auto beamformer_op = [&](){
-        // TODO: Implement options parsing.
-        // TODO: Implement options printing.
-
         return app->template make_operator<BeamformerOp>(
             fmt::format("beamformer_{}", id),
+            Arg("number_of_buffers", numberOfBuffers),
             Arg("input_shape", input_shape),
-            Arg("output_shape", output_shape)
+            Arg("output_shape", output_shape),
+            Arg("options", options)
         );
     };
 
     auto frbnn_op = [&](){
-        // TODO: Implement options parsing.
-        // TODO: Implement options printing.
-
         return app->template make_operator<FrbnnOp>(
             fmt::format("frbnn_{}", id),
+            Arg("number_of_buffers", numberOfBuffers),
             Arg("input_shape", input_shape),
-            Arg("output_shape", output_shape)
+            Arg("output_shape", output_shape),
+            Arg("options", options)
         );
     };
 

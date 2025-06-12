@@ -51,17 +51,18 @@ private:
 };
 
 struct CorrelatorOp::Impl {
-    // Configuration parameters (derived).
+    // Derived configuration parameters.
 
+    uint64_t numberOfBuffers;
     BlockShape inputShape;
     BlockShape outputShape;
+    Map options;
 
     // State.
 
     Dispatcher dispatcher;
+    OpCorrelatorPipeline::Config config;
     std::shared_ptr<OpCorrelatorPipeline> pipeline;
-    ArrayShape bladeInputShape;
-    ArrayShape bladeOutputShape;
 
     // Metrics.
 
@@ -73,6 +74,7 @@ struct CorrelatorOp::Impl {
 void CorrelatorOp::initialize() {
     // Register custom types.
     register_converter<BlockShape>();
+    register_converter<Map>();
 
     // Allocate memory.
     pimpl = new Impl();
@@ -93,52 +95,62 @@ void CorrelatorOp::setup(OperatorSpec& spec) {
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
+    spec.param(numberOfBuffers_, "number_of_buffers");
     spec.param(inputShape_, "input_shape");
     spec.param(outputShape_, "output_shape");
+    spec.param(options_, "options");
 }
 
 void CorrelatorOp::start() {
     // Convert Parameters to variables.
 
+    pimpl->numberOfBuffers = numberOfBuffers_.get();
     pimpl->inputShape = inputShape_.get();
     pimpl->outputShape = outputShape_.get();
-
-    pimpl->bladeInputShape = ArrayShape({
-        pimpl->inputShape.numberOfAntennas,
-        pimpl->inputShape.numberOfChannels,
-        pimpl->inputShape.numberOfSamples,
-        pimpl->inputShape.numberOfPolarizations
-    });
-
-    pimpl->bladeOutputShape = ArrayShape({
-        pimpl->outputShape.numberOfAntennas,
-        pimpl->outputShape.numberOfChannels,
-        pimpl->outputShape.numberOfSamples,
-        pimpl->outputShape.numberOfPolarizations
-    });
+    pimpl->options = options_.get();
 
     // Validate configuration.
 
     // TODO: Write validation.
 
     // Create pipeline.
-    // TODO: Implement configuration parameters.
 
-    OpCorrelatorPipeline::Config config = {
-        .inputShape = pimpl->bladeInputShape,
-        .outputShape = pimpl->bladeOutputShape,
+    pimpl->config = {
+        .inputShape = ArrayShape({
+            pimpl->inputShape.numberOfAntennas,
+            pimpl->inputShape.numberOfChannels,
+            pimpl->inputShape.numberOfSamples,
+            pimpl->inputShape.numberOfPolarizations
+        }),
+        .outputShape = ArrayShape({
+            pimpl->outputShape.numberOfAntennas,
+            pimpl->outputShape.numberOfChannels,
+            pimpl->outputShape.numberOfSamples,
+            pimpl->outputShape.numberOfPolarizations
+        }),
 
-        .preCorrelatorStackerMultiplier = 1,
+        .preChannelizerStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_channelizer_stacker_multiplier", 1),
 
-        .correlatorIntegrationRate = 8192,
-        .correlatorConjugateAntennaIndex = 1,
+        .channelizerBypass = FetchMap<bool>(pimpl->options, "channelizer_bypass", false),
+
+        .preCorrelatorStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_correlator_stacker_multiplier", 8),
+
+        .correlatorIntegrationRate = FetchMap<U64>(pimpl->options, "correlator_integration_rate", 128),
+        .correlatorConjugateAntennaIndex = FetchMap<U64>(pimpl->options, "correlator_conjugate_antenna_index", 1),
+        .correlatorUseSharedMemory = FetchMap<bool>(pimpl->options, "correlator_use_shared_memory", false),
+        .correlatorCalculationMode = CALC_MODE::INTEGER,
+
+        .stackerBlockSize = FetchMap<U64>(pimpl->options, "stacker_block_size", 512),
+        .casterBlockSize = FetchMap<U64>(pimpl->options, "caster_block_size", 512),
+        .channelizerBlockSize = FetchMap<U64>(pimpl->options, "channelizer_block_size", 512),
+        .correlatorBlockSize = FetchMap<U64>(pimpl->options, "correlator_block_size", 64),
     };
-    pimpl->pipeline = std::make_shared<OpCorrelatorPipeline>(config);
+    pimpl->pipeline = std::make_shared<OpCorrelatorPipeline>(pimpl->config);
 
     // Initialize Dispatcher.
 
     // TODO: Make number of buffers configurable.
-    pimpl->dispatcher.template initialize<CF32>(4, pimpl->bladeOutputShape);
+    pimpl->dispatcher.template initialize<CF32>(pimpl->numberOfBuffers, pimpl->config.outputShape);
 
     // Start metrics thread.
 
@@ -163,12 +175,12 @@ void CorrelatorOp::compute(InputContext& input, OutputContext& output, Execution
     };
 
     auto convertInputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->bladeInputShape);
+        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->config.inputShape);
         return pimpl->pipeline->transferIn(deviceInputBuffer);
     };
 
     auto convertOutputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(data.tensor->data(), pimpl->bladeOutputShape);
+        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(data.tensor->data(), pimpl->config.outputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 

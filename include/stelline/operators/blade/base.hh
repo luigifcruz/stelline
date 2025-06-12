@@ -5,6 +5,7 @@
 
 #include <stelline/common.hh>
 #include <stelline/yaml/types/block_shape.hh>
+#include <stelline/yaml/types/map.hh>
 
 namespace stelline::operators::blade {
 
@@ -31,8 +32,10 @@ class STELLINE_API CorrelatorOp : public Operator {
     struct Impl;
     Impl* pimpl;
 
+    Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;
     Parameter<BlockShape> outputShape_;
+    Parameter<Map> options_;
 };
 
 class STELLINE_API FrbnnOp : public Operator {
@@ -51,8 +54,10 @@ class STELLINE_API FrbnnOp : public Operator {
     struct Impl;
     Impl* pimpl;
 
+    Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;
     Parameter<BlockShape> outputShape_;
+    Parameter<Map> options_;
 };
 
 class STELLINE_API BeamformerOp : public Operator {
@@ -71,8 +76,10 @@ class STELLINE_API BeamformerOp : public Operator {
     struct Impl;
     Impl* pimpl;
 
+    Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;
     Parameter<BlockShape> outputShape_;
+    Parameter<Map> options_;
 };
 
 }  // namespace stelline::operators::blade

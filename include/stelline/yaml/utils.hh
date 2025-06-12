@@ -3,27 +3,30 @@
 
 #include <map>
 #include <string>
+#include <optional>
 
 #include <stelline/common.hh>
 
 namespace stelline::yaml {
 
-std::map<std::string, YAML::Node> enumerate_nodes(const YAML::Node& node, const std::string& key) {
+inline std::map<std::string, YAML::Node> enumerate_nodes(const YAML::Node& node, const std::optional<std::string>& key = {}) {
     std::map<std::string, YAML::Node> result;
-    
+
     if (!node.IsMap()) {
         return result;
     }
 
-    if (!node[key]) {
+    const auto& children = (key.has_value() ? node[key.value()] : node);
+
+    if (!children) {
         return result;
     }
-    
-    for (const auto& element : node[key]) {
+
+    for (const auto& element : children) {
         std::string key = element.first.as<std::string>();
         result[key] = element.second;
     }
-    
+
     return result;
 }
 

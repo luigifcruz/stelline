@@ -23,7 +23,10 @@ public:
         ArrayShape inputShape;
         ArrayShape outputShape;
 
-        U64 inputCasterBlockSize = 512;
+        bool beamformerEnableIncoherentBeam;
+        bool beamformerEnableIncoherentBeamSqrt;
+
+        U64 beamformerBlockSize;
     };
 
     explicit OpBeamformerPipeline(const Config& config)
@@ -50,21 +53,14 @@ public:
 
         // Connect modules.
 
-        this->connect(inputCaster, {
-            .blockSize = config.inputCasterBlockSize,
+        this->connect(beamformer, {
+            .enableIncoherentBeam = config.beamformerEnableIncoherentBeam,
+            .enableIncoherentBeamSqrt = config.beamformerEnableIncoherentBeamSqrt,
+
+            .blockSize = config.beamformerBlockSize,
         }, {
             .buf = inputBuffer,
-        });
-
-        this->connect(beamformer, {}, {
-            .buf = inputCaster->getOutputBuffer(),
             .phasors = inputPhasorBuffer,
-        });
-
-        this->connect(channelizer, {
-            .rate = 8192,
-        }, {
-            .buf = beamformer->getOutputBuffer(),
         });
     }
 
@@ -74,7 +70,7 @@ public:
     }
 
     Result transferResult() {
-        BL_CHECK(this->copy(outputBuffer, channelizer->getOutputBuffer()));
+        BL_CHECK(this->copy(outputBuffer, beamformer->getOutputBuffer()));
         return Result::SUCCESS;
     }
 
@@ -84,14 +80,8 @@ public:
     }
 
 private:
-    using InputCaster = typename Modules::Caster<IT, CF32>;
-    std::shared_ptr<InputCaster> inputCaster;
-
     using Beamformer = typename Modules::Beamformer::ATA<CF32, CF32>;
     std::shared_ptr<Beamformer> beamformer;
-
-    using Channelizer = typename Modules::Channelizer<CF32, CF32>;
-    std::shared_ptr<Channelizer> channelizer;
 
     Duet<ArrayTensor<Device::CUDA, IT>> inputBuffer;
     Duet<ArrayTensor<Device::CUDA, OT>> outputBuffer;
@@ -102,15 +92,16 @@ private:
 struct BeamformerOp::Impl {
     // Configuration parameters (derived).
 
+    uint64_t numberOfBuffers;
     BlockShape inputShape;
     BlockShape outputShape;
+    Map options;
 
     // State.
 
     Dispatcher dispatcher;
+    OpBeamformerPipeline::Config config;
     std::shared_ptr<OpBeamformerPipeline> pipeline;
-    ArrayShape bladeInputShape;
-    ArrayShape bladeOutputShape;
 
     // Metrics.
 
@@ -122,6 +113,7 @@ struct BeamformerOp::Impl {
 void BeamformerOp::initialize() {
     // Register custom types.
     register_converter<BlockShape>();
+    register_converter<Map>();
 
     // Allocate memory.
     pimpl = new Impl();
@@ -142,47 +134,51 @@ void BeamformerOp::setup(OperatorSpec& spec) {
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
+    spec.param(numberOfBuffers_, "number_of_buffers");
     spec.param(inputShape_, "input_shape");
     spec.param(outputShape_, "output_shape");
+    spec.param(options_, "options");
 }
 
 void BeamformerOp::start() {
     // Convert Parameters to variables.
 
+    pimpl->numberOfBuffers = numberOfBuffers_.get();
     pimpl->inputShape = inputShape_.get();
     pimpl->outputShape = outputShape_.get();
-
-    pimpl->bladeInputShape = ArrayShape({
-        pimpl->inputShape.numberOfAntennas,
-        pimpl->inputShape.numberOfChannels,
-        pimpl->inputShape.numberOfSamples,
-        pimpl->inputShape.numberOfPolarizations
-    });
-
-    pimpl->bladeOutputShape = ArrayShape({
-        pimpl->outputShape.numberOfAntennas,
-        pimpl->outputShape.numberOfChannels,
-        pimpl->outputShape.numberOfSamples,
-        pimpl->outputShape.numberOfPolarizations
-    });
+    pimpl->options = options_.get();
 
     // Validate configuration.
 
     // TODO: Write validation.
 
     // Create pipeline.
-    // TODO: Implement configuration parameters.
 
-    OpBeamformerPipeline::Config config = {
-        .inputShape = pimpl->bladeInputShape,
-        .outputShape = pimpl->bladeOutputShape
+    pimpl->config = {
+        .inputShape = ArrayShape({
+            pimpl->inputShape.numberOfAntennas,
+            pimpl->inputShape.numberOfChannels,
+            pimpl->inputShape.numberOfSamples,
+            pimpl->inputShape.numberOfPolarizations
+        }),
+        .outputShape = ArrayShape({
+            pimpl->outputShape.numberOfAntennas,
+            pimpl->outputShape.numberOfChannels,
+            pimpl->outputShape.numberOfSamples,
+            pimpl->outputShape.numberOfPolarizations
+        }),
+
+        .beamformerEnableIncoherentBeam = FetchMap<bool>(pimpl->options, "beamformer_enable_incoherent_beam", false),
+        .beamformerEnableIncoherentBeamSqrt = FetchMap<bool>(pimpl->options, "beamformer_enable_incoherent_beam_sqrt", false),
+
+        .beamformerBlockSize = FetchMap<U64>(pimpl->options, "beamformer_block_size", 512),
     };
-    pimpl->pipeline = std::make_shared<OpBeamformerPipeline>(config);
+    pimpl->pipeline = std::make_shared<OpBeamformerPipeline>(pimpl->config);
 
     // Initialize Dispatcher.
 
     // TODO: Make number of buffers configurable.
-    pimpl->dispatcher.template initialize<CF32>(8, pimpl->bladeOutputShape);
+    pimpl->dispatcher.template initialize<CF32>(pimpl->numberOfBuffers, pimpl->config.outputShape);
 
     // Start metrics thread.
 
@@ -207,12 +203,12 @@ void BeamformerOp::compute(InputContext& input, OutputContext& output, Execution
     };
 
     auto convertInputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->bladeInputShape);
+        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->config.inputShape);
         return pimpl->pipeline->transferIn(deviceInputBuffer);
     };
 
     auto convertOutputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(data.tensor->data(), pimpl->bladeOutputShape);
+        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(data.tensor->data(), pimpl->config.outputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 

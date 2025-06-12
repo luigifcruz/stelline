@@ -25,21 +25,21 @@ public:
         ArrayShape inputShape;
         ArrayShape outputShape;
 
-        U64 integratorSize = 32;
-        U64 integratorRate = 1;
+        U64 integratorSize;
+        U64 integratorRate;
 
-        U64 timeStackerAxis = 2;
-        U64 timeStackerMultiplier = 8;
+        U64 timeStackerAxis;
+        U64 timeStackerMultiplier;
 
-        U64 batchStackerAxis = 0;
-        U64 batchStackerMultiplier = 32;
+        U64 batchStackerAxis;
+        U64 batchStackerMultiplier;
 
-        U64 inputCasterBlockSize = 512;
-        U64 integratorBlockSize = 512;
-        U64 detectorBlockSize = 512;
-        U64 outputCasterBlockSize = 512;
-        U64 batchStackerBlockSize = 512;
-        U64 timeStackerBlockSize = 512;
+        U64 inputCasterBlockSize;
+        U64 integratorBlockSize;
+        U64 detectorBlockSize;
+        U64 outputCasterBlockSize;
+        U64 batchStackerBlockSize;
+        U64 timeStackerBlockSize;
     };
 
     explicit OpFrbnnPipeline(const Config& config)
@@ -165,17 +165,18 @@ private:
 };
 
 struct FrbnnOp::Impl {
-    // Configuration parameters (derived).
+    // Derived configuration parameters.
 
+    uint64_t numberOfBuffers;
     BlockShape inputShape;
     BlockShape outputShape;
+    Map options;
 
     // State.
 
     Dispatcher dispatcher;
+    OpFrbnnPipeline::Config config;
     std::shared_ptr<OpFrbnnPipeline> pipeline;
-    ArrayShape bladeInputShape;
-    ArrayShape bladeOutputShape;
 
     // Metrics.
 
@@ -187,6 +188,7 @@ struct FrbnnOp::Impl {
 void FrbnnOp::initialize() {
     // Register custom types.
     register_converter<BlockShape>();
+    register_converter<Map>();
 
     // Allocate memory.
     pimpl = new Impl();
@@ -207,47 +209,62 @@ void FrbnnOp::setup(OperatorSpec& spec) {
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
+    spec.param(numberOfBuffers_, "number_of_buffers");
     spec.param(inputShape_, "input_shape");
     spec.param(outputShape_, "output_shape");
+    spec.param(options_, "options");
 }
 
 void FrbnnOp::start() {
     // Convert Parameters to variables.
 
+    pimpl->numberOfBuffers = numberOfBuffers_.get();
     pimpl->inputShape = inputShape_.get();
     pimpl->outputShape = outputShape_.get();
-
-    pimpl->bladeInputShape = ArrayShape({
-        pimpl->inputShape.numberOfAntennas,
-        pimpl->inputShape.numberOfChannels,
-        pimpl->inputShape.numberOfSamples,
-        pimpl->inputShape.numberOfPolarizations
-    });
-
-    pimpl->bladeOutputShape = ArrayShape({
-        pimpl->outputShape.numberOfAntennas,
-        pimpl->outputShape.numberOfChannels,
-        pimpl->outputShape.numberOfSamples,
-        pimpl->outputShape.numberOfPolarizations
-    });
+    pimpl->options = options_.get();
 
     // Validate configuration.
 
     // TODO: Write validation.
 
     // Create pipeline.
-    // TODO: Implement configuration parameters.
 
-    OpFrbnnPipeline::Config config = {
-        .inputShape = pimpl->bladeInputShape,
-        .outputShape = pimpl->bladeOutputShape
+    pimpl->config = {
+        .inputShape = ArrayShape({
+            pimpl->inputShape.numberOfAntennas,
+            pimpl->inputShape.numberOfChannels,
+            pimpl->inputShape.numberOfSamples,
+            pimpl->inputShape.numberOfPolarizations
+        }),
+        .outputShape = ArrayShape({
+            pimpl->outputShape.numberOfAntennas,
+            pimpl->outputShape.numberOfChannels,
+            pimpl->outputShape.numberOfSamples,
+            pimpl->outputShape.numberOfPolarizations
+        }),
+
+        .integratorSize = FetchMap<U64>(pimpl->options, "integrator_size", 32),
+        .integratorRate = FetchMap<U64>(pimpl->options, "integrator_rate", 1),
+
+        .timeStackerAxis = FetchMap<U64>(pimpl->options, "time_stacker_axis", 2),
+        .timeStackerMultiplier = FetchMap<U64>(pimpl->options, "time_stacker_multiplier", 8),
+
+        .batchStackerAxis = FetchMap<U64>(pimpl->options, "batch_stacker_axis", 0),
+        .batchStackerMultiplier = FetchMap<U64>(pimpl->options, "batch_stacker_multiplier", 32),
+
+        .inputCasterBlockSize = FetchMap<U64>(pimpl->options, "input_caster_block_size", 512),
+        .integratorBlockSize = FetchMap<U64>(pimpl->options, "integrator_block_size", 512),
+        .detectorBlockSize = FetchMap<U64>(pimpl->options, "detector_block_size", 512),
+        .outputCasterBlockSize = FetchMap<U64>(pimpl->options, "output_caster_block_size", 512),
+        .batchStackerBlockSize = FetchMap<U64>(pimpl->options, "batch_stacker_block_size", 512),
+        .timeStackerBlockSize = FetchMap<U64>(pimpl->options, "time_stacker_block_size", 512),
     };
-    pimpl->pipeline = std::make_shared<OpFrbnnPipeline>(config);
+    pimpl->pipeline = std::make_shared<OpFrbnnPipeline>(pimpl->config);
 
     // Initialize Dispatcher.
 
     // TODO: Make number of buffers configurable.
-    pimpl->dispatcher.template initialize<F32>(4, pimpl->bladeOutputShape);
+    pimpl->dispatcher.template initialize<F32>(pimpl->numberOfBuffers, pimpl->config.outputShape);
 
     // Start metrics thread.
 
@@ -272,12 +289,12 @@ void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionConte
     };
 
     auto convertInputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->bladeInputShape);
+        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->config.inputShape);
         return pimpl->pipeline->transferIn(deviceInputBuffer);
     };
 
     auto convertOutputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, F32> deviceOutputBuffer(data.tensor->data(), pimpl->bladeOutputShape);
+        ArrayTensor<Device::CUDA, F32> deviceOutputBuffer(data.tensor->data(), pimpl->config.outputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 
