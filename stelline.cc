@@ -146,6 +146,23 @@ int main(int argc, char** argv) {
     auto app = holoscan::make_application<DefaultOp>();
 
     app->config(std::filesystem::path(configurationFilePath));
+
+    {
+        // Setup Scheduler
+        const auto& config = app->from_config("scheduler");
+        const auto& type = app->from_config("scheduler_type").as<std::string>();
+
+        if (type == "greedy") {
+            app->scheduler(app->make_scheduler<holoscan::GreedyScheduler>("scheduler", config));
+        } else if (type == "multi_thread") {
+            app->scheduler(app->make_scheduler<holoscan::MultiThreadScheduler>("scheduler", config));
+        } else if (type == "event_based") {
+            app->scheduler(app->make_scheduler<holoscan::EventBasedScheduler>("scheduler", config));
+        } else {
+            throw std::runtime_error("Invalid scheduler type: " + type);
+        }
+    }
+
     app->run();
 
     return 0;
