@@ -94,18 +94,23 @@ class DefaultOp : public holoscan::Application {
             }
         }
 
-        for (const auto& [dst, src] : flows) {
-            if (!map.contains(src)) {
-                HOLOSCAN_LOG_ERROR("Unknown node: '{}'", src);
+        for (const auto& [dst_id, src_id] : flows) {
+            if (!map.contains(src_id)) {
+                HOLOSCAN_LOG_ERROR("Unknown node: '{}'", src_id);
                 throw std::runtime_error("Unknown node.");
             }
 
-            if (!map.contains(dst)) {
-                HOLOSCAN_LOG_ERROR("Unknown node: '{}'", dst);
+            if (!map.contains(dst_id)) {
+                HOLOSCAN_LOG_ERROR("Unknown node: '{}'", dst_id);
                 throw std::runtime_error("Unknown node.");
             }
 
-            add_flow(map[src].second, map[dst].first);
+            const auto& [_1, src, src_meta] = map[src_id];
+            const auto& [dst, _2, dst_meta] = map[dst_id];
+
+            src_meta->link_metadata(dst_meta->metadata_storage());
+
+            add_flow(src, dst);
         }
     }
 };

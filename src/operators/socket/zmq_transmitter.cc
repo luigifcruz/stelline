@@ -84,6 +84,10 @@ void ZmqTransmitterOp::start() {
     pimpl->publisher.setsockopt(ZMQ_LINGER, 0);
     pimpl->publisher.bind(pimpl->address);
 
+    // Register metadata.
+
+    this->commit_metadata();
+
     HOLOSCAN_LOG_INFO("Successfully created ZeroMQ transmitter at address '{}'.", pimpl->address);
 }
 

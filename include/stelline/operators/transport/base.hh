@@ -4,6 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
+#include <stelline/metadata.hh>
 #include <stelline/yaml/types/block_shape.hh>
 
 namespace stelline::operators::transport {
@@ -15,7 +16,7 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API ReceiverOp : public Operator {
+class STELLINE_API ReceiverOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(ReceiverOp)
 
@@ -43,7 +44,7 @@ class STELLINE_API ReceiverOp : public Operator {
     Parameter<bool> enableCsvLogging_;
 };
 
-class STELLINE_API SorterOp : public Operator {
+class STELLINE_API SorterOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)
 

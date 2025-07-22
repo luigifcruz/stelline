@@ -4,6 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
+#include <stelline/metadata.hh>
 #include <stelline/yaml/types/block_shape.hh>
 #include <stelline/yaml/types/map.hh>
 
@@ -16,7 +17,7 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API CorrelatorOp : public Operator {
+class STELLINE_API CorrelatorOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(CorrelatorOp)
 
@@ -38,7 +39,7 @@ class STELLINE_API CorrelatorOp : public Operator {
     Parameter<Map> options_;
 };
 
-class STELLINE_API FrbnnOp : public Operator {
+class STELLINE_API FrbnnOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(FrbnnOp)
 
@@ -60,7 +61,7 @@ class STELLINE_API FrbnnOp : public Operator {
     Parameter<Map> options_;
 };
 
-class STELLINE_API BeamformerOp : public Operator {
+class STELLINE_API BeamformerOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(BeamformerOp)
 

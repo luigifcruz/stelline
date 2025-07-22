@@ -39,7 +39,7 @@ SorterOp::~SorterOp() {
 
 void SorterOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("dsp_block_in")
-        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+        .connector(IOSpec::ConnectorType::kDoubleBuffer,
                     holoscan::Arg("capacity", 1024UL));
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
@@ -65,6 +65,10 @@ void SorterOp::start() {
     pimpl->metricsThread = std::thread([&]{
         pimpl->metricsLoop();
     });
+
+    // Register metadata.
+
+    this->commit_metadata();
 }
 
 void SorterOp::stop() {

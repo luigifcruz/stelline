@@ -12,34 +12,38 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
     using namespace holoscan;
     using namespace stelline::operators::filesystem;
 
+    // Create metadata storage.
+
+    auto metadata = std::make_shared<MetadataStorage>();
+
     // Fetch configuration YAML.
 
     auto mode = FetchNodeArg<std::string>(app, config, "mode");
-    auto filePath = FetchNodeArg<std::string>(app, config, "file_path", "./file.bin");
+    auto file_path = FetchNodeArg<std::string>(app, config, "file_path", "./file.bin");
 
     HOLOSCAN_LOG_INFO("Filesystem Configuration:");
     HOLOSCAN_LOG_INFO("  Mode: {}", mode);
-    HOLOSCAN_LOG_INFO("  File Path: {}", filePath);
+    HOLOSCAN_LOG_INFO("  File Path: {}", file_path);
 
     // Declare modes.
 
-    auto simple_writer_op = [&](){
+    auto simple_writer_op_cb = [&](const auto& op_id){
         return app->template make_operator<SimpleWriterOp>(
-            fmt::format("simple-writer_{}", id),
-            Arg("file_path", filePath)
+            op_id,
+            Arg("file_path", file_path)
         );
     };
 
-    auto simple_writer_rdma_op = [&](){
+    auto simple_writer_rdma_op_cb = [&](const auto& op_id){
         return app->template make_operator<SimpleWriterRdmaOp>(
-            fmt::format("simple-writer-rdma_{}", id),
-            Arg("file_path", filePath)
+            op_id,
+            Arg("file_path", file_path)
         );
     };
 
-    auto dummy_writer_op = [&](){
+    auto dummy_writer_op_cb = [&](const auto& op_id){
         return app->template make_operator<DummyWriterOp>(
-            fmt::format("dummy-writer_{}", id)
+            op_id
         );
     };
 
@@ -47,20 +51,26 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
 
     if (mode == "simple_writer") {
         HOLOSCAN_LOG_INFO("Creating Simple Writer operator.");
-        const auto& op = simple_writer_op();
-        return {op, op};
+        const auto& simple_writer_id = fmt::format("filesystem-simple-writer-{}", id);
+        auto simple_writer_op = simple_writer_op_cb(simple_writer_id);
+        simple_writer_op->load_metadata(simple_writer_id, metadata);
+        return {simple_writer_op, simple_writer_op, simple_writer_op};
     }
 
     if (mode == "simple_writer_rdma") {
         HOLOSCAN_LOG_INFO("Creating Simple Writer RDMA operator.");
-        const auto& op = simple_writer_rdma_op();
-        return {op, op};
+        const auto& simple_writer_rdma_id = fmt::format("filesystem-simple-writer-rdma-{}", id);
+        auto simple_writer_rdma_op = simple_writer_rdma_op_cb(simple_writer_rdma_id);
+        simple_writer_rdma_op->load_metadata(simple_writer_rdma_id, metadata);
+        return {simple_writer_rdma_op, simple_writer_rdma_op, simple_writer_rdma_op};
     }
 
     if (mode == "dummy_writer") {
         HOLOSCAN_LOG_INFO("Creating Dummy Writer operator.");
-        const auto& op = dummy_writer_op();
-        return {op, op};
+        const auto& dummy_writer_id = fmt::format("filesystem-dummy-writer-{}", id);
+        auto dummy_writer_op = dummy_writer_op_cb(dummy_writer_id);
+        dummy_writer_op->load_metadata(dummy_writer_id, metadata);
+        return {dummy_writer_op, dummy_writer_op, dummy_writer_op};
     }
 
     HOLOSCAN_LOG_ERROR("Unsupported mode: {}", mode);

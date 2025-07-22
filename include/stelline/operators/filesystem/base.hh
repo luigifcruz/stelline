@@ -4,6 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
+#include <stelline/metadata.hh>
 
 namespace stelline::operators::filesystem {
 
@@ -14,7 +15,7 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API SimpleWriterOp : public Operator {
+class STELLINE_API SimpleWriterOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleWriterOp)
 
@@ -33,7 +34,7 @@ class STELLINE_API SimpleWriterOp : public Operator {
     Parameter<std::string> filePath_;
 };
 
-class STELLINE_API SimpleWriterRdmaOp : public Operator {
+class STELLINE_API SimpleWriterRdmaOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleWriterRdmaOp)
 
@@ -52,7 +53,7 @@ class STELLINE_API SimpleWriterRdmaOp : public Operator {
     Parameter<std::string> filePath_;
 };
 
-class STELLINE_API DummyWriterOp : public Operator {
+class STELLINE_API DummyWriterOp : public Operator, public Metadata {
  public:
       HOLOSCAN_OPERATOR_FORWARD_ARGS(DummyWriterOp)
 

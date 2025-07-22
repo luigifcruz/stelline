@@ -7,6 +7,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
+#include <stelline/metadata.hh>
 
 namespace stelline {
 
@@ -35,7 +36,7 @@ struct InferenceBlock {
     }
 };
 
-typedef std::pair<std::shared_ptr<holoscan::Operator>, std::shared_ptr<holoscan::Operator>> BitInterface;
+typedef std::tuple<std::shared_ptr<holoscan::Operator>, std::shared_ptr<holoscan::Operator>, std::shared_ptr<Metadata>> BitInterface;
 
 }  // namespace stelline
 

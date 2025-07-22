@@ -7,12 +7,17 @@
 #include <stelline/helpers.hh>
 #include <stelline/yaml/types/block_shape.hh>
 #include <stelline/operators/transport/base.hh>
+#include <stelline/metadata.hh>
 
 namespace stelline::bits::transport {
 
 inline BitInterface TransportBit(auto* app, auto& pool, uint64_t id, const std::string& config) {
     using namespace holoscan;
     using namespace stelline::operators::transport;
+
+    // Create metadata storage.
+
+    auto metadata = std::make_shared<MetadataStorage>();
 
     // Fetch configuration YAML.
 
@@ -89,14 +94,16 @@ inline BitInterface TransportBit(auto* app, auto& pool, uint64_t id, const std::
 
     // Instantiate operators.
 
-    auto ano_rx = app->template make_operator<ops::AdvNetworkOpRx>(
-        fmt::format("ano_rx_{}", id),
+    const auto& ano_rx_id = fmt::format("transport-ano-rx-{}", id);
+    auto ano_rx_op = app->template make_operator<ops::AdvNetworkOpRx>(
+        ano_rx_id,
         Arg("cfg", ano_cfg),
         app->template make_condition<BooleanCondition>("is_alive", true)
     );
 
-    auto receiver = app->template make_operator<ReceiverOp>(
-        fmt::format("receiver_{}", id),
+    const auto& receiver_id = fmt::format("transport-receiver-{}", id);
+    auto receiver_op = app->template make_operator<ReceiverOp>(
+        receiver_id,
         Arg("concurrent_blocks", concurrent_blocks),
         Arg("total_block", total_block),
         Arg("partial_block", partial_block),
@@ -104,18 +111,21 @@ inline BitInterface TransportBit(auto* app, auto& pool, uint64_t id, const std::
         Arg("output_pool_size", output_pool_size),
         Arg("enable_csv_logging", enable_csv_logging)
     );
+    receiver_op->load_metadata(receiver_id, metadata);
 
-    auto sorter = app->template make_operator<SorterOp>(
-        fmt::format("sorter_{}", id),
+    const auto& sorter_id = fmt::format("transport-sorter-{}", id);
+    auto sorter_op = app->template make_operator<SorterOp>(
+        sorter_id,
         Arg("depth", sorter_depth)
     );
+    sorter_op->load_metadata(sorter_id, metadata);
 
     // Connect operators.
 
-    app->add_flow(ano_rx, receiver, {{"bench_rx_out", "burst_in"}});
-    app->add_flow(receiver, sorter, {{"dsp_block_out", "dsp_block_in"}});
+    app->add_flow(ano_rx_op, receiver_op, {{"bench_rx_out", "burst_in"}});
+    app->add_flow(receiver_op, sorter_op, {{"dsp_block_out", "dsp_block_in"}});
 
-    return {sorter, sorter};
+    return {sorter_op, sorter_op, sorter_op};
 }
 
 }  // namespace stelline::bits::transport

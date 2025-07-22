@@ -15,6 +15,12 @@ void ModelPreprocessorOp::setup(OperatorSpec& spec) {
     spec.output<holoscan::gxf::Entity>("out");
 }
 
+void ModelPreprocessorOp::start() {
+    // Register metadata.
+
+    this->commit_metadata();
+}
+
 void ModelPreprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
     auto block = input.receive<DspBlock>("in").value();
 
@@ -28,11 +34,17 @@ void ModelPreprocessorOp::compute(InputContext& input, OutputContext& output, Ex
 
 //
 // ModelAdapterOp
-// 
+//
 
 void ModelAdapterOp::setup(OperatorSpec& spec) {
     spec.input<holoscan::gxf::Entity>("in");
     spec.output<holoscan::gxf::Entity>("out");
+}
+
+void ModelAdapterOp::start() {
+    // Register metadata.
+
+    this->commit_metadata();
 }
 
 void ModelAdapterOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
@@ -51,6 +63,12 @@ void ModelAdapterOp::compute(InputContext& input, OutputContext& output, Executi
 void ModelPostprocessorOp::setup(OperatorSpec& spec) {
     spec.input<holoscan::gxf::Entity>("in");
     spec.output<InferenceBlock>("out");
+}
+
+void ModelPostprocessorOp::start() {
+    // Register metadata.
+
+    this->commit_metadata();
 }
 
 void ModelPostprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -105,7 +123,7 @@ SimpleDetectionOp::~SimpleDetectionOp() {
 
 void SimpleDetectionOp::setup(OperatorSpec& spec) {
     spec.input<InferenceBlock>("in")
-        .connector(IOSpec::ConnectorType::kDoubleBuffer, 
+        .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
     spec.param(csvFilePath_, "csv_file_path");
@@ -135,6 +153,10 @@ void SimpleDetectionOp::start() {
     pimpl->metricsThread = std::thread([&]{
         pimpl->metricsLoop();
     });
+
+    // Register metadata.
+
+    this->commit_metadata();
 }
 
 void SimpleDetectionOp::stop() {
@@ -188,13 +210,13 @@ void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionCo
 
         const auto p1 = std::chrono::system_clock::now();
         const auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(p1.time_since_epoch()).count();
-        std::string csvLine = fmt::format("{},{},{},{},{},{},{},{}\n", pimpl->iterations++, 
-                                                                       a, 
-                                                                       b, 
+        std::string csvLine = fmt::format("{},{},{},{},{},{},{},{}\n", pimpl->iterations++,
+                                                                       a,
+                                                                       b,
                                                                        (a > b) ? 0 : 1,
-                                                                       (a > b) ? "NO" : ">> HIT <<", 
-                                                                       i, 
-                                                                       block.dspBlock.timestamp, 
+                                                                       (a > b) ? "NO" : ">> HIT <<",
+                                                                       i,
+                                                                       block.dspBlock.timestamp,
                                                                        timestamp);
         pimpl->csvFile.write(csvLine.c_str(), csvLine.size());
         pimpl->csvFile.flush();

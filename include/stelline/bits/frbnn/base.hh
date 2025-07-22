@@ -17,52 +17,60 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
+    // Create metadata storage.
+
+    auto metadata = std::make_shared<MetadataStorage>();
+
     // Configure app.
 
     app->is_metadata_enabled(true);
 
     // Fetch configuration YAML.
 
-    auto frbnnPreprocessorPath = FetchNodeArg<std::string>(app, config, "frbnn_preprocessor_path");
-    auto frbnnPath = FetchNodeArg<std::string>(app, config, "frbnn_path");
+    auto frbnn_preprocessor_path = FetchNodeArg<std::string>(app, config, "frbnn_preprocessor_path");
+    auto frbnn_path = FetchNodeArg<std::string>(app, config, "frbnn_path");
 
     HOLOSCAN_LOG_INFO("FRBNN Inference Configuration:");
-    HOLOSCAN_LOG_INFO("  Preprocessor Path: {}", frbnnPreprocessorPath);
-    HOLOSCAN_LOG_INFO("  Model Path: {}", frbnnPath);
+    HOLOSCAN_LOG_INFO("  Preprocessor Path: {}", frbnn_preprocessor_path);
+    HOLOSCAN_LOG_INFO("  Model Path: {}", frbnn_path);
 
     // Build FRBNN Preprocessor configuration.
 
-    ops::InferenceOp::DataMap frbnnPreprocessorPathMap;
-    frbnnPreprocessorPathMap.insert("frbnn_preprocessor", frbnnPreprocessorPath);
+    ops::InferenceOp::DataMap frbnn_preprocessor_path_map;
+    frbnn_preprocessor_path_map.insert("frbnn_preprocessor", frbnn_preprocessor_path);
 
-    ops::InferenceOp::DataVecMap frbnnPreprocessorInputMap;
-    frbnnPreprocessorInputMap.insert("frbnn_preprocessor", {"input"});
+    ops::InferenceOp::DataVecMap frbnn_preprocessor_input_map;
+    frbnn_preprocessor_input_map.insert("frbnn_preprocessor", {"input"});
 
-    ops::InferenceOp::DataVecMap frbnnPreprocessorOutputMap;
-    frbnnPreprocessorOutputMap.insert("frbnn_preprocessor", {"output"});
+    ops::InferenceOp::DataVecMap frbnn_preprocessor_output_map;
+    frbnn_preprocessor_output_map.insert("frbnn_preprocessor", {"output"});
 
     // Build FRBNN configuration.
 
-    ops::InferenceOp::DataMap frbnnPathMap;
-    frbnnPathMap.insert("frbnn", frbnnPath);
+    ops::InferenceOp::DataMap frbnn_path_map;
+    frbnn_path_map.insert("frbnn", frbnn_path);
 
-    ops::InferenceOp::DataVecMap frbnnInputMap;
-    frbnnInputMap.insert("frbnn", {"input"});
+    ops::InferenceOp::DataVecMap frbnn_input_map;
+    frbnn_input_map.insert("frbnn", {"input"});
 
-    ops::InferenceOp::DataVecMap frbnnOutputMap;
-    frbnnOutputMap.insert("frbnn", {"output"});
+    ops::InferenceOp::DataVecMap frbnn_output_map;
+    frbnn_output_map.insert("frbnn", {"output"});
 
     // Instantiate operators.
 
-    auto modelPreprocessor = app->template make_operator<ModelPreprocessorOp>(
-        fmt::format("model-preprocessor_{}", id)
+    const auto& model_preprocessor_id = fmt::format("frbnn-model-preprocessor-{}", id);
+    auto model_preprocessor_op = app->template make_operator<ModelPreprocessorOp>(
+        model_preprocessor_id
     );
-    auto frbnnPreprocessorInference = app->template make_operator<ops::InferenceOp>(
-        fmt::format("frbnn-preprocessor-inference_{}", id),
+    model_preprocessor_op->load_metadata(model_preprocessor_id, metadata);
+
+    const auto& frbnn_preprocessor_inference_id = fmt::format("frbnn-preprocessor-inference-{}", id);
+    auto frbnn_preprocessor_inference_op = app->template make_operator<ops::InferenceOp>(
+        frbnn_preprocessor_inference_id,
         Arg("backend") = std::string("trt"),
-        Arg("model_path_map", frbnnPreprocessorPathMap),
-        Arg("pre_processor_map", frbnnPreprocessorInputMap),
-        Arg("inference_map", frbnnPreprocessorOutputMap),
+        Arg("model_path_map", frbnn_preprocessor_path_map),
+        Arg("pre_processor_map", frbnn_preprocessor_input_map),
+        Arg("inference_map", frbnn_preprocessor_output_map),
         Arg("infer_on_cpu") = false,
         Arg("input_on_cuda") = true,
         Arg("output_on_cuda") = true,
@@ -70,15 +78,20 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
         Arg("is_engine_path") = true,
         Arg("allocator") = pool
     );
-    auto modelAdapter = app->template make_operator<ModelAdapterOp>(
-        fmt::format("model-adapter_{}", id)
+
+    const auto& model_adapter_id = fmt::format("frbnn-model-adapter-{}", id);
+    auto model_adapter_op = app->template make_operator<ModelAdapterOp>(
+        model_adapter_id
     );
-    auto frbnnInference = app->template make_operator<ops::InferenceOp>(
-        fmt::format("frbnn-inference_{}", id),
+    model_adapter_op->load_metadata(model_adapter_id, metadata);
+
+    const auto& frbnn_inference_id = fmt::format("frbnn-inference-{}", id);
+    auto frbnn_inference_op = app->template make_operator<ops::InferenceOp>(
+        frbnn_inference_id,
         Arg("backend") = std::string("trt"),
-        Arg("model_path_map", frbnnPathMap),
-        Arg("pre_processor_map", frbnnInputMap),
-        Arg("inference_map", frbnnOutputMap),
+        Arg("model_path_map", frbnn_path_map),
+        Arg("pre_processor_map", frbnn_input_map),
+        Arg("inference_map", frbnn_output_map),
         Arg("infer_on_cpu") = false,
         Arg("input_on_cuda") = true,
         Arg("output_on_cuda") = true,
@@ -86,18 +99,21 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
         Arg("is_engine_path") = true,
         Arg("allocator") = pool
     );
-    auto modelPostprocessor = app->template make_operator<ModelPostprocessorOp>(
-        fmt::format("model-postprocessor_{}", id)
+
+    const auto& model_postprocessor_id = fmt::format("frbnn-model-postprocessor-{}", id);
+    auto model_postprocessor_op = app->template make_operator<ModelPostprocessorOp>(
+        model_postprocessor_id
     );
+    model_postprocessor_op->load_metadata(model_postprocessor_id, metadata);
 
     // Connect operators.
 
-    app->add_flow(modelPreprocessor, frbnnPreprocessorInference, {{"out", "receivers"}});
-    app->add_flow(frbnnPreprocessorInference, modelAdapter, {{"transmitter", "in"}});
-    app->add_flow(modelAdapter, frbnnInference, {{"out", "receivers"}});
-    app->add_flow(frbnnInference, modelPostprocessor, {{"transmitter", "in"}});
+    app->add_flow(model_preprocessor_op, frbnn_preprocessor_inference_op, {{"out", "receivers"}});
+    app->add_flow(frbnn_preprocessor_inference_op, model_adapter_op, {{"transmitter", "in"}});
+    app->add_flow(model_adapter_op, frbnn_inference_op, {{"out", "receivers"}});
+    app->add_flow(frbnn_inference_op, model_postprocessor_op, {{"transmitter", "in"}});
 
-    return {modelPreprocessor, modelPostprocessor};
+    return {model_preprocessor_op, model_postprocessor_op, model_postprocessor_op};
 }
 
 //
@@ -108,28 +124,32 @@ inline BitInterface FrbnnDetectionBit(auto* app, auto& pool, uint64_t id, const 
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
+    auto metadata = std::make_shared<MetadataStorage>();
+
     // Configure app.
 
     app->is_metadata_enabled(true);
 
     // Fetch configuration YAML.
 
-    auto frbnnCsvFilePath = FetchNodeArg<std::string>(app, config, "csv_file_path");
-    auto frbnnHitsDirectory = FetchNodeArg<std::string>(app, config, "hits_directory");
+    auto frbnn_csv_file_path = FetchNodeArg<std::string>(app, config, "csv_file_path");
+    auto frbnn_hits_directory = FetchNodeArg<std::string>(app, config, "hits_directory");
 
     HOLOSCAN_LOG_INFO("FRBNN Detection Configuration:");
-    HOLOSCAN_LOG_INFO("  CSV File Path: {}", frbnnCsvFilePath);
-    HOLOSCAN_LOG_INFO("  Hits Directory: {}", frbnnHitsDirectory);
+    HOLOSCAN_LOG_INFO("  CSV File Path: {}", frbnn_csv_file_path);
+    HOLOSCAN_LOG_INFO("  Hits Directory: {}", frbnn_hits_directory);
 
     // Instantiate operators.
 
-    auto frbnnSimpleDetection = app->template make_operator<SimpleDetectionOp>(
-        fmt::format("frbnn-simple-detection_{}", id),
-        Arg("csv_file_path", frbnnCsvFilePath),
-        Arg("hits_directory", frbnnHitsDirectory)
+    const auto& frbnn_simple_detection_id = fmt::format("frbnn-simple-detection-{}", id);
+    auto frbnn_simple_detection_op = app->template make_operator<SimpleDetectionOp>(
+        frbnn_simple_detection_id,
+        Arg("csv_file_path", frbnn_csv_file_path),
+        Arg("hits_directory", frbnn_hits_directory)
     );
+    frbnn_simple_detection_op->load_metadata(frbnn_simple_detection_id, metadata);
 
-    return {frbnnSimpleDetection, frbnnSimpleDetection};
+    return {frbnn_simple_detection_op, frbnn_simple_detection_op, frbnn_simple_detection_op};
 }
 
 }  // namespace stelline::bits::frbnn

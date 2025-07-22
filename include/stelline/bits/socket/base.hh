@@ -12,6 +12,10 @@ inline BitInterface SocketBit(auto* app, auto& pool, uint64_t id, const std::str
     using namespace holoscan;
     using namespace stelline::operators::socket;
 
+    // Create metadata storage.
+
+    auto metadata = std::make_shared<MetadataStorage>();
+
     // Fetch configuration YAML.
 
     auto mode = FetchNodeArg<std::string>(app, config, "mode");
@@ -23,9 +27,9 @@ inline BitInterface SocketBit(auto* app, auto& pool, uint64_t id, const std::str
 
     // Declare modes.
 
-    auto zmq_transmitter_op = [&](){
+    auto zmq_transmitter_op_cb = [&](const auto& op_id){
         return app->template make_operator<ZmqTransmitterOp>(
-            fmt::format("zmq-transmitter_{}", id),
+            op_id,
             Arg("address", address)
         );
     };
@@ -34,8 +38,10 @@ inline BitInterface SocketBit(auto* app, auto& pool, uint64_t id, const std::str
 
     if (mode == "zmq") {
         HOLOSCAN_LOG_INFO("Creating ZeroMQ Transmitter operator.");
-        const auto& op = zmq_transmitter_op();
-        return {op, op};
+        const auto& op_id = fmt::format("socket-zmq-transmitter-{}", id);
+        auto zmq_op = zmq_transmitter_op_cb(op_id);
+        zmq_op->load_metadata(op_id, metadata);
+        return {zmq_op, zmq_op, zmq_op};
     }
 
     HOLOSCAN_LOG_ERROR("Unsupported mode: {}", mode);
