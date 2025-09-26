@@ -1,5 +1,7 @@
 deps = [
     dependency('hdf5_vfd_gds', required: false),
+    dependency('h5dsc99', required: false),
+    dependency('filterbankc99', required: false),
 ]
 
 all_deps_found = true

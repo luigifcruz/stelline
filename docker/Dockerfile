@@ -48,6 +48,17 @@ RUN python3 -m pip install numpy astropy pandas
 WORKDIR /workspace
 
 #
+# Clone, Build & Install filterbankc99, to support FBH5 writing
+#
+
+RUN git clone https://github.com/MydonSolutions/filterbankc99.git
+RUN cd blade \
+    && git submodule update --init --recursive \
+    && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja install
+
+#
 # Clone, Build & Install CyberEther
 #
 

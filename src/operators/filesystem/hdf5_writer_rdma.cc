@@ -12,6 +12,11 @@
 
 #include "H5FDgds.h"
 
+extern "C" {
+#include "h5dsc99/h5_dataspace.h"
+}
+#include "filterbankc99.h"
+
 using namespace gxf;
 using namespace holoscan;
 
@@ -20,16 +25,15 @@ namespace stelline::operators::filesystem {
 struct Hdf5WriterRdmaOp::Impl {
     // State.
 
-    hid_t faplId, fileId, datasetId, dataspaceId, memspaceId, plistId;
-    hid_t attributeId, attrDataspaceId, dimLabelsType;
-    std::vector<hsize_t> dims;
-    std::vector<hsize_t> maxdims;
-    std::vector<hsize_t> chunkDims;
-    std::vector<hsize_t> count;
-    std::vector<hsize_t> offset;
+    std::string filePath;
+    std::string scheme; // TODO make enum
+
+    // FBHB file state.
+
+    hid_t faplId;
+    filterbank_h5_file_t fbh5_file;
     int64_t bytesWritten;
     uint64_t chunkCounter;
-    std::string filePath;
     uint64_t rank;
     std::shared_ptr<holoscan::Tensor> permutedTensor;
 
@@ -68,71 +72,75 @@ void Hdf5WriterRdmaOp::start() {
     // Convert Parameters to variables.
 
     pimpl->filePath = filePath_.get();
+    pimpl->scheme = "FBH5";
 
     // Initialize arrays.
+    pimpl->fbh5_file = {0};
+    pimpl->fbh5_file.header = {0};
+    filterbank_header_t* hdr = &pimpl->fbh5_file.header;
 
-    pimpl->rank = 3;  // Placeholder. Replace with actual dimensions.
-    pimpl->dims.resize(pimpl->rank);
-    pimpl->maxdims.resize(pimpl->rank);
-    pimpl->chunkDims.resize(pimpl->rank);
-    pimpl->count.resize(pimpl->rank);
-    pimpl->offset.resize(pimpl->rank);
+    // 0=fake data; 1=Arecibo; 2=Ooty... others to be added
+    hdr->machine_id = 20; // ???
+    // 0=FAKE; 1=PSPM; 2=WAPP; 3=OOTY... others to be added
+    hdr->telescope_id = 6; // GBT
+    // 1=filterbank; 2=time series... others to be added
+    hdr->data_type = 1;
+    // 1 if barycentric or 0 otherwise (only output if non-zero)
+    hdr->barycentric = 1;
+    // 1 if pulsarcentric or 0 otherwise (only output if non-zero)
+    hdr->pulsarcentric = 1;
+    // right ascension (J2000) of source (hours)
+    // will be converted to/from hhmmss.s
+    hdr->src_raj = 20.0 + 39/60.0 + 7.4/3600.0;
+    // declination (J2000) of source (degrees)
+    // will be converted to/from ddmmss.s
+    hdr->src_dej = 42.0 + 24/60.0 + 24.5/3600.0;
+    // telescope azimuth at start of scan (degrees)
+    hdr->az_start = 12.3456;
+    // telescope zenith angle at start of scan (degrees)
+    hdr->za_start = 65.4321;
+    // centre frequency (MHz) of first filterbank channel
+    hdr->fch1 = 4626.464842353016138;
+    // filterbank channel bandwidth (MHz)
+    hdr->foff = -0.000002793967724;
+    // number of filterbank channels
+    hdr->nchans = 192; // TODO: Placeholder. Replace with actual dimensions.
+    // total number of beams
+    hdr->nbeams = 1;
+    // beam enumeration contained in this file
+    hdr->ibeam = 1;
+    // number of bits per time sample
+    hdr->nbits = sizeof(float)*8;
+    // time stamp (MJD) of first sample
+    hdr->tstart = 57856.810798611114;
+    // time interval between samples (s)
+    hdr->tsamp = 1.825361100800;
+    // number of seperate IF channels
+    hdr->nifs = 1;
+    // the name of the source being observed by the telescope
+    // Max string size is supposed to be 80, but bug in sigproc if over 79
+    strcpy(hdr->source_name, "1234567891123456789212345678931234567894123456789512345678961234567897123456789");
 
-    // Set up HDF5 file.
-    // TODO: Placeholder. Replace with actual dimensions.
-
-    pimpl->dims = {0, 1, 192};
-    pimpl->maxdims = {H5S_UNLIMITED, 1, 192};
-    pimpl->chunkDims = {8192, 1, 192};
-    pimpl->count = {1, 1, 192};
-    pimpl->offset = {0, 0, 0};
-
+    pimpl->fbh5_file.nchans_per_write = hdr->nchans;
+    pimpl->fbh5_file.ntimes_per_write = 8192; // TODO: placeholder. Replace with actual dimensions
+    
     // Set up HDF5 library.
 
     pimpl->faplId = H5Pcreate(H5P_FILE_ACCESS);
-
-    H5Pset_fapl_gds(pimpl->faplId, MBOUNDARY_DEF, FBSIZE_DEF, CBSIZE_DEF);
+    HDF5_CHECK_THROW(H5Pset_fapl_gds(pimpl->faplId, MBOUNDARY_DEF, FBSIZE_DEF, CBSIZE_DEF), [&]{
+        HOLOSCAN_LOG_ERROR("Error setting the file access property list to H5FD_GDS.");
+    });
 
     // Create HDF5 file.
 
-    if ((pimpl->fileId = H5Fcreate(pimpl->filePath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, pimpl->faplId)) < 0) {
-        HOLOSCAN_LOG_ERROR("Error creating HDF5 file.");
-        throw std::runtime_error("I/O Error");
-    }
-
-    // Create HDF5 dataspace with unlimited dimensions.
-    pimpl->dataspaceId = H5Screate_simple(pimpl->rank, pimpl->dims.data(), pimpl->maxdims.data());
-
-    // Create dataset creation property list and enable chunking.
-
-    pimpl->plistId = H5Pcreate(H5P_DATASET_CREATE);
-
-    HDF5_CHECK_THROW(H5Pset_chunk(pimpl->plistId, pimpl->rank, pimpl->chunkDims.data()), [&]{
-        HOLOSCAN_LOG_ERROR("Error setting chunk size.");
+    HDF5_CHECK_THROW(filterbank_h5_open_explicit(pimpl->filePath.data(), &pimpl->fbh5_file, H5Tcopy(H5T_IEEE_F64LE), pimpl->faplId), [&]{
+        HOLOSCAN_LOG_ERROR("Error opening FBH5 file.");
     });
 
-    // Create compound datatype for complex data.
-    /*
-    memtype_id = H5Tcreate(H5T_COMPOUND, sizeof(SensorData));
-    H5Tinsert(memtype_id, "ID", HOFFSET(SensorData, id), H5T_NATIVE_INT);
-    H5Tinsert(memtype_id, "Temperature", HOFFSET(SensorData, temperature), H5T_NATIVE_DOUBLE);
-    H5Tinsert(memtype_id, "Location", HOFFSET(SensorData, location), H5T_NATIVE_CHAR);
-    */
-    // Create dataset.
+    // Create HDF5 data pointers
 
-    pimpl->datasetId = H5Dcreate2(pimpl->fileId,
-                                  "data",
-                                  H5T_IEEE_F64LE,
-                                  pimpl->dataspaceId,
-                                  H5P_DEFAULT,
-                                  pimpl->plistId,
-                                  H5P_DEFAULT);
-
-    // Create memory dataspace.
-
-    pimpl->memspaceId = H5Screate_simple(pimpl->rank, pimpl->chunkDims.data(), NULL);
-
-    // TODO: Add HDF5 attributes.
+    pimpl->fbh5_file.mask = (uint8_t*) H5DSmalloc(&pimpl->fbh5_file.ds_mask);
+    memset(pimpl->fbh5_file.mask, 0, H5DSsize(&pimpl->fbh5_file.ds_mask));
 
     // Reset counters.
 
@@ -159,18 +167,15 @@ void Hdf5WriterRdmaOp::stop() {
     }
 
     // Close HDF5.
-
-    HDF5_CHECK_THROW(H5Sclose(pimpl->memspaceId), [&]{
-        HOLOSCAN_LOG_ERROR("Error closing memory dataspace (memspaceId).");
+    free(pimpl->fbh5_file.mask);
+    HDF5_CHECK_THROW(H5DSclose(&pimpl->fbh5_file.ds_data), [&]{
+        HOLOSCAN_LOG_ERROR("Error closing FBH5 data dataset (ds_data).");
     });
-    HDF5_CHECK_THROW(H5Pclose(pimpl->plistId), [&]{
-        HOLOSCAN_LOG_ERROR("Error closing memory dataspace (plistId).");
+    HDF5_CHECK_THROW(H5DSclose(&pimpl->fbh5_file.ds_mask), [&]{
+        HOLOSCAN_LOG_ERROR("Error closing FBH5 mask dataset (ds_mask).");
     });
-    HDF5_CHECK_THROW(H5Dclose(pimpl->datasetId), [&]{
-        HOLOSCAN_LOG_ERROR("Error closing memory dataspace (datasetId).");
-    });
-    HDF5_CHECK_THROW(H5Fclose(pimpl->fileId), [&]{
-        HOLOSCAN_LOG_ERROR("Error closing memory dataspace (fileId).");
+    HDF5_CHECK_THROW(H5Fclose(pimpl->fbh5_file.file_id), [&]{
+        HOLOSCAN_LOG_ERROR("Error closing FBH5 file.");
     });
 }
 
@@ -198,31 +203,19 @@ void Hdf5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
 
     // Write tensor to HDF5.
 
-    pimpl->dims[0] += 8192;
-    HDF5_CHECK_THROW(H5Dset_extent(pimpl->datasetId, pimpl->dims.data()), [&]{
-        HOLOSCAN_LOG_ERROR("Error setting dataset extent.");
+    HDF5_CHECK_THROW(H5DSextend(&pimpl->fbh5_file.ds_data), [&]{
+        HOLOSCAN_LOG_ERROR("H5DSextend failure on 'data'");
+    });
+    HDF5_CHECK_THROW(H5DSwrite(&pimpl->fbh5_file.ds_data, pimpl->permutedTensor->data()), [&]{
+        HOLOSCAN_LOG_ERROR("H5DSwrite failure on 'data'");
     });
 
-    pimpl->dataspaceId = H5Dget_space(pimpl->datasetId);
-    pimpl->offset[0] = pimpl->chunkCounter * 8192;
-
-    HDF5_CHECK_THROW(H5Sselect_hyperslab(pimpl->dataspaceId,
-                                         H5S_SELECT_SET,
-                                         pimpl->offset.data(),
-                                         NULL,
-                                         pimpl->chunkDims.data(),
-                                         NULL), [&]{
-        HOLOSCAN_LOG_ERROR("Error selecting hyperslab.");
+    // mask
+    HDF5_CHECK_THROW(H5DSextend(&pimpl->fbh5_file.ds_mask), [&]{
+        HOLOSCAN_LOG_ERROR("H5DSextend failure on 'mask'");
     });
-
-    // Write all the data at once
-    HDF5_CHECK_THROW(H5Dwrite(pimpl->datasetId,
-                              H5T_IEEE_F64LE,
-                              pimpl->memspaceId,
-                              pimpl->dataspaceId,
-                              H5P_DEFAULT,
-                              pimpl->permutedTensor->data()), [&]{
-        HOLOSCAN_LOG_ERROR("Error writing data to dataset.");
+    HDF5_CHECK_THROW(H5DSwrite(&pimpl->fbh5_file.ds_mask, pimpl->fbh5_file.mask), [&]{
+        HOLOSCAN_LOG_ERROR("H5DSwrite failure on 'mask'");
     });
 
     // TODO: Add HDF5 write.
