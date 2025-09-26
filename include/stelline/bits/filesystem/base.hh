@@ -47,6 +47,13 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
         );
     };
 
+    auto hdf5_writer_rdma_op_cb = [&](const auto& op_id){
+        return app->template make_operator<Hdf5WriterRdmaOp>(
+            op_id,
+            Arg("file_path", file_path)
+        );
+    };
+
     // Select configuration mode.
 
     if (mode == "simple_writer") {
@@ -72,6 +79,16 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
         dummy_writer_op->load_metadata(dummy_writer_id, metadata);
         return {dummy_writer_op, dummy_writer_op, dummy_writer_op};
     }
+
+#ifdef STELLINE_LOADER_HDF5
+    if (mode == "hdf5_writer_rdma") {
+        HOLOSCAN_LOG_INFO("Creating HDF5 Writer RDMA operator.");
+        const auto& hdf5_writer_rdma_id = fmt::format("filesystem-hdf5-writer-rdma-{}", id);
+        auto hdf5_writer_rdma_op = hdf5_writer_rdma_op_cb(hdf5_writer_rdma_id);
+        hdf5_writer_rdma_op->load_metadata(hdf5_writer_rdma_id, metadata);
+        return {hdf5_writer_rdma_op, hdf5_writer_rdma_op, hdf5_writer_rdma_op};
+    }
+#endif
 
     HOLOSCAN_LOG_ERROR("Unsupported mode: {}", mode);
     throw std::runtime_error("Unsupported mode.");

@@ -71,6 +71,27 @@ class STELLINE_API DummyWriterOp : public Operator, public Metadata {
       Impl* pimpl;
 };
 
+#ifdef STELLINE_LOADER_HDF5
+class STELLINE_API Hdf5WriterRdmaOp : public Operator, public Metadata {
+ public:
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(Hdf5WriterRdmaOp)
+
+    ~Hdf5WriterRdmaOp();
+
+    void initialize() override;
+    void setup(OperatorSpec& spec) override;
+    void start() override;
+    void stop() override;
+    void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+ private:
+    struct Impl;
+    Impl* pimpl;
+
+    Parameter<std::string> filePath_;
+};
+#endif  // STELLINE_LOADER_HDF5
+
 }  // namespace stelline::operators::filesystem
 
 #endif  // STELLINE_OPERATORS_FILESYSTEM_BASE_HH

@@ -17,4 +17,10 @@ if all_deps_found
     subdir('utils')
 endif
 
+if cfg_lst.get('STELLINE_LOADER_HDF5', false)
+    src_lst += files([
+        'hdf5_writer_rdma.cc',
+    ])
+endif
+
 operator_lst += {'Filesystem': all_deps_found}

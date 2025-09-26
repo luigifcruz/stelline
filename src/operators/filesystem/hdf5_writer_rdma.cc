@@ -2,19 +2,22 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <hdf5.h>
 
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
 
-#include "helpers.hh"
-#include "permute.hh"
+#include "utils/helpers.hh"
+#include "utils/modifiers.hh"
+
+#include "H5FDgds.h"
 
 using namespace gxf;
 using namespace holoscan;
 
 namespace stelline::operators::filesystem {
 
-struct Hdf5SinkRdmaOp::Impl {
+struct Hdf5WriterRdmaOp::Impl {
     // State.
 
     hid_t faplId, fileId, datasetId, dataspaceId, memspaceId, plistId;
@@ -41,7 +44,7 @@ struct Hdf5SinkRdmaOp::Impl {
     void metricsLoop();
 };
 
-void Hdf5SinkRdmaOp::initialize() {
+void Hdf5WriterRdmaOp::initialize() {
     // Allocate memory.
     pimpl = new Impl();
 
@@ -49,11 +52,11 @@ void Hdf5SinkRdmaOp::initialize() {
     Operator::initialize();
 }
 
-Hdf5SinkRdmaOp::~Hdf5SinkRdmaOp() {
+Hdf5WriterRdmaOp::~Hdf5WriterRdmaOp() {
     delete pimpl;
 }
 
-void Hdf5SinkRdmaOp::setup(OperatorSpec& spec) {
+void Hdf5WriterRdmaOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
@@ -61,7 +64,7 @@ void Hdf5SinkRdmaOp::setup(OperatorSpec& spec) {
     spec.param(filePath_, "file_path");
 }
 
-void Hdf5SinkRdmaOp::start() {
+void Hdf5WriterRdmaOp::start() {
     // Convert Parameters to variables.
 
     pimpl->filePath = filePath_.get();
@@ -147,7 +150,7 @@ void Hdf5SinkRdmaOp::start() {
     });
 }
 
-void Hdf5SinkRdmaOp::stop() {
+void Hdf5WriterRdmaOp::stop() {
     // Stop metrics thread.
 
     pimpl->metricsThreadRunning = false;
@@ -171,7 +174,7 @@ void Hdf5SinkRdmaOp::stop() {
     });
 }
 
-void Hdf5SinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
+void Hdf5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     const auto& tensor = input.receive<DspBlock>("in").value().tensor;
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
@@ -229,7 +232,7 @@ void Hdf5SinkRdmaOp::compute(InputContext& input, OutputContext&, ExecutionConte
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-void Hdf5SinkRdmaOp::Impl::metricsLoop() {
+void Hdf5WriterRdmaOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
         auto now = std::chrono::steady_clock::now();
         auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
