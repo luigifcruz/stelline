@@ -84,6 +84,10 @@ class Dispatcher {
             return convertInputCallback(inputBlock);
         };
 
+        auto transferCallback = [&](){
+            return Result::SUCCESS;
+        };
+
         auto resultCallback = [&](){
             return pipeline->transferResult();
         };
@@ -124,6 +128,7 @@ class Dispatcher {
 
         while (true) {
             const auto& enqueueResult = pipeline->enqueue(inputCallback,
+                                                          transferCallback,
                                                           resultCallback,
                                                           outputCallback,
                                                           inputPoolPhase,
