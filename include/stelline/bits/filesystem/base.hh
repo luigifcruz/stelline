@@ -47,13 +47,6 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
         );
     };
 
-    auto hdf5_writer_rdma_op_cb = [&](const auto& op_id){
-        return app->template make_operator<Hdf5WriterRdmaOp>(
-            op_id,
-            Arg("file_path", file_path)
-        );
-    };
-
     // Select configuration mode.
 
     if (mode == "simple_writer") {
@@ -81,6 +74,13 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
     }
 
 #ifdef STELLINE_LOADER_HDF5
+    auto hdf5_writer_rdma_op_cb = [&](const auto& op_id){
+        return app->template make_operator<Hdf5WriterRdmaOp>(
+            op_id,
+            Arg("file_path", file_path)
+        );
+    };
+
     if (mode == "hdf5_writer_rdma") {
         HOLOSCAN_LOG_INFO("Creating HDF5 Writer RDMA operator.");
         const auto& hdf5_writer_rdma_id = fmt::format("filesystem-hdf5-writer-rdma-{}", id);

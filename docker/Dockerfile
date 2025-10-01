@@ -52,7 +52,8 @@ WORKDIR /workspace
 #
 
 RUN git clone https://github.com/MydonSolutions/filterbankc99.git
-RUN cd blade \
+RUN cd filterbankc99 \
+    && git checkout v1.5.0 \
     && git submodule update --init --recursive \
     && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
     && cd build \

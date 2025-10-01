@@ -123,7 +123,7 @@ RUN apt update && \
 
 RUN git clone https://github.com/HDFGroup/hdf5.git /workspace/hdf5 && \
     cd /workspace/hdf5 && \
-    git checkout d4525d758f49da5972f34b1c53d189dcd9bcc3d0 && \
+    git checkout hdf5-1.14.6 && \
     git submodule update --init --recursive && \
     mkdir build && cd build && \
     cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr -DHDF5_ENABLE_PARALLEL=NO .. && \
