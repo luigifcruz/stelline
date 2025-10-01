@@ -32,10 +32,12 @@ RUN apt update && \
 #
 # BLADE Dependencies
 #
+# Omit libhdf5-dev as it overules the selective install from stelline-base
+#  reverting to 1.10.x
 
 RUN apt update && \
     apt install --no-install-recommends -y \
-        liberfa-dev libhdf5-dev \
+        liberfa-dev \
         libbenchmark-dev libgtest-dev \
         && rm -rf /var/lib/apt/lists/*
 
