@@ -71,12 +71,12 @@ class STELLINE_API DummyWriterOp : public Operator, public Metadata {
       Impl* pimpl;
 };
 
-#ifdef STELLINE_LOADER_HDF5
-class STELLINE_API Hdf5WriterRdmaOp : public Operator, public Metadata {
+#ifdef STELLINE_LOADER_FBH5
+class STELLINE_API Fbh5WriterRdmaOp : public Operator, public Metadata {
  public:
-    HOLOSCAN_OPERATOR_FORWARD_ARGS(Hdf5WriterRdmaOp)
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(Fbh5WriterRdmaOp)
 
-    ~Hdf5WriterRdmaOp();
+    ~Fbh5WriterRdmaOp();
 
     void initialize() override;
     void setup(OperatorSpec& spec) override;
@@ -90,7 +90,31 @@ class STELLINE_API Hdf5WriterRdmaOp : public Operator, public Metadata {
 
     Parameter<std::string> filePath_;
 };
-#endif  // STELLINE_LOADER_HDF5
+#endif  // STELLINE_LOADER_FBH5
+
+#ifdef STELLINE_LOADER_UVH5
+class STELLINE_API Uvh5WriterRdmaOp : public Operator, public Metadata {
+ public:
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(Uvh5WriterRdmaOp)
+
+    ~Uvh5WriterRdmaOp();
+
+    void initialize() override;
+    void setup(OperatorSpec& spec) override;
+    void start() override;
+    void stop() override;
+    void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+ private:
+    struct Impl;
+    Impl* pimpl;
+
+    Parameter<std::string> output_filePath_;
+    Parameter<std::string> telinfo_filePath_;
+    Parameter<std::string> obsantinfo_filePath_;
+    Parameter<std::string> iers_filePath_;
+};
+#endif  // STELLINE_LOADER_UVH5
 
 }  // namespace stelline::operators::filesystem
 

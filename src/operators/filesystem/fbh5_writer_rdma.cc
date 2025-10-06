@@ -22,7 +22,7 @@ using namespace holoscan;
 
 namespace stelline::operators::filesystem {
 
-struct Hdf5WriterRdmaOp::Impl {
+struct Fbh5WriterRdmaOp::Impl {
     // State.
 
     std::string filePath;
@@ -48,7 +48,7 @@ struct Hdf5WriterRdmaOp::Impl {
     void metricsLoop();
 };
 
-void Hdf5WriterRdmaOp::initialize() {
+void Fbh5WriterRdmaOp::initialize() {
     // Allocate memory.
     pimpl = new Impl();
 
@@ -56,11 +56,11 @@ void Hdf5WriterRdmaOp::initialize() {
     Operator::initialize();
 }
 
-Hdf5WriterRdmaOp::~Hdf5WriterRdmaOp() {
+Fbh5WriterRdmaOp::~Fbh5WriterRdmaOp() {
     delete pimpl;
 }
 
-void Hdf5WriterRdmaOp::setup(OperatorSpec& spec) {
+void Fbh5WriterRdmaOp::setup(OperatorSpec& spec) {
     spec.input<DspBlock>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
@@ -68,7 +68,7 @@ void Hdf5WriterRdmaOp::setup(OperatorSpec& spec) {
     spec.param(filePath_, "file_path");
 }
 
-void Hdf5WriterRdmaOp::start() {
+void Fbh5WriterRdmaOp::start() {
     // Convert Parameters to variables.
 
     pimpl->filePath = filePath_.get();
@@ -158,7 +158,7 @@ void Hdf5WriterRdmaOp::start() {
     });
 }
 
-void Hdf5WriterRdmaOp::stop() {
+void Fbh5WriterRdmaOp::stop() {
     // Stop metrics thread.
 
     pimpl->metricsThreadRunning = false;
@@ -179,7 +179,7 @@ void Hdf5WriterRdmaOp::stop() {
     });
 }
 
-void Hdf5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
+void Fbh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     const auto& tensor = input.receive<DspBlock>("in").value().tensor;
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
@@ -225,7 +225,7 @@ void Hdf5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-void Hdf5WriterRdmaOp::Impl::metricsLoop() {
+void Fbh5WriterRdmaOp::Impl::metricsLoop() {
     while (metricsThreadRunning) {
         auto now = std::chrono::steady_clock::now();
         auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
