@@ -17,4 +17,16 @@ if all_deps_found
     subdir('utils')
 endif
 
+if cfg_lst.get('STELLINE_LOADER_FBH5', false)
+    src_lst += files([
+        'fbh5_writer_rdma.cc',
+    ])
+endif
+
+if cfg_lst.get('STELLINE_LOADER_UVH5', false)
+    src_lst += files([
+        'uvh5_writer_rdma.cc',
+    ])
+endif
+
 operator_lst += {'Filesystem': all_deps_found}

@@ -44,6 +44,25 @@ class STELLINE_API ReceiverOp : public Operator, public Metadata {
     Parameter<bool> enableCsvLogging_;
 };
 
+class STELLINE_API SourceOp : public Operator, public Metadata {
+ public:
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(SourceOp)
+
+    ~SourceOp();
+
+    void initialize() override;
+    void setup(OperatorSpec& spec) override;
+    void start() override;
+    void stop() override;
+    void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+ private:
+    struct Impl;
+    Impl* pimpl;
+
+    Parameter<BlockShape> totalBlock_;
+};
+
 class STELLINE_API SorterOp : public Operator, public Metadata {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)

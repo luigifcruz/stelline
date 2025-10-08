@@ -32,10 +32,12 @@ RUN apt update && \
 #
 # BLADE Dependencies
 #
+# Omit libhdf5-dev as it overules the selective install from stelline-base
+#  reverting to 1.10.x
 
 RUN apt update && \
     apt install --no-install-recommends -y \
-        liberfa-dev libhdf5-dev \
+        liberfa-dev \
         libbenchmark-dev libgtest-dev \
         && rm -rf /var/lib/apt/lists/*
 
@@ -46,6 +48,30 @@ RUN python3 -m pip install numpy astropy pandas
 #
 
 WORKDIR /workspace
+
+#
+# Clone, Build & Install filterbankc99, to support FBH5 writing
+#
+
+RUN git clone https://github.com/MydonSolutions/filterbankc99.git
+RUN cd filterbankc99 \
+    && git checkout v1.5.0 \
+    && git submodule update --init --recursive \
+    && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja install
+
+#
+# Clone, Build & Install uvhc99, to support FBH5 writing
+#
+
+RUN git clone https://github.com/MydonSolutions/uvhc99.git
+RUN cd uvhc99 \
+    && git checkout v0.9.0 \
+    && git submodule update --init --recursive \
+    && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja install
 
 #
 # Clone, Build & Install CyberEther

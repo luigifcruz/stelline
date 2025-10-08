@@ -37,6 +37,7 @@
 }
 #endif  // GDS_CHECK_THROW
 
+#ifdef STELLINE_LOADER_HDF5
 //
 // HDF
 //
@@ -54,5 +55,6 @@
     } \
 }
 #endif  // HDF5_CHECK_THROW
+#endif  // STELLINE_LOADER_HDF5
 
 #endif  // STELLINE_OPERATORS_FILESYSTEM_HELPERS_HH

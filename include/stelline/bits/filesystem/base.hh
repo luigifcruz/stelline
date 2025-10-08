@@ -73,6 +73,49 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
         return {dummy_writer_op, dummy_writer_op, dummy_writer_op};
     }
 
+
+#ifdef STELLINE_LOADER_FBH5
+    auto fbh5_writer_rdma_op_cb = [&](const auto& op_id){
+        return app->template make_operator<Fbh5WriterRdmaOp>(
+            op_id,
+            Arg("file_path", file_path)
+        );
+    };
+
+    if (mode == "fbh5_writer_rdma") {
+        HOLOSCAN_LOG_INFO("Creating FBH5 Writer RDMA operator.");
+        const auto& fbh5_writer_rdma_id = fmt::format("filesystem-fbh5-writer-rdma-{}", id);
+        auto fbh5_writer_rdma_op = fbh5_writer_rdma_op_cb(fbh5_writer_rdma_id);
+        fbh5_writer_rdma_op->load_metadata(fbh5_writer_rdma_id, metadata);
+        return {fbh5_writer_rdma_op, fbh5_writer_rdma_op, fbh5_writer_rdma_op};
+    }
+#endif
+#ifdef STELLINE_LOADER_UVH5
+    auto telinfo_file_path = FetchNodeArg<std::string>(app, config, "telinfo_file_path");
+    auto obsantinfo_file_path = FetchNodeArg<std::string>(app, config, "obsantinfo_file_path");
+    auto iers_file_path = FetchNodeArg<std::string>(app, config, "iers_file_path");
+    HOLOSCAN_LOG_INFO("  Telinfo Path: {}", telinfo_file_path);
+    HOLOSCAN_LOG_INFO("  Obsantinfo Path: {}", obsantinfo_file_path);
+    HOLOSCAN_LOG_INFO("  IERS Path: {}", iers_file_path);
+    auto uvh5_writer_rdma_op_cb = [&](const auto& op_id){
+        return app->template make_operator<Uvh5WriterRdmaOp>(
+            op_id,
+            Arg("output_file_path", file_path),
+            Arg("telinfo_file_path", telinfo_file_path),
+            Arg("obsantinfo_file_path", obsantinfo_file_path),
+            Arg("iers_file_path", iers_file_path)
+        );
+    };
+
+    if (mode == "uvh5_writer_rdma") {
+        HOLOSCAN_LOG_INFO("Creating FBH5 Writer RDMA operator.");
+        const auto& uvh5_writer_rdma_id = fmt::format("filesystem-fbh5-writer-rdma-{}", id);
+        auto uvh5_writer_rdma_op = uvh5_writer_rdma_op_cb(uvh5_writer_rdma_id);
+        uvh5_writer_rdma_op->load_metadata(uvh5_writer_rdma_id, metadata);
+        return {uvh5_writer_rdma_op, uvh5_writer_rdma_op, uvh5_writer_rdma_op};
+    }
+#endif
+
     HOLOSCAN_LOG_ERROR("Unsupported mode: {}", mode);
     throw std::runtime_error("Unsupported mode.");
 }

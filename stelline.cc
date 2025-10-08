@@ -60,6 +60,9 @@ class DefaultOp : public holoscan::Application {
             if (node.bit == "transport_bit") {
                 map[node.id] = TransportBit(this, pool, map.size(), node.configuration);
             }
+            if (node.bit == "source_bit") {
+                map[node.id] = SourceBit(this, pool, node.configuration);
+            }
 #endif
 
 #ifdef STELLINE_BIT_BLADE

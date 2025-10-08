@@ -128,6 +128,28 @@ inline BitInterface TransportBit(auto* app, auto& pool, uint64_t id, const std::
     return {sorter_op, sorter_op, sorter_op};
 }
 
+inline BitInterface SourceBit(auto* app, auto& pool, const std::string& config) {
+    using namespace holoscan;
+    using namespace stelline::operators::transport;
+
+    // Fetch configuration YAML.
+
+    auto total_block = FetchNodeArg<BlockShape>(app, config, "total_block");
+    HOLOSCAN_LOG_INFO("Source Configuration:");
+    HOLOSCAN_LOG_INFO("  Total Block: {}", total_block);
+
+    // Instantiate operators.
+
+    auto source_op = app->template make_operator<SourceOp>(
+        "source",
+        Arg("total_block", total_block),
+        // app->template make_condition<CountCondition>("count-condition", 5),
+        app->template make_condition<PeriodicCondition>(1000000000)
+    );
+    
+    return {source_op, source_op, source_op};
+}
+
 }  // namespace stelline::bits::transport
 
 #endif  // STELLINE_BITS_TRANSPORT_BASE_HH
