@@ -15,10 +15,10 @@ hero:
       text: Learn More
       link: /overview/
 features:
-  - title: Production Ready
-    details: Built for the Allen Telescope Array.
-  - title: GPU-Accelerated Operators
-    details: CUDA and Holoscan components deliver FRBNN inference, transport, and storage at instrument scale.
-  - title: Declarative Recipes
-    details: YAML-driven pipelines make it easy to tweak deployments without recompiling operators.
+  - title: Observatory‑Proven
+    details: Developed and validated at the Allen Telescope Array, ensuring real-world performance and reliability.
+  - title: Made with NVIDIA Holoscan
+    details: Holoscan operators interface seamlessly with our signal processing framework, enabling efficient integration with minimal boilerplate.
+  - title: Declarative YAML Recipes
+    details: Define, configure, and deploy pipelines entirely in YAML with no recompilation required.
 ---
