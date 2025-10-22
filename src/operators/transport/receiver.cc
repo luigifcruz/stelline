@@ -186,10 +186,6 @@ void ReceiverOp::start() {
         }, matx::MATX_DEVICE_MEMORY);
         return std::make_shared<Tensor>(tensor.ToDlPack());
     });
-
-    // Register metadata.
-
-    this->commit_metadata();
 }
 
 void ReceiverOp::stop() {

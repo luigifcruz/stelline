@@ -17,13 +17,11 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
-    // Create metadata storage.
 
-    auto metadata = std::make_shared<MetadataStorage>();
 
     // Configure app.
 
-    app->is_metadata_enabled(true);
+
 
     // Fetch configuration YAML.
 
@@ -62,7 +60,7 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
     auto model_preprocessor_op = app->template make_operator<ModelPreprocessorOp>(
         model_preprocessor_id
     );
-    model_preprocessor_op->load_metadata(model_preprocessor_id, metadata);
+
 
     const auto& frbnn_preprocessor_inference_id = fmt::format("frbnn-preprocessor-inference-{}", id);
     auto frbnn_preprocessor_inference_op = app->template make_operator<ops::InferenceOp>(
@@ -83,7 +81,7 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
     auto model_adapter_op = app->template make_operator<ModelAdapterOp>(
         model_adapter_id
     );
-    model_adapter_op->load_metadata(model_adapter_id, metadata);
+
 
     const auto& frbnn_inference_id = fmt::format("frbnn-inference-{}", id);
     auto frbnn_inference_op = app->template make_operator<ops::InferenceOp>(
@@ -104,7 +102,7 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
     auto model_postprocessor_op = app->template make_operator<ModelPostprocessorOp>(
         model_postprocessor_id
     );
-    model_postprocessor_op->load_metadata(model_postprocessor_id, metadata);
+
 
     // Connect operators.
 
@@ -113,7 +111,7 @@ inline BitInterface FrbnnInferenceBit(auto* app, auto& pool, uint64_t id, const 
     app->add_flow(model_adapter_op, frbnn_inference_op, {{"out", "receivers"}});
     app->add_flow(frbnn_inference_op, model_postprocessor_op, {{"transmitter", "in"}});
 
-    return {model_preprocessor_op, model_postprocessor_op, model_postprocessor_op};
+    return {model_preprocessor_op, model_postprocessor_op};
 }
 
 //
@@ -124,11 +122,7 @@ inline BitInterface FrbnnDetectionBit(auto* app, auto& pool, uint64_t id, const 
     using namespace holoscan;
     using namespace stelline::operators::frbnn;
 
-    auto metadata = std::make_shared<MetadataStorage>();
 
-    // Configure app.
-
-    app->is_metadata_enabled(true);
 
     // Fetch configuration YAML.
 
@@ -147,9 +141,9 @@ inline BitInterface FrbnnDetectionBit(auto* app, auto& pool, uint64_t id, const 
         Arg("csv_file_path", frbnn_csv_file_path),
         Arg("hits_directory", frbnn_hits_directory)
     );
-    frbnn_simple_detection_op->load_metadata(frbnn_simple_detection_id, metadata);
 
-    return {frbnn_simple_detection_op, frbnn_simple_detection_op, frbnn_simple_detection_op};
+
+    return {frbnn_simple_detection_op, frbnn_simple_detection_op};
 }
 
 }  // namespace stelline::bits::frbnn

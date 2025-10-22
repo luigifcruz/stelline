@@ -65,10 +65,6 @@ void SorterOp::start() {
     pimpl->metricsThread = std::thread([&]{
         pimpl->metricsLoop();
     });
-
-    // Register metadata.
-
-    this->commit_metadata();
 }
 
 void SorterOp::stop() {

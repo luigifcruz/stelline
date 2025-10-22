@@ -17,9 +17,7 @@ inline BitInterface BladeBit(auto* app, auto& pool, uint64_t id, const std::stri
     using namespace holoscan;
     using namespace stelline::operators::blade;
 
-    // Create metadata storage.
 
-    auto metadata = std::make_shared<MetadataStorage>();
 
     // Fetch configuration YAML.
 
@@ -74,24 +72,24 @@ inline BitInterface BladeBit(auto* app, auto& pool, uint64_t id, const std::stri
         HOLOSCAN_LOG_INFO("Creating Correlator operator.");
         const auto& correlator_id = fmt::format("blade-correlator-{}", id);
         auto correlator_op = correlator_op_cb(correlator_id);
-        correlator_op->load_metadata(correlator_id, metadata);
-        return {correlator_op, correlator_op, correlator_op};
+
+        return {correlator_op, correlator_op};
     }
 
     if (mode == "beamformer") {
         HOLOSCAN_LOG_INFO("Creating Beamformer operator.");
         const auto& beamformer_id = fmt::format("blade-beamformer-{}", id);
         auto beamformer_op = beamformer_op_cb(beamformer_id);
-        beamformer_op->load_metadata(beamformer_id, metadata);
-        return {beamformer_op, beamformer_op, beamformer_op};
+
+        return {beamformer_op, beamformer_op};
     }
 
     if (mode == "frbnn") {
         HOLOSCAN_LOG_INFO("Creating FRBNN operator.");
         const auto& frbnn_id = fmt::format("blade-frbnn-{}", id);
         auto frbnn_op = frbnn_op_cb(frbnn_id);
-        frbnn_op->load_metadata(frbnn_id, metadata);
-        return {frbnn_op, frbnn_op, frbnn_op};
+
+        return {frbnn_op, frbnn_op};
     }
 
     HOLOSCAN_LOG_ERROR("Unsupported mode: {}", mode);

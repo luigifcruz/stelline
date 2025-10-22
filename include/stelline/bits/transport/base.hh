@@ -7,7 +7,7 @@
 #include <stelline/helpers.hh>
 #include <stelline/yaml/types/block_shape.hh>
 #include <stelline/operators/transport/base.hh>
-#include <stelline/metadata.hh>
+
 
 namespace stelline::bits::transport {
 
@@ -15,9 +15,7 @@ inline BitInterface TransportBit(auto* app, auto& pool, uint64_t id, const std::
     using namespace holoscan;
     using namespace stelline::operators::transport;
 
-    // Create metadata storage.
 
-    auto metadata = std::make_shared<MetadataStorage>();
 
     // Fetch configuration YAML.
 
@@ -111,21 +109,19 @@ inline BitInterface TransportBit(auto* app, auto& pool, uint64_t id, const std::
         Arg("output_pool_size", output_pool_size),
         Arg("enable_csv_logging", enable_csv_logging)
     );
-    receiver_op->load_metadata(receiver_id, metadata);
 
     const auto& sorter_id = fmt::format("transport-sorter-{}", id);
     auto sorter_op = app->template make_operator<SorterOp>(
         sorter_id,
         Arg("depth", sorter_depth)
     );
-    sorter_op->load_metadata(sorter_id, metadata);
 
     // Connect operators.
 
     app->add_flow(ano_rx_op, receiver_op, {{"bench_rx_out", "burst_in"}});
     app->add_flow(receiver_op, sorter_op, {{"dsp_block_out", "dsp_block_in"}});
 
-    return {sorter_op, sorter_op, sorter_op};
+    return {receiver_op, sorter_op};
 }
 
 inline BitInterface SourceBit(auto* app, auto& pool, const std::string& config) {
@@ -147,7 +143,7 @@ inline BitInterface SourceBit(auto* app, auto& pool, const std::string& config) 
         app->template make_condition<PeriodicCondition>(1000000000)
     );
     
-    return {source_op, source_op, source_op};
+    return {source_op, source_op};
 }
 
 }  // namespace stelline::bits::transport

@@ -108,10 +108,8 @@ class DefaultOp : public holoscan::Application {
                 throw std::runtime_error("Unknown node.");
             }
 
-            const auto& [_1, src, src_meta] = map[src_id];
-            const auto& [dst, _2, dst_meta] = map[dst_id];
-
-            src_meta->link_metadata(dst_meta->metadata_storage());
+            const auto& [_1, src] = map[src_id];
+            const auto& [dst, _2] = map[dst_id];
 
             add_flow(src, dst);
         }

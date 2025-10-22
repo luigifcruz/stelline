@@ -12,9 +12,7 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
     using namespace holoscan;
     using namespace stelline::operators::filesystem;
 
-    // Create metadata storage.
 
-    auto metadata = std::make_shared<MetadataStorage>();
 
     // Fetch configuration YAML.
 
@@ -53,24 +51,24 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
         HOLOSCAN_LOG_INFO("Creating Simple Writer operator.");
         const auto& simple_writer_id = fmt::format("filesystem-simple-writer-{}", id);
         auto simple_writer_op = simple_writer_op_cb(simple_writer_id);
-        simple_writer_op->load_metadata(simple_writer_id, metadata);
-        return {simple_writer_op, simple_writer_op, simple_writer_op};
+
+        return {simple_writer_op, simple_writer_op};
     }
 
     if (mode == "simple_writer_rdma") {
         HOLOSCAN_LOG_INFO("Creating Simple Writer RDMA operator.");
         const auto& simple_writer_rdma_id = fmt::format("filesystem-simple-writer-rdma-{}", id);
         auto simple_writer_rdma_op = simple_writer_rdma_op_cb(simple_writer_rdma_id);
-        simple_writer_rdma_op->load_metadata(simple_writer_rdma_id, metadata);
-        return {simple_writer_rdma_op, simple_writer_rdma_op, simple_writer_rdma_op};
+
+        return {simple_writer_rdma_op, simple_writer_rdma_op};
     }
 
     if (mode == "dummy_writer") {
         HOLOSCAN_LOG_INFO("Creating Dummy Writer operator.");
         const auto& dummy_writer_id = fmt::format("filesystem-dummy-writer-{}", id);
         auto dummy_writer_op = dummy_writer_op_cb(dummy_writer_id);
-        dummy_writer_op->load_metadata(dummy_writer_id, metadata);
-        return {dummy_writer_op, dummy_writer_op, dummy_writer_op};
+
+        return {dummy_writer_op, dummy_writer_op};
     }
 
 
@@ -86,8 +84,8 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
         HOLOSCAN_LOG_INFO("Creating FBH5 Writer RDMA operator.");
         const auto& fbh5_writer_rdma_id = fmt::format("filesystem-fbh5-writer-rdma-{}", id);
         auto fbh5_writer_rdma_op = fbh5_writer_rdma_op_cb(fbh5_writer_rdma_id);
-        fbh5_writer_rdma_op->load_metadata(fbh5_writer_rdma_id, metadata);
-        return {fbh5_writer_rdma_op, fbh5_writer_rdma_op, fbh5_writer_rdma_op};
+
+        return {fbh5_writer_rdma_op, fbh5_writer_rdma_op};
     }
 #endif
 #ifdef STELLINE_LOADER_UVH5
@@ -111,8 +109,8 @@ inline BitInterface FilesystemBit(auto* app, auto& pool, uint64_t id, const std:
         HOLOSCAN_LOG_INFO("Creating FBH5 Writer RDMA operator.");
         const auto& uvh5_writer_rdma_id = fmt::format("filesystem-fbh5-writer-rdma-{}", id);
         auto uvh5_writer_rdma_op = uvh5_writer_rdma_op_cb(uvh5_writer_rdma_id);
-        uvh5_writer_rdma_op->load_metadata(uvh5_writer_rdma_id, metadata);
-        return {uvh5_writer_rdma_op, uvh5_writer_rdma_op, uvh5_writer_rdma_op};
+
+        return {uvh5_writer_rdma_op, uvh5_writer_rdma_op};
     }
 #endif
 
