@@ -98,10 +98,6 @@ void SimpleWriterRdmaOp::start() {
         pimpl->metricsLoop();
     });
 
-    // Register metadata.
-
-    this->commit_metadata();
-
     HOLOSCAN_LOG_INFO("Successfully opened file '{}'.", pimpl->filePath);
 }
 

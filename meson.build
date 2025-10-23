@@ -1,7 +1,7 @@
 project(
     'stelline',
     ['cpp', 'cuda'],
-    version: '0.0.1',
+    version: '0.1.0',
     default_options: [
         'cpp_std=c++20',
         'buildtype=release',
@@ -55,8 +55,4 @@ if not is_static
     )
 endif
 
-executable(
-    'stelline',
-    ['stelline.cc'],
-    dependencies: lib_stelline_dep,
-)
+subdir('python')

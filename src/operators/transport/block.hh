@@ -5,7 +5,7 @@
 
 #include <stelline/yaml/types/block_shape.hh>
 
-#include "kernel.hh"
+#include "ata_kernel.hh"
 
 using namespace gxf;
 using namespace holoscan;
