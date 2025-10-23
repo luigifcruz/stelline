@@ -12,10 +12,10 @@ endforeach
 if all_deps_found
     cfg_lst.set('STELLINE_OPERATOR_TRANSPORT', true)
     src_lst += files([
-        'receiver.cc',
+        'ata_receiver.cc',
         'dummy_receiver.cc',
         'sorter.cc',
-        'kernel.cu',
+        'ata_kernel.cu',
     ])
 endif
 

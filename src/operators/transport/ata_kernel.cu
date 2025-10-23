@@ -1,4 +1,4 @@
-#include "kernel.hh"
+#include "ata_kernel.hh"
 
 #include <cuda/std/complex>
 

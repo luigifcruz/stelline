@@ -8,7 +8,7 @@ from stelline.operators._filesystem_ops import (
     Uvh5WriterRdmaOp,
 )
 
-from stelline.operators._transport_ops import ReceiverOp, SorterOp, DummyReceiverOp
+from stelline.operators._transport_ops import AtaReceiverOp, SorterOp, DummyReceiverOp
 
 from stelline.operators._socket_ops import ZmqTransmitterOp
 
@@ -32,7 +32,7 @@ __all__ = [
     "SimpleWriterRdmaOp",
     "Fbh5WriterRdmaOp",
     "Uvh5WriterRdmaOp",
-    "ReceiverOp",
+    "AtaReceiverOp",
     "SorterOp",
     "DummyReceiverOp",
     "ZmqTransmitterOp",

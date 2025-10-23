@@ -16,15 +16,15 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API ReceiverOp : public Operator {
+class STELLINE_API AtaReceiverOp : public Operator {
  public:
-    HOLOSCAN_OPERATOR_FORWARD_ARGS(ReceiverOp)
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)
 
     constexpr static const uint64_t TransportHeaderSize = 46;
     constexpr static const uint64_t VoltageHeaderSize = 16;
     constexpr static const uint64_t VoltageDataSize = 6144;
 
-    ~ReceiverOp();
+    ~AtaReceiverOp();
 
     void initialize() override;
     void setup(OperatorSpec& spec) override;

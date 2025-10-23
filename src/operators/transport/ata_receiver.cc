@@ -13,7 +13,7 @@ using namespace holoscan::ops;
 
 namespace stelline::operators::transport {
 
-struct ReceiverOp::Impl {
+struct AtaReceiverOp::Impl {
     // Configuration parameters (derived).
 
     BlockShape totalBlock;
@@ -80,7 +80,7 @@ struct ReceiverOp::Impl {
     std::unordered_set<std::shared_ptr<AdvNetBurstParams>> bursts;
 };
 
-void ReceiverOp::initialize() {
+void AtaReceiverOp::initialize() {
     // Register custom types.
     register_converter<BlockShape>();
 
@@ -91,11 +91,11 @@ void ReceiverOp::initialize() {
     Operator::initialize();
 }
 
-ReceiverOp::~ReceiverOp() {
+AtaReceiverOp::~AtaReceiverOp() {
     delete pimpl;
 }
 
-void ReceiverOp::setup(OperatorSpec& spec) {
+void AtaReceiverOp::setup(OperatorSpec& spec) {
     spec.input<AdvNetBurstParams>("burst_in");
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
@@ -109,7 +109,7 @@ void ReceiverOp::setup(OperatorSpec& spec) {
     spec.param(enableCsvLogging_, "enable_csv_logging");
 }
 
-void ReceiverOp::start() {
+void AtaReceiverOp::start() {
     // Convert Parameters to variables.
 
     pimpl->totalBlock = totalBlock_.get();
@@ -188,7 +188,7 @@ void ReceiverOp::start() {
     });
 }
 
-void ReceiverOp::stop() {
+void AtaReceiverOp::stop() {
     pimpl->idleQueue = {};
     pimpl->receiveQueue = {};
     pimpl->computeQueue = {};
@@ -210,7 +210,7 @@ void ReceiverOp::stop() {
     }
 }
 
-void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
+void AtaReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     auto burst = input.receive<std::shared_ptr<AdvNetBurstParams>>("burst_in").value();
 
     if (!burst) {
@@ -321,7 +321,7 @@ void ReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionCo
     }
 }
 
-void ReceiverOp::Impl::releaseReceivedBlocks() {
+void AtaReceiverOp::Impl::releaseReceivedBlocks() {
     while (!receiveQueue.empty()) {
         auto block = receiveQueue.front();
         receiveQueue.pop();
@@ -347,7 +347,7 @@ void ReceiverOp::Impl::releaseReceivedBlocks() {
     }
 }
 
-void ReceiverOp::Impl::releaseComputedBlocks(OutputContext& output) {
+void AtaReceiverOp::Impl::releaseComputedBlocks(OutputContext& output) {
     while (!computeQueue.empty()) {
         auto block = computeQueue.front();
         computeQueue.pop();
@@ -372,7 +372,7 @@ void ReceiverOp::Impl::releaseComputedBlocks(OutputContext& output) {
     }
 }
 
-void ReceiverOp::Impl::burstCollectorLoop() {
+void AtaReceiverOp::Impl::burstCollectorLoop() {
     std::chrono::microseconds totalRuntime(0);
     uint64_t numIterations = 1;
 
@@ -416,7 +416,7 @@ void ReceiverOp::Impl::burstCollectorLoop() {
     }
 }
 
-void ReceiverOp::Impl::metricsLoop() {
+void AtaReceiverOp::Impl::metricsLoop() {
     std::ofstream file;
 
     if (enableCsvLogging) {

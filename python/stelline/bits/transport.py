@@ -10,7 +10,7 @@ from holoscan import conditions
 from ..types import BlockShape
 from ..utils import logger
 from ..operators import (
-    ReceiverOp,
+    AtaReceiverOp,
     DummyReceiverOp,
     SorterOp,
     AdvNetworkOpRx,
@@ -129,11 +129,11 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
             name=ano_rx_name,
         )
 
-        # Create Receiver operator
-        receiver_name = f"transport-receiver-{id}"
-        receiver_op = ReceiverOp(
+        # Create AtaReceiver operator
+        ata_receiver_name = f"transport-ata-receiver-{id}"
+        ata_receiver_op = AtaReceiverOp(
             fragment=app,
-            name=receiver_name,
+            name=ata_receiver_name,
             concurrent_blocks=concurrent_blocks,
             total_block=total_block_shape,
             partial_block=partial_block_shape,
@@ -147,10 +147,10 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         sorter_op = SorterOp(fragment=app, name=sorter_name, depth=sorter_depth)
 
         # Connect operators
-        app.add_flow(ano_rx_op, receiver_op, {("bench_rx_out", "burst_in")})
-        app.add_flow(receiver_op, sorter_op, {("dsp_block_out", "dsp_block_in")})
+        app.add_flow(ano_rx_op, ata_receiver_op, {("bench_rx_out", "burst_in")})
+        app.add_flow(ata_receiver_op, sorter_op, {("dsp_block_out", "dsp_block_in")})
 
-        return (receiver_op, sorter_op)
+        return (ata_receiver_op, sorter_op)
 
     elif mode == "dummy":
         logger.info(f"  Total Block: {total_block}")

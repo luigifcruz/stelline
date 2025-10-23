@@ -1,5 +1,5 @@
-#ifndef STELLINE_OPERATORS_TRANSPORT_KERNEL_HH
-#define STELLINE_OPERATORS_TRANSPORT_KERNEL_HH
+#ifndef STELLINE_OPERATORS_TRANSPORT_ATA_KERNEL_HH
+#define STELLINE_OPERATORS_TRANSPORT_ATA_KERNEL_HH
 
 #include <stelline/common.hh>
 #include <stelline/yaml/types/block_shape.hh>
@@ -12,4 +12,4 @@ cudaError_t LaunchKernel(void* output, void** input, uint64_t numberOfPackets,
 
 }  // namespace stelline::operators::transport
 
-#endif  // STELLINE_OPERATORS_TRANSPORT_KERNEL_HH
+#endif  // STELLINE_OPERATORS_TRANSPORT_ATA_KERNEL_HH

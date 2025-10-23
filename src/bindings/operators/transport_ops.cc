@@ -15,24 +15,24 @@ namespace py = pybind11;
 using namespace stelline::operators::transport;
 using namespace holoscan;
 
-class PyReceiverOp : public ReceiverOp {
+class PyAtaReceiverOp : public AtaReceiverOp {
 public:
-    using ReceiverOp::ReceiverOp;
+    using AtaReceiverOp::AtaReceiverOp;
 
-    PyReceiverOp(Fragment* fragment, const py::args& args,
-                 const stelline::BlockShape& total_block,
-                 const stelline::BlockShape& partial_block,
-                 const stelline::BlockShape& offset_block,
-                 uint64_t concurrent_blocks,
-                 uint64_t output_pool_size,
-                 bool enable_csv_logging,
-                 const std::string& name = "receiver")
-        : ReceiverOp(ArgList{Arg("total_block", total_block),
-                             Arg("partial_block", partial_block),
-                             Arg("offset_block", offset_block),
-                             Arg("concurrent_blocks", concurrent_blocks),
-                             Arg("output_pool_size", output_pool_size),
-                             Arg("enable_csv_logging", enable_csv_logging)}) {
+    PyAtaReceiverOp(Fragment* fragment, const py::args& args,
+                    const stelline::BlockShape& total_block,
+                    const stelline::BlockShape& partial_block,
+                    const stelline::BlockShape& offset_block,
+                    uint64_t concurrent_blocks,
+                    uint64_t output_pool_size,
+                    bool enable_csv_logging,
+                    const std::string& name = "ata_receiver")
+        : AtaReceiverOp(ArgList{Arg("total_block", total_block),
+                                Arg("partial_block", partial_block),
+                                Arg("offset_block", offset_block),
+                                Arg("concurrent_blocks", concurrent_blocks),
+                                Arg("output_pool_size", output_pool_size),
+                                Arg("enable_csv_logging", enable_csv_logging)}) {
         name_ = name;
         fragment_ = fragment;
         spec_ = std::make_shared<OperatorSpec>(fragment);
@@ -73,7 +73,7 @@ public:
 PYBIND11_MODULE(_transport_ops, m) {
     m.doc() = "Stelline transport operators module";
 
-    py::class_<ReceiverOp, PyReceiverOp, Operator, std::shared_ptr<ReceiverOp>>(m, "ReceiverOp")
+    py::class_<AtaReceiverOp, PyAtaReceiverOp, Operator, std::shared_ptr<AtaReceiverOp>>(m, "AtaReceiverOp")
         .def(py::init<Fragment*, const py::args&, const stelline::BlockShape&,
                       const stelline::BlockShape&, const stelline::BlockShape&,
                       uint64_t, uint64_t, bool, const std::string&>(),
@@ -84,7 +84,7 @@ PYBIND11_MODULE(_transport_ops, m) {
              py::arg("concurrent_blocks"),
              py::arg("output_pool_size"),
              py::arg("enable_csv_logging"),
-             py::arg("name") = "receiver");
+             py::arg("name") = "ata_receiver");
 
     py::class_<DummyReceiverOp, PyDummyReceiverOp, Operator, std::shared_ptr<DummyReceiverOp>>(m, "DummyReceiverOp")
         .def(py::init<Fragment*, const py::args&, const stelline::BlockShape&, const std::string&>(),
@@ -99,7 +99,7 @@ PYBIND11_MODULE(_transport_ops, m) {
              py::arg("name") = "sorter");
 
     // Expose transport constants
-    m.attr("TRANSPORT_HEADER_SIZE") = ReceiverOp::TransportHeaderSize;
-    m.attr("VOLTAGE_HEADER_SIZE") = ReceiverOp::VoltageHeaderSize;
-    m.attr("VOLTAGE_DATA_SIZE") = ReceiverOp::VoltageDataSize;
+    m.attr("TRANSPORT_HEADER_SIZE") = AtaReceiverOp::TransportHeaderSize;
+    m.attr("VOLTAGE_HEADER_SIZE") = AtaReceiverOp::VoltageHeaderSize;
+    m.attr("VOLTAGE_DATA_SIZE") = AtaReceiverOp::VoltageDataSize;
 }
