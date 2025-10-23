@@ -13,7 +13,7 @@ using namespace holoscan::ops;
 
 namespace stelline::operators::transport {
 
-struct SourceOp::Impl {
+struct DummyReceiverOp::Impl {
     // Configuration parameters (derived).
 
     BlockShape totalBlock;
@@ -44,7 +44,7 @@ struct SourceOp::Impl {
     std::unordered_set<std::shared_ptr<AdvNetBurstParams>> bursts;
 };
 
-void SourceOp::initialize() {
+void DummyReceiverOp::initialize() {
     // Register custom types.
     register_converter<BlockShape>();
 
@@ -55,11 +55,11 @@ void SourceOp::initialize() {
     Operator::initialize();
 }
 
-SourceOp::~SourceOp() {
+DummyReceiverOp::~DummyReceiverOp() {
     delete pimpl;
 }
 
-void SourceOp::setup(OperatorSpec& spec) {
+void DummyReceiverOp::setup(OperatorSpec& spec) {
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
@@ -67,7 +67,7 @@ void SourceOp::setup(OperatorSpec& spec) {
     spec.param(totalBlock_, "total_block");
 }
 
-void SourceOp::start() {
+void DummyReceiverOp::start() {
     // Convert Parameters to variables.
 
     pimpl->totalBlock = totalBlock_.get();
@@ -91,9 +91,9 @@ void SourceOp::start() {
     }, matx::MATX_DEVICE_MEMORY).ToDlPack());
 }
 
-void SourceOp::stop() {}
+void DummyReceiverOp::stop() {}
 
-void SourceOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
+void DummyReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     HOLOSCAN_LOG_INFO("Faking block {}.", pimpl->timestamp);
     DspBlock outputBlock = {
         .timestamp = pimpl->timestamp,

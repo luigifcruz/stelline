@@ -25,6 +25,7 @@ stelline:
 # Nodes
 
 ata_standard_rx:
+    mode: ata
     rdma_gpu: 0
     rdma_nic: 01:00.0
     rdma_master_core: 0

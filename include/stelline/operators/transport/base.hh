@@ -44,11 +44,11 @@ class STELLINE_API ReceiverOp : public Operator {
     Parameter<bool> enableCsvLogging_;
 };
 
-class STELLINE_API SourceOp : public Operator {
+class STELLINE_API DummyReceiverOp : public Operator {
  public:
-    HOLOSCAN_OPERATOR_FORWARD_ARGS(SourceOp)
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(DummyReceiverOp)
 
-    ~SourceOp();
+    ~DummyReceiverOp();
 
     void initialize() override;
     void setup(OperatorSpec& spec) override;

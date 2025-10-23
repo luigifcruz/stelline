@@ -19,7 +19,7 @@ scheduler:
 stelline:
     graph:
         transport:
-            bit: source_bit
+            bit: transport_bit
             configuration: ata_shape
         writer:
             bit: filesystem_bit
@@ -30,6 +30,7 @@ stelline:
 # Nodes
 
 ata_shape:
+    mode: dummy
     total_block:
         number_of_antennas: 28
         number_of_channels: 192

@@ -14,7 +14,6 @@ from stelline.bits import (
     BladeBit,
     FilesystemBit,
     TransportBit,
-    SourceBit,
     SocketBit,
     FrbnnInferenceBit,
     FrbnnDetectionBit,

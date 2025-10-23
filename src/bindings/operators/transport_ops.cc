@@ -40,14 +40,14 @@ public:
     }
 };
 
-class PySourceOp : public SourceOp {
+class PyDummyReceiverOp : public DummyReceiverOp {
 public:
-    using SourceOp::SourceOp;
+    using DummyReceiverOp::DummyReceiverOp;
 
-    PySourceOp(Fragment* fragment, const py::args& args,
-               const stelline::BlockShape& total_block,
-               const std::string& name = "source")
-        : SourceOp(ArgList{Arg("total_block", total_block)}) {
+    PyDummyReceiverOp(Fragment* fragment, const py::args& args,
+                      const stelline::BlockShape& total_block,
+                      const std::string& name = "dummy_receiver")
+        : DummyReceiverOp(ArgList{Arg("total_block", total_block)}) {
         name_ = name;
         fragment_ = fragment;
         spec_ = std::make_shared<OperatorSpec>(fragment);
@@ -86,11 +86,11 @@ PYBIND11_MODULE(_transport_ops, m) {
              py::arg("enable_csv_logging"),
              py::arg("name") = "receiver");
 
-    py::class_<SourceOp, PySourceOp, Operator, std::shared_ptr<SourceOp>>(m, "SourceOp")
+    py::class_<DummyReceiverOp, PyDummyReceiverOp, Operator, std::shared_ptr<DummyReceiverOp>>(m, "DummyReceiverOp")
         .def(py::init<Fragment*, const py::args&, const stelline::BlockShape&, const std::string&>(),
              py::arg("fragment"),
              py::arg("total_block"),
-             py::arg("name") = "source");
+             py::arg("name") = "dummy_receiver");
 
     py::class_<SorterOp, PySorterOp, Operator, std::shared_ptr<SorterOp>>(m, "SorterOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const std::string&>(),

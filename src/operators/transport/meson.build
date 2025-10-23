@@ -13,7 +13,7 @@ if all_deps_found
     cfg_lst.set('STELLINE_OPERATOR_TRANSPORT', true)
     src_lst += files([
         'receiver.cc',
-        'source.cc',
+        'dummy_receiver.cc',
         'sorter.cc',
         'kernel.cu',
     ])
