@@ -62,11 +62,11 @@ RUN cd filterbankc99 \
     && ninja install
 
 #
-# Clone, Build & Install uvhc99, to support FBH5 writing
+# Clone, Build & Install uvh5c99, to support FBH5 writing
 #
 
-RUN git clone https://github.com/MydonSolutions/uvhc99.git
-RUN cd uvhc99 \
+RUN git clone https://github.com/MydonSolutions/uvh5c99.git
+RUN cd uvh5c99 \
     && git checkout v0.9.0 \
     && git submodule update --init --recursive \
     && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
