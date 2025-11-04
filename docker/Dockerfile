@@ -79,7 +79,7 @@ RUN cd uvh5c99 \
 
 RUN git clone https://github.com/luigifcruz/CyberEther.git
 RUN cd CyberEther \
-    && git checkout v1.0.0-alpha6 \
+    && git checkout v1.0.0-alpha5 \
     && rm -fr build \
     && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
     && cd build \
@@ -100,3 +100,5 @@ RUN cd blade \
     && cd build \
     && ninja \
     && ninja install
+
+RUN python3 -m pip install "cupy-cuda12x==13.6.0" xarray "zarr<3"
