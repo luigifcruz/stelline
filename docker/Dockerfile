@@ -101,4 +101,4 @@ RUN cd blade \
     && ninja \
     && ninja install
 
-RUN python3 -m pip install "cupy-cuda12x==13.6.0" xarray "zarr<3"
+RUN python3 -m pip install "cupy-cuda12x==13.6.0" xarray "zarr<3" "dask[array]"

@@ -175,7 +175,6 @@ class CoreAlgorithmOperator(Operator):
         res /= n
         # axes placeholders
         res = res[:, None, None, :, :]
-        print(times, time_out)
         out_dict = {
             'cube': hs.as_tensor(res),
             'time_out': hs.as_tensor(time_out),
