@@ -4,6 +4,7 @@ deps = [
         modules: [
             'holoscan::core',
             'holoscan::logger',
+            'holoscan::pybind11',
         ],
         required: false,
     ),

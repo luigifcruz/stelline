@@ -14,7 +14,7 @@
     cudaError_t status = (f); \
     if (status != cudaSuccess) { \
         callback(); \
-        HOLOSCAN_LOG_ERROR("[CUDA] Error code: {}", status); \
+        HOLOSCAN_LOG_ERROR("[CUDA] Error code: {} ({})", static_cast<int>(status), cudaGetErrorString(status)); \
         throw std::runtime_error("CUDA error."); \
     } \
 }
@@ -31,7 +31,7 @@
     CUfileError_t status = (f); \
     if (status.err != CU_FILE_SUCCESS) { \
         callback(); \
-        HOLOSCAN_LOG_ERROR("[GDS] Error code: {}", status.err); \
+        HOLOSCAN_LOG_ERROR("[GDS] Error code: {}", static_cast<int>(status.err)); \
         throw std::runtime_error("GDS I/O error."); \
     } \
 }

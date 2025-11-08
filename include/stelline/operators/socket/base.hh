@@ -4,7 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
-#include <stelline/metadata.hh>
+
 
 namespace stelline::operators::socket {
 
@@ -15,7 +15,7 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API ZmqTransmitterOp : public Operator, public Metadata {
+class STELLINE_API ZmqTransmitterOp : public Operator {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(ZmqTransmitterOp)
 

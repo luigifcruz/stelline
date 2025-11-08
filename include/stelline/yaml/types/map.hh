@@ -29,9 +29,9 @@ inline T FetchMap(const Map& map, const std::string& key, const std::optional<T>
         return std::stoull(map.at(key));
     } else if constexpr (std::is_same_v<T, bool>) {
         bool result = false;
-        if (map.at(key) == "true") {
+        if (map.at(key) == "true" || map.at(key) == "True") {
             result = true;
-        } else if (map.at(key) == "false") {
+        } else if (map.at(key) == "false" || map.at(key) == "False") {
             result = false;
         } else {
             result = std::stoi(map.at(key)) != 0;

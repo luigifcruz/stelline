@@ -4,7 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
-#include <stelline/metadata.hh>
+
 #include <stelline/yaml/types/block_shape.hh>
 
 namespace stelline::operators::transport {
@@ -16,15 +16,11 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API ReceiverOp : public Operator, public Metadata {
+class STELLINE_API AtaReceiverOp : public Operator {
  public:
-    HOLOSCAN_OPERATOR_FORWARD_ARGS(ReceiverOp)
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)
 
-    constexpr static const uint64_t TransportHeaderSize = 46;
-    constexpr static const uint64_t VoltageHeaderSize = 16;
-    constexpr static const uint64_t VoltageDataSize = 6144;
-
-    ~ReceiverOp();
+    ~AtaReceiverOp();
 
     void initialize() override;
     void setup(OperatorSpec& spec) override;
@@ -39,16 +35,18 @@ class STELLINE_API ReceiverOp : public Operator, public Metadata {
     Parameter<BlockShape> totalBlock_;
     Parameter<BlockShape> partialBlock_;
     Parameter<BlockShape> offsetBlock_;
-    Parameter<uint64_t> concurrentBlocks_;
+    Parameter<uint64_t> maxConcurrentBlocks_;
+    Parameter<uint64_t> packetHeaderSize_;
+    Parameter<uint64_t> packetHeaderOffset_;
     Parameter<uint64_t> outputPoolSize_;
     Parameter<bool> enableCsvLogging_;
 };
 
-class STELLINE_API SourceOp : public Operator, public Metadata {
+class STELLINE_API DummyReceiverOp : public Operator {
  public:
-    HOLOSCAN_OPERATOR_FORWARD_ARGS(SourceOp)
+    HOLOSCAN_OPERATOR_FORWARD_ARGS(DummyReceiverOp)
 
-    ~SourceOp();
+    ~DummyReceiverOp();
 
     void initialize() override;
     void setup(OperatorSpec& spec) override;
@@ -63,7 +61,7 @@ class STELLINE_API SourceOp : public Operator, public Metadata {
     Parameter<BlockShape> totalBlock_;
 };
 
-class STELLINE_API SorterOp : public Operator, public Metadata {
+class STELLINE_API SorterOp : public Operator {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)
 

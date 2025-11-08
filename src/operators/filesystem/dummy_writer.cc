@@ -48,9 +48,7 @@ void DummyWriterOp::start() {
         pimpl->metricsLoop();
     });
 
-    // Register metadata.
 
-    this->commit_metadata();
 }
 
 void DummyWriterOp::stop() {

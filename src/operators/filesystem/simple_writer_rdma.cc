@@ -98,10 +98,6 @@ void SimpleWriterRdmaOp::start() {
         pimpl->metricsLoop();
     });
 
-    // Register metadata.
-
-    this->commit_metadata();
-
     HOLOSCAN_LOG_INFO("Successfully opened file '{}'.", pimpl->filePath);
 }
 
@@ -183,7 +179,7 @@ void SimpleWriterRdmaOp::Impl::metricsLoop() {
         }
 
         HOLOSCAN_LOG_INFO("Simple Writer RDMA Operator:");
-        HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
+        HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps.load());
         HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
 
         std::this_thread::sleep_for(std::chrono::seconds(1));

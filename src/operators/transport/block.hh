@@ -1,15 +1,16 @@
 #ifndef STELLINE_OPERATORS_TRANSPORT_BLOCK_HH
 #define STELLINE_OPERATORS_TRANSPORT_BLOCK_HH
 
-#include <holoscan/operators/advanced_network/adv_network_rx.h>
+#include <advanced_network/common.h>
 
 #include <stelline/yaml/types/block_shape.hh>
 
-#include "kernel.hh"
+#include "ata_kernel.hh"
 
 using namespace gxf;
 using namespace holoscan;
 using namespace holoscan::ops;
+using namespace holoscan::advanced_network;
 
 namespace stelline::operators::transport {
 
@@ -59,8 +60,8 @@ struct Block {
 
     inline void addPacket(const uint64_t& blockPacketIndex,
                           const uint64_t& burstPacketIndex,
-                          const std::shared_ptr<AdvNetBurstParams>& burst) {
-        gpuData[blockPacketIndex] = adv_net_get_gpu_pkt_ptr(burst, burstPacketIndex);
+                          const std::shared_ptr<BurstParams>& burst) {
+        gpuData[blockPacketIndex] = get_segment_packet_ptr(burst.get(), RX_DATA, burstPacketIndex);
         bursts.insert(burst);
         packetCount += 1;
     }
@@ -92,7 +93,7 @@ struct Block {
 
     void** gpuData;
     uint64_t packetCount;
-    std::unordered_set<std::shared_ptr<AdvNetBurstParams>> bursts;
+    std::unordered_set<std::shared_ptr<BurstParams>> bursts;
 
     cudaStream_t stream;
     std::shared_ptr<Tensor> _outputTensor;

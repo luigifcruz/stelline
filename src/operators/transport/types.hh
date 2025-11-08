@@ -5,6 +5,9 @@
 
 #include <stelline/common.hh>
 
+#define RX_HEADER 0
+#define RX_DATA 1
+
 namespace stelline::operators::transport {
 
 struct VoltagePacket {

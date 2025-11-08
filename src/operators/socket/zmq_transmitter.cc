@@ -84,10 +84,6 @@ void ZmqTransmitterOp::start() {
     pimpl->publisher.setsockopt(ZMQ_LINGER, 0);
     pimpl->publisher.bind(pimpl->address);
 
-    // Register metadata.
-
-    this->commit_metadata();
-
     HOLOSCAN_LOG_INFO("Successfully created ZeroMQ transmitter at address '{}'.", pimpl->address);
 }
 
@@ -153,7 +149,7 @@ void ZmqTransmitterOp::Impl::metricsLoop() {
         }
 
         HOLOSCAN_LOG_INFO("ZeroMQ Transmitter Operator:");
-        HOLOSCAN_LOG_INFO("  Input Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
+        HOLOSCAN_LOG_INFO("  Input Bandwidth: {:.2f} MB/s", currentBandwidthMBps.load());
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }

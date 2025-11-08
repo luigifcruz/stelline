@@ -1,0 +1,27 @@
+FROM stelline-base:latest
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /home/sdk
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        iproute2 htop btop nvtop nload \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" "notebook>=7,<8" "jupyter-server>=2,<3" "jupyterlab-nvdashboard"
+
+EXPOSE 8888
+
+ENV JUPYTER_PORT=8888
+ENV JUPYTER_BASE_URL=/
+ENV JUPYTER_NOTEBOOK_DIR=/home/sdk
+
+CMD jupyter lab \
+  --ServerApp.ip=0.0.0.0 \
+  --ServerApp.port=${JUPYTER_PORT} \
+  --ServerApp.open_browser=False \
+  --ServerApp.base_url="${JUPYTER_BASE_URL}" \
+  --ServerApp.root_dir="${JUPYTER_NOTEBOOK_DIR}" \
+  --ServerApp.token="${JUPYTER_TOKEN}" \
+  --allow-root

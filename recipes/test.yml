@@ -1,0 +1,42 @@
+%YAML 1.2
+---
+# Holoscan Configuration
+
+multithreaded: true
+num_delay_ops: 32
+delay: 0.1
+delay_step: 0.01
+
+scheduler_type: greedy
+scheduler:
+    check_recession_period_ms: 0
+    worker_thread_number: 4
+    stop_on_deadlock: true
+    stop_on_deadlock_timeout: 500
+
+# Graph
+
+stelline:
+    graph:
+        transport:
+            bit: transport_bit
+            configuration: ata_shape
+        writer:
+            bit: filesystem_bit
+            configuration: file_writer
+            input:
+                in: transport
+
+# Nodes
+
+ata_shape:
+    mode: dummy
+    total_block:
+        number_of_antennas: 28
+        number_of_channels: 192
+        number_of_samples: 8192
+        number_of_polarizations: 2
+
+file_writer:
+    mode: fbh5_writer_rdma
+    file_path: ./output_f.fbh5

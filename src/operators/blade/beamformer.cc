@@ -141,7 +141,6 @@ void BeamformerOp::setup(OperatorSpec& spec) {
 }
 
 void BeamformerOp::start() {
-    this->commit_metadata();
     // Convert Parameters to variables.
 
     pimpl->numberOfBuffers = numberOfBuffers_.get();
@@ -187,10 +186,6 @@ void BeamformerOp::start() {
     pimpl->metricsThread = std::thread([&]{
         pimpl->metricsLoop();
     });
-
-    // Register metadata.
-
-    this->commit_metadata();
 }
 
 void BeamformerOp::stop() {

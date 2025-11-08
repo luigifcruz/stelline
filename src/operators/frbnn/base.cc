@@ -16,9 +16,6 @@ void ModelPreprocessorOp::setup(OperatorSpec& spec) {
 }
 
 void ModelPreprocessorOp::start() {
-    // Register metadata.
-
-    this->commit_metadata();
 }
 
 void ModelPreprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
@@ -42,9 +39,6 @@ void ModelAdapterOp::setup(OperatorSpec& spec) {
 }
 
 void ModelAdapterOp::start() {
-    // Register metadata.
-
-    this->commit_metadata();
 }
 
 void ModelAdapterOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
@@ -66,9 +60,6 @@ void ModelPostprocessorOp::setup(OperatorSpec& spec) {
 }
 
 void ModelPostprocessorOp::start() {
-    // Register metadata.
-
-    this->commit_metadata();
 }
 
 void ModelPostprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -153,10 +144,6 @@ void SimpleDetectionOp::start() {
     pimpl->metricsThread = std::thread([&]{
         pimpl->metricsLoop();
     });
-
-    // Register metadata.
-
-    this->commit_metadata();
 }
 
 void SimpleDetectionOp::stop() {
