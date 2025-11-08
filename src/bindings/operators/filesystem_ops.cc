@@ -15,7 +15,8 @@ class PyDummyWriterOp : public DummyWriterOp {
 public:
     using DummyWriterOp::DummyWriterOp;
 
-    PyDummyWriterOp(Fragment* fragment, const py::args& args,
+    PyDummyWriterOp(Fragment* fragment,
+                    const py::args& args,
                     const std::string& name = "dummy_writer")
         : DummyWriterOp() {
         name_ = name;
@@ -29,7 +30,8 @@ class PySimpleWriterOp : public SimpleWriterOp {
 public:
     using SimpleWriterOp::SimpleWriterOp;
 
-    PySimpleWriterOp(Fragment* fragment, const py::args& args,
+    PySimpleWriterOp(Fragment* fragment,
+                     const py::args& args,
                      const std::string& file_path,
                      const std::string& name = "simple_writer")
         : SimpleWriterOp(ArgList{Arg("file_path", file_path)}) {
@@ -44,7 +46,8 @@ class PySimpleWriterRdmaOp : public SimpleWriterRdmaOp {
 public:
     using SimpleWriterRdmaOp::SimpleWriterRdmaOp;
 
-    PySimpleWriterRdmaOp(Fragment* fragment, const py::args& args,
+    PySimpleWriterRdmaOp(Fragment* fragment,
+                         const py::args& args,
                          const std::string& file_path,
                          const std::string& name = "simple_writer_rdma")
         : SimpleWriterRdmaOp(ArgList{Arg("file_path", file_path)}) {
@@ -60,7 +63,8 @@ class PyFbh5WriterRdmaOp : public Fbh5WriterRdmaOp {
 public:
     using Fbh5WriterRdmaOp::Fbh5WriterRdmaOp;
 
-    PyFbh5WriterRdmaOp(Fragment* fragment, const py::args& args,
+    PyFbh5WriterRdmaOp(Fragment* fragment,
+                       const py::args& args,
                        const std::string& file_path,
                        const std::string& name = "fbh5_writer_rdma")
         : Fbh5WriterRdmaOp(ArgList{Arg("file_path", file_path)}) {
@@ -77,7 +81,8 @@ class PyUvh5WriterRdmaOp : public Uvh5WriterRdmaOp {
 public:
     using Uvh5WriterRdmaOp::Uvh5WriterRdmaOp;
 
-    PyUvh5WriterRdmaOp(Fragment* fragment, const py::args& args,
+    PyUvh5WriterRdmaOp(Fragment* fragment,
+                       const py::args& args,
                        const std::string& output_file_path,
                        const std::string& telinfo_file_path,
                        const std::string& obsantinfo_file_path,

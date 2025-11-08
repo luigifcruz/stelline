@@ -3,7 +3,6 @@
 #include <stelline/utils/juggler.hh>
 
 #include <matx.h>
-#include <holoscan/operators/advanced_network/adv_network_rx.h>
 
 #include "types.hh"
 #include "block.hh"
@@ -41,7 +40,6 @@ struct DummyReceiverOp::Impl {
     void burstCollectorLoop();
 
     std::mutex burstCollectorMutex;
-    std::unordered_set<std::shared_ptr<AdvNetBurstParams>> bursts;
 };
 
 void DummyReceiverOp::initialize() {
@@ -118,9 +116,9 @@ void DummyReceiverOp::compute(InputContext& input, OutputContext& output, Execut
         // Throw exception.
         throw std::runtime_error(err);
     }
-    
+
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    HOLOSCAN_LOG_WARN("Finished sleeping..."); 
+    HOLOSCAN_LOG_WARN("Finished sleeping...");
 }
 
 }  // namespace stelline::operators::transport

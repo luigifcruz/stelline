@@ -95,21 +95,19 @@ py.extension_module(
     gnu_symbol_visibility: 'hidden'
 )
 
-py.extension_module(
-    '_advanced_network_ops',
-    sources: '../src/bindings/operators/advanced_network_ops.cc',
-    include_directories: inc_lst,
-    dependencies: [pybind11_dep, py.dependency()] + dep_lst,
-    link_with: lib_stelline,
-    install: true,
-    install_rpath: extension_rpath,
-    gnu_symbol_visibility: 'hidden',
-    subdir: 'stelline/operators'
-)
-
 install_subdir(
     'stelline',
     install_dir: py_install_path,
-    exclude_files: ['__pycache__'],
+    exclude_files: ['__pycache__', 'stelline'],
     exclude_directories: ['__pycache__']
 )
+
+stelline_script = configure_file(
+    input: 'stelline.in',
+    output: 'stelline',
+    configuration: {
+        'PYTHON': py.path(),
+    }
+)
+
+install_data(stelline_script, install_dir: get_option('bindir'), install_mode: 'rwxr-xr-x')

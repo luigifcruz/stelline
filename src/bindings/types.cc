@@ -10,7 +10,7 @@ using namespace stelline;
 PYBIND11_MODULE(_types, m) {
     m.doc() = "Stelline types module";
 
-    py::class_<BlockShape>(m, "BlockShape")
+    py::class_<BlockShape, std::shared_ptr<BlockShape>>(m, "BlockShape")
         .def(py::init<>())
         .def(py::init<uint64_t, uint64_t, uint64_t, uint64_t>(),
              py::arg("number_of_antennas"),
@@ -27,7 +27,7 @@ PYBIND11_MODULE(_types, m) {
                              b.numberOfSamples, b.numberOfPolarizations);
         });
 
-    py::class_<DspBlock>(m, "DspBlock")
+    py::class_<DspBlock, std::shared_ptr<DspBlock>>(m, "DspBlock")
         .def(py::init<>())
         .def_readwrite("timestamp", &DspBlock::timestamp)
         .def_readwrite("tensor", &DspBlock::tensor)
@@ -37,7 +37,7 @@ PYBIND11_MODULE(_types, m) {
             return fmt::format("DspBlock(timestamp={})", d.timestamp);
         });
 
-    py::class_<InferenceBlock>(m, "InferenceBlock")
+    py::class_<InferenceBlock, std::shared_ptr<InferenceBlock>>(m, "InferenceBlock")
         .def(py::init<>())
         .def_readwrite("dsp_block", &InferenceBlock::dspBlock)
         .def_readwrite("tensor", &InferenceBlock::tensor)

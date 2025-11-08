@@ -2,20 +2,22 @@
 FRBNN Bits Module
 """
 
-from typing import Tuple, Any
+from typing import Any, Tuple
 
 from holoscan.core import Application
 from holoscan.operators import InferenceOp
 
 from ..operators import (
-    ModelPreprocessorOp,
     ModelAdapterOp,
     ModelPostprocessorOp,
+    ModelPreprocessorOp,
     SimpleDetectionOp,
 )
+from ..registry import register_bit
 from ..utils import logger
 
 
+@register_bit("frbnn_inference_bit")
 def FrbnnInferenceBit(
     app: Application, pool: Any, id: int, config: str
 ) -> Tuple[Any, Any]:
@@ -45,8 +47,8 @@ def FrbnnInferenceBit(
 
     cfg = app.kwargs(config)
 
-    frbnn_preprocessor_path = cfg["frbnn_preprocessor_path"]
-    frbnn_path = cfg["frbnn_path"]
+    frbnn_preprocessor_path = cfg.get("frbnn_preprocessor_path")
+    frbnn_path = cfg.get("frbnn_path")
 
     logger.info("FRBNN Inference Configuration:")
     logger.info(f"  Preprocessor Path: {frbnn_preprocessor_path}")
@@ -129,6 +131,7 @@ def FrbnnInferenceBit(
     return (model_preprocessor_op, model_postprocessor_op)
 
 
+@register_bit("frbnn_detection_bit")
 def FrbnnDetectionBit(
     app: Application, pool: Any, id: int, config: str
 ) -> Tuple[Any, Any]:
@@ -158,8 +161,8 @@ def FrbnnDetectionBit(
 
     cfg = app.kwargs(config)
 
-    csv_file_path = cfg["csv_file_path"]
-    hits_directory = cfg["hits_directory"]
+    csv_file_path = cfg.get("csv_file_path")
+    hits_directory = cfg.get("hits_directory")
 
     logger.info("FRBNN Detection Configuration:")
     logger.info(f"  CSV File Path: {csv_file_path}")

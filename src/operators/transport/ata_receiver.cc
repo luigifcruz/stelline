@@ -3,13 +3,17 @@
 #include <stelline/utils/juggler.hh>
 
 #include <matx.h>
-#include <holoscan/operators/advanced_network/adv_network_rx.h>
+#include <advanced_network/common.h>
 
 #include "types.hh"
 #include "block.hh"
 
+#define RX_HEADER 0
+#define RX_DATA 1
+
 using namespace holoscan;
 using namespace holoscan::ops;
+using namespace holoscan::advanced_network;
 
 namespace stelline::operators::transport {
 
@@ -19,8 +23,10 @@ struct AtaReceiverOp::Impl {
     BlockShape totalBlock;
     BlockShape partialBlock;
     BlockShape offsetBlock;
-    uint64_t concurrentBlocks;
+    uint64_t maxConcurrentBlocks;
     uint64_t outputPoolSize;
+    uint64_t packetHeaderSize;
+    uint64_t packetHeaderOffset;
     bool enableCsvLogging;
 
     // Cache parameters.
@@ -77,7 +83,7 @@ struct AtaReceiverOp::Impl {
     void burstCollectorLoop();
 
     std::mutex burstCollectorMutex;
-    std::unordered_set<std::shared_ptr<AdvNetBurstParams>> bursts;
+    std::unordered_set<std::shared_ptr<BurstParams>> bursts;
 };
 
 void AtaReceiverOp::initialize() {
@@ -96,12 +102,13 @@ AtaReceiverOp::~AtaReceiverOp() {
 }
 
 void AtaReceiverOp::setup(OperatorSpec& spec) {
-    spec.input<AdvNetBurstParams>("burst_in");
     spec.output<DspBlock>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
-    spec.param(concurrentBlocks_, "concurrent_blocks");
+    spec.param(maxConcurrentBlocks_, "max_concurrent_blocks");
+    spec.param(packetHeaderSize_, "packet_header_size");
+    spec.param(packetHeaderOffset_, "packet_header_offset");
     spec.param(totalBlock_, "total_block");
     spec.param(partialBlock_, "partial_block");
     spec.param(offsetBlock_, "offset_block");
@@ -113,9 +120,11 @@ void AtaReceiverOp::start() {
     // Convert Parameters to variables.
 
     pimpl->totalBlock = totalBlock_.get();
+    pimpl->packetHeaderSize = packetHeaderSize_.get();
+    pimpl->packetHeaderOffset = packetHeaderOffset_.get();
     pimpl->partialBlock = partialBlock_.get();
     pimpl->offsetBlock = offsetBlock_.get();
-    pimpl->concurrentBlocks = concurrentBlocks_.get();
+    pimpl->maxConcurrentBlocks = maxConcurrentBlocks_.get();
     pimpl->outputPoolSize = outputPoolSize_.get();
     pimpl->enableCsvLogging = enableCsvLogging_.get();
 
@@ -157,7 +166,7 @@ void AtaReceiverOp::start() {
 
     // Allocate blocks.
 
-    for (uint64_t i = 0; i < pimpl->concurrentBlocks; i++) {
+    for (uint64_t i = 0; i < pimpl->maxConcurrentBlocks; i++) {
         pimpl->idleQueue.push(std::make_shared<Block>(pimpl->packetsPerBlock));
     }
 
@@ -208,32 +217,34 @@ void AtaReceiverOp::stop() {
     if (pimpl->metricsThread.joinable()) {
         pimpl->metricsThread.join();
     }
+
+    advanced_network::shutdown();
 }
 
 void AtaReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
-    auto burst = input.receive<std::shared_ptr<AdvNetBurstParams>>("burst_in").value();
-
-    if (!burst) {
+    BurstParams* burstPtr;
+    if (get_rx_burst(&burstPtr) != Status::SUCCESS) {
         return;
     }
+    auto burst = std::shared_ptr<BurstParams>(burstPtr, [](BurstParams*){});
 
     {
         std::lock_guard<std::mutex> lock(pimpl->burstCollectorMutex);
         pimpl->bursts.insert(burst);
     }
 
-    for (int64_t i = 0; i < adv_net_get_num_pkts(burst); i++) {
+    for (int64_t i = 0; i < get_num_packets(burst.get()); i++) {
         const auto& burstPacketIndex = i;
 
-        const auto* p = reinterpret_cast<uint8_t*>(adv_net_get_cpu_pkt_ptr(burst, burstPacketIndex));
-        const VoltagePacket packet(p + TransportHeaderSize);
+        const auto* p = reinterpret_cast<uint8_t*>(get_segment_packet_ptr(burst.get(), RX_HEADER, burstPacketIndex));
+        const VoltagePacket packet(p + pimpl->packetHeaderOffset);
 
         uint64_t antennaIndex = packet.antennaId;
         uint64_t channelIndex = packet.channelNumber;
 
         pimpl->allAntennas.insert(antennaIndex);
         pimpl->allChannels.insert(channelIndex);
-        pimpl->payloadSizes.insert(adv_net_get_gpu_pkt_len(burst, burstPacketIndex));
+        pimpl->payloadSizes.insert(get_segment_packet_length(burst.get(), RX_DATA, burstPacketIndex));
 
         antennaIndex -= pimpl->offsetBlock.numberOfAntennas;
         channelIndex -= pimpl->offsetBlock.numberOfChannels;
@@ -326,6 +337,8 @@ void AtaReceiverOp::Impl::releaseReceivedBlocks() {
         auto block = receiveQueue.front();
         receiveQueue.pop();
 
+        bool isStale = (latestBlockTimeIndex > block->index() + maxConcurrentBlocks);
+
         if (block->isComplete()) {
             blockMap.erase(block->index());
             std::shared_ptr<Tensor> tensor;
@@ -336,6 +349,11 @@ void AtaReceiverOp::Impl::releaseReceivedBlocks() {
             block->compute(tensor, totalBlock, partialBlock, slots);
             computeQueue.push(block);
             receivedBlocks += 1;
+        } else if (isStale) {
+            blockMap.erase(block->index());
+            block->destroy();
+            idleQueue.push(block);
+            lostBlocks += 1;
         } else {
             swapQueue.push(block);
         }
@@ -380,7 +398,7 @@ void AtaReceiverOp::Impl::burstCollectorLoop() {
         auto startTime = std::chrono::steady_clock::now();
 
         const auto numReleasedBursts = [&]{
-            std::unordered_set<std::shared_ptr<AdvNetBurstParams>> stale;
+            std::unordered_set<std::shared_ptr<BurstParams>> stale;
 
             {
                 std::lock_guard<std::mutex> lock(burstCollectorMutex);
@@ -396,7 +414,7 @@ void AtaReceiverOp::Impl::burstCollectorLoop() {
             }
 
             for (const auto& burst : stale) {
-                adv_net_free_all_burst_pkts_and_burst(burst);
+                free_all_packets_and_burst_rx(burst.get());
             }
 
             return stale.size();
@@ -451,7 +469,7 @@ void AtaReceiverOp::Impl::metricsLoop() {
         for (const auto& [time, _] : blockMap) {
             allBlockTimes.insert(time);
         }
-        HOLOSCAN_LOG_INFO("  Block Map : latest time index {}, usage {}/{}, all block times {}", latestBlockTimeIndex, allBlockTimes.size(), concurrentBlocks, allBlockTimes);
+        HOLOSCAN_LOG_INFO("  Block Map : latest time index {}, usage {}/{}, all block times {}", latestBlockTimeIndex, allBlockTimes.size(), maxConcurrentBlocks, allBlockTimes);
 
         HOLOSCAN_LOG_INFO("  Fine Packet Count:");
         HOLOSCAN_LOG_INFO("    Payload Sizes:   : {}", payloadSizes);

@@ -23,7 +23,7 @@ $ docker build -t stelline-base -f docker/Dockerfile-base .
 
 ### 3. Build demo container
 ```
-$ docker build -t stelline -f docker/Dockerfile .
+$ docker build -t stelline-dev -f docker/Dockerfile-dev .
 ```
 
 ### 4. Run the demo container
@@ -46,17 +46,8 @@ $ sudo docker run -it --rm -u root \
     -v $nvidia_icd_json:$nvidia_icd_json:ro \
     -e NVIDIA_DRIVER_CAPABILITIES=graphics,video,compute,utility,display \
     -e DISPLAY=$DISPLAY \
-    stelline
+    stelline-dev
 ```
 
-### 5. Compile
-Once inside the container, compile the library and the applications:
-```
-$ cd stelline
-$ meson -Dbuildtype=debugoptimized build
-$ cd build
-$ ninja
-```
-
-### 6. Fun!
-Now you can use the Stelline API to create your own application with `Bit` and `Operator` classes. Or, even better, use the `stelline` executable to run your recipes. Check out the recipes directory for examples.
+### 5. Fun!
+This will create a Jupyter Notebook with everything pre-installed for you. All you have to do is to navigate to `http://[SPARK-IP]:8888` and start exploring. Execute `stelline -h` in the command line for more information.

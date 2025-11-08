@@ -19,10 +19,6 @@ from stelline.operators._frbnn_ops import (
     SimpleDetectionOp,
 )
 
-from stelline.operators._advanced_network_ops import (
-    AdvNetworkOpRx,
-)
-
 __all__ = [
     "CorrelatorOp",
     "BeamformerOp",
@@ -40,5 +36,4 @@ __all__ = [
     "ModelAdapterOp",
     "ModelPostprocessorOp",
     "SimpleDetectionOp",
-    "AdvNetworkOpRx",
 ]

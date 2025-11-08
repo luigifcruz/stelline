@@ -111,7 +111,7 @@ void Uvh5WriterRdmaOp::start() {
             uvh5_header->ant_1_array[bl_index] = ant_1_num;
             uvh5_header->ant_2_array[bl_index] = ant_2_num;
             bl_index++;
-        } 
+        }
     }
 
 	UVH5Hadmin(uvh5_header);
@@ -157,7 +157,7 @@ void Uvh5WriterRdmaOp::start() {
 		uvh5_header->time_array[i] = uvh5_header->time_array[0];
 		uvh5_header->integration_time[i] = pimpl->tau;
 	}
-    
+
     // Set up HDF5 library.
 
     pimpl->faplId = H5Pcreate(H5P_FILE_ACCESS);
@@ -321,7 +321,7 @@ void Uvh5WriterRdmaOp::Impl::metricsLoop() {
         }
 
         HOLOSCAN_LOG_INFO("HDF5 Sink RDMA Operator:");
-        HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
+        HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps.load());
         HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
 
         std::this_thread::sleep_for(std::chrono::seconds(1));

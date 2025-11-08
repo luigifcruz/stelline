@@ -2,7 +2,7 @@
 layout: home
 hero:
   name: "Stelline"
-  text: "Software Defined Telescope"
+  text: "Software Defined Observatory"
   tagline: Run real-time radio astronomy pipelines on GPUs, NVMe, and RDMA fabrics.
   actions:
     - theme: brand

@@ -14,8 +14,9 @@ using namespace holoscan;
 class PyZmqTransmitterOp : public ZmqTransmitterOp {
 public:
     using ZmqTransmitterOp::ZmqTransmitterOp;
-    
-    PyZmqTransmitterOp(Fragment* fragment, const py::args& args,
+
+    PyZmqTransmitterOp(Fragment* fragment,
+                       const py::args& args,
                        const std::string& address,
                        const std::string& name = "zmq_transmitter")
         : ZmqTransmitterOp(ArgList{Arg("address", address)}) {

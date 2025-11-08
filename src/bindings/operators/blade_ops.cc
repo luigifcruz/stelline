@@ -17,7 +17,8 @@ class PyCorrelatorOp : public CorrelatorOp {
 public:
     using CorrelatorOp::CorrelatorOp;
 
-    PyCorrelatorOp(Fragment* fragment, const py::args& args,
+    PyCorrelatorOp(Fragment* fragment,
+                   const py::args& args,
                    uint64_t number_of_buffers,
                    const stelline::BlockShape& input_shape,
                    const stelline::BlockShape& output_shape,
@@ -38,7 +39,8 @@ class PyBeamformerOp : public BeamformerOp {
 public:
     using BeamformerOp::BeamformerOp;
 
-    PyBeamformerOp(Fragment* fragment, const py::args& args,
+    PyBeamformerOp(Fragment* fragment,
+                   const py::args& args,
                    uint64_t number_of_buffers,
                    const stelline::BlockShape& input_shape,
                    const stelline::BlockShape& output_shape,
@@ -59,7 +61,8 @@ class PyFrbnnOp : public FrbnnOp {
 public:
     using FrbnnOp::FrbnnOp;
 
-    PyFrbnnOp(Fragment* fragment, const py::args& args,
+    PyFrbnnOp(Fragment* fragment,
+              const py::args& args,
               uint64_t number_of_buffers,
               const stelline::BlockShape& input_shape,
               const stelline::BlockShape& output_shape,

@@ -1,10 +1,14 @@
+from typing import Any, Dict, Optional, Tuple
+
 from holoscan.core import Application, Resource
+
 from ..operators import BeamformerOp, CorrelatorOp, FrbnnOp
+from ..registry import register_bit
 from ..types import BlockShape
 from ..utils import logger
-from typing import Tuple, Dict, Any, Optional
 
 
+@register_bit("blade_bit")
 def BladeBit(
     app: Application,
     pool: Resource,
@@ -13,11 +17,11 @@ def BladeBit(
 ) -> Tuple[Any, Any]:
     cfg = app.kwargs(config)
 
-    input_shape_config = cfg["input_shape"]
-    output_shape_config = cfg["output_shape"]
-    mode = cfg["mode"]
-    number_of_buffers = cfg.get("number_of_buffers", 4)
-    options = cfg.get("options", {})
+    input_shape_config = cfg.get("input_shape")
+    output_shape_config = cfg.get("output_shape")
+    mode = cfg.get("mode")
+    number_of_buffers = cfg.get("number_of_buffers") or 4
+    options = cfg.get("options") or {}
 
     logger.info("Blade Configuration:")
     logger.info(f"  Input Shape: {input_shape_config}")
@@ -27,16 +31,16 @@ def BladeBit(
     logger.info(f"  Options: {options}")
 
     input_block_shape = BlockShape(
-        numberOfAntennas=input_shape_config["number_of_antennas"],
-        numberOfChannels=input_shape_config["number_of_channels"],
-        numberOfSamples=input_shape_config["number_of_samples"],
-        numberOfPolarizations=input_shape_config["number_of_polarizations"],
+        number_of_antennas=input_shape_config["number_of_antennas"],
+        number_of_channels=input_shape_config["number_of_channels"],
+        number_of_samples=input_shape_config["number_of_samples"],
+        number_of_polarizations=input_shape_config["number_of_polarizations"],
     )
     output_block_shape = BlockShape(
-        numberOfAntennas=output_shape_config["number_of_antennas"],
-        numberOfChannels=output_shape_config["number_of_channels"],
-        numberOfSamples=output_shape_config["number_of_samples"],
-        numberOfPolarizations=output_shape_config["number_of_polarizations"],
+        number_of_antennas=output_shape_config["number_of_antennas"],
+        number_of_channels=output_shape_config["number_of_channels"],
+        number_of_samples=output_shape_config["number_of_samples"],
+        number_of_polarizations=output_shape_config["number_of_polarizations"],
     )
 
     if mode == "correlator":
@@ -47,7 +51,7 @@ def BladeBit(
             number_of_buffers=number_of_buffers,
             input_shape=input_block_shape,
             output_shape=output_block_shape,
-            options=options,
+            options={k: str(v) for k, v in options.items()},
             name=blade_name,
         )
     elif mode == "beamformer":
@@ -58,7 +62,7 @@ def BladeBit(
             number_of_buffers=number_of_buffers,
             input_shape=input_block_shape,
             output_shape=output_block_shape,
-            options=options,
+            options={k: str(v) for k, v in options.items()},
             name=blade_name,
         )
     elif mode == "frbnn":
@@ -69,7 +73,7 @@ def BladeBit(
             number_of_buffers=number_of_buffers,
             input_shape=input_block_shape,
             output_shape=output_block_shape,
-            options=options,
+            options={k: str(v) for k, v in options.items()},
             name=blade_name,
         )
     else:

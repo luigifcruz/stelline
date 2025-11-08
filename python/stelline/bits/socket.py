@@ -5,10 +5,13 @@ Socket bits for Stelline pipeline
 from typing import Any, Tuple
 
 from holoscan.core import Application, Resource
+
 from ..operators import ZmqTransmitterOp
+from ..registry import register_bit
 from ..utils import logger
 
 
+@register_bit("socket_bit")
 def SocketBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any, Any]:
     """
     Create a socket bit for network communication.
@@ -30,8 +33,8 @@ def SocketBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any, A
         (input_operator, output_operator) tuple for connecting flows
     """
     cfg = app.kwargs(config)
-    address = cfg["address"]
-    bind_mode = cfg.get("bind_mode", False)
+    address = cfg.get("address")
+    bind_mode = cfg.get("bind_mode") or False
 
     logger.info("Socket Configuration:")
     logger.info(f"  Address: {address}")

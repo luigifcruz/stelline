@@ -3,7 +3,7 @@
 - Importance of hardware acceleration.
 - Structure overview (operators, bits, and recipes).
 
-## Software Defined Telescope
+## Software Defined Observatory
 
 - Concept
   - Placeholder for concise definition and elevator pitch.

@@ -149,7 +149,7 @@ void ZmqTransmitterOp::Impl::metricsLoop() {
         }
 
         HOLOSCAN_LOG_INFO("ZeroMQ Transmitter Operator:");
-        HOLOSCAN_LOG_INFO("  Input Bandwidth: {:.2f} MB/s", currentBandwidthMBps);
+        HOLOSCAN_LOG_INFO("  Input Bandwidth: {:.2f} MB/s", currentBandwidthMBps.load());
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }

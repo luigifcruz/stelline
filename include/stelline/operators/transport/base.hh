@@ -20,10 +20,6 @@ class STELLINE_API AtaReceiverOp : public Operator {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)
 
-    constexpr static const uint64_t TransportHeaderSize = 46;
-    constexpr static const uint64_t VoltageHeaderSize = 16;
-    constexpr static const uint64_t VoltageDataSize = 6144;
-
     ~AtaReceiverOp();
 
     void initialize() override;
@@ -39,7 +35,9 @@ class STELLINE_API AtaReceiverOp : public Operator {
     Parameter<BlockShape> totalBlock_;
     Parameter<BlockShape> partialBlock_;
     Parameter<BlockShape> offsetBlock_;
-    Parameter<uint64_t> concurrentBlocks_;
+    Parameter<uint64_t> maxConcurrentBlocks_;
+    Parameter<uint64_t> packetHeaderSize_;
+    Parameter<uint64_t> packetHeaderOffset_;
     Parameter<uint64_t> outputPoolSize_;
     Parameter<bool> enableCsvLogging_;
 };

@@ -1,32 +1,9 @@
-FROM nvcr.io/nvidia/clara-holoscan/holoscan:v2.4.0-dgpu
+FROM nvcr.io/nvidia/clara-holoscan/holoscan:v3.7.0-cuda12-dgpu
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-#
-# Add PPAs (cmake)
-#
-
-RUN apt update && \
-    apt install --no-install-recommends -y \
-        ca-certificates \
-        gpg \
-        wget \
-        && rm -rf /var/lib/apt/lists/*
-
-RUN test -f /usr/share/doc/kitware-archive-keyring/copyright || \
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
-    gpg --dearmor - | \
-    tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
-
-RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | \
-    tee /etc/apt/sources.list.d/kitware.list >/dev/null
-
-RUN apt update && \
-    apt install --no-install-recommends -y \
-        kitware-archive-keyring \
-        && rm -rf /var/lib/apt/lists/*
-
-RUN rm -fr $(whereis cmake)
+ENV PYTHONPATH="/usr/local/lib/python3/dist-packages:${PYTHONPATH}"
+ENV LD_LIBRARY_PATH="/opt/nvidia/holoscan/lib:${LD_LIBRARY_PATH}"
 
 #
 # Global Dependencies
@@ -36,6 +13,7 @@ RUN apt update && \
     apt install --no-install-recommends -y \
         python3-dev \
         python3-pip \
+        python3-pybind11 \
         build-essential \
         pkg-config \
         cmake \
@@ -43,23 +21,13 @@ RUN apt update && \
         g++-11 \
         gcc-11 \
         && rm -rf /var/lib/apt/lists/*
-RUN python3 -m pip install ninja
-RUN python3 -m pip install git+https://github.com/luigifcruz/meson.git@system-includes
+
+RUN python3 -m pip install --no-cache-dir ninja
+RUN python3 -m pip install --no-cache-dir git+https://github.com/luigifcruz/meson.git@system-includes
 
 #
-# Clone Holohub
+# Install ANO (transport)
 #
-
-RUN git clone https://github.com/nvidia-holoscan/holohub.git /workspace/holohub && \
-    cd /workspace/holohub && \
-    git checkout 2fe24a6f91824733c4f37d3a1267e332ce3de1d9 && \
-    git submodule update --init --recursive
-
-#
-# Advanced Network Operator
-#
-
-# Install DPDK (Advanced Network Dependency)
 
 RUN apt update && \
     apt install --no-install-recommends -y \
@@ -68,61 +36,52 @@ RUN apt update && \
         libnuma-dev \
         && rm -rf /var/lib/apt/lists/*
 
-RUN wget -q https://fast.dpdk.org/rel/dpdk-23.11.tar.xz && \
-    tar xf dpdk-23.11.tar.xz && \
-    cd dpdk-23.11/ && \
-    patch --ignore-whitespace --fuzz 3 \
-        drivers/gpu/cuda/devices.h \
-        /workspace/holohub/operators/advanced_network/dpdk_patches/devices.h.patch && \
-    patch --ignore-whitespace --fuzz 3 \
-        drivers/gpu/cuda/cuda.c \
-        /workspace/holohub/operators/advanced_network/dpdk_patches/cuda.c.patch && \
-    meson build -Dplatform=generic -Dc_args=-I/usr/local/cuda/include && \
+RUN wget -q https://fast.dpdk.org/rel/dpdk-24.11.3.tar.xz && \
+    tar xf dpdk-24.11.3.tar.xz && \
+    cd dpdk-stable-24.11.3/ && \
+    meson build -Dplatform=generic -Dmachine=generic && \
     ninja -C build install
 
-# Install Advanced Network Operator
-
-RUN apt update && \
-    apt install --no-install-recommends -y \
-        pkg-config \
-        && rm -rf /var/lib/apt/lists/*
-
-COPY ./docker/patches /workspace/patches
-RUN cd /workspace/holohub/operators/advanced_network && \
-    patch -p1 < /workspace/patches/adv_networking_install.patch && \
-    patch -p1 < /workspace/patches/adv_networking_multi.patch && \
-    patch -p1 < /workspace/patches/adv_networking_free.patch && \
-    rm -fr build && \
-    mkdir build && \
+RUN git clone https://github.com/luigifcruz/holoscan-networking.git && \
+    cd holoscan-networking && \
+    meson build && \
     cd build && \
-    cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release && \
     ninja install
 
 #
-# Install MatX
+# Install MatX (transport)
 #
 
-RUN git clone https://github.com/NVIDIA/MatX.git /workspace/MatX && \
-    cd /workspace/MatX && \
-    git checkout 419a1c3f840f64168b2a276b44e56cabfe7c36d9 && \
+RUN git clone https://github.com/NVIDIA/MatX.git
+RUN cd MatX && \
+    git checkout ad55c6b894f0fdef65294858d9561ba31baa8734 && \
     git submodule update --init --recursive && \
-    cp ./include/matx/core/dlpack.h /opt/nvidia/holoscan/include/3rdparty/dlpack/dlpack.h && \
-    mkdir build && cd build &&\
+    mkdir build && cd build && \
     cmake -DMATX_BUILD_DOCS=OFF .. && \
     make -j && \
     make install
 
 #
-# Install HDF5 and GDS-VFD
+# Install ZeroMQ (socket)
+#
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        libzmq3-dev \
+        cppzmq-dev \
+        && rm -rf /var/lib/apt/lists/*
+#
+# Install HDF5, FBH5, and UVH5 (filesystem)
 #
 
 RUN apt update && \
     apt install --no-install-recommends -y \
         libmpich-dev \
+        liberfa-dev \
         && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/HDFGroup/hdf5.git /workspace/hdf5 && \
-    cd /workspace/hdf5 && \
+RUN git clone https://github.com/HDFGroup/hdf5.git
+RUN cd hdf5 && \
     git checkout hdf5-1.14.6 && \
     git submodule update --init --recursive && \
     mkdir build && cd build && \
@@ -130,11 +89,89 @@ RUN git clone https://github.com/HDFGroup/hdf5.git /workspace/hdf5 && \
     make -j && \
     make install
 
-RUN git clone https://github.com/hpc-io/vfd-gds.git /workspace/vfd-gds && \
-    cd /workspace/vfd-gds && \
+RUN git clone https://github.com/hpc-io/vfd-gds.git
+RUN cd vfd-gds && \
     git checkout e33bae67a16238c2677f23abac76b9fe30b99869 && \
     git submodule update --init --recursive && \
-    mkdir build && cd build &&\
+    mkdir build && cd build && \
     cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_INSTALL_PREFIX:PATH=/usr -DBUILD_TESTING=OFF .. && \
     make -j && \
     make install
+
+RUN git clone https://github.com/MydonSolutions/filterbankc99.git
+RUN cd filterbankc99 \
+    && git checkout v1.5.0 \
+    && git submodule update --init --recursive \
+    && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja install
+
+RUN git clone https://github.com/MydonSolutions/uvh5c99.git
+RUN cd uvh5c99 \
+    && git checkout v0.9.0 \
+    && git submodule update --init --recursive \
+    && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja install
+
+#
+# Install CyberEther (cyberether)
+#
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        libxkbcommon-dev \
+        spirv-cross glslang-tools libglfw3-dev \
+        libvulkan-dev vulkan-validationlayers \
+        python3-yaml \
+        libgstreamer1.0-dev gstreamer1.0-libav \
+        gstreamer1.0-plugins-base libgstreamer-plugins-bad1.0-dev \
+        libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev \
+        gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+        libsoapysdr-dev soapysdr-module-rtlsdr soapysdr-module-uhd \
+        soapysdr-module-airspy soapysdr-module-lms7 soapysdr-tools \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/luigifcruz/CyberEther.git
+RUN cd CyberEther \
+    && git checkout 813c33d23905b053912b9fc3c7e26bce49f270a3 \
+    && rm -fr build \
+    && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja \
+    && ninja install
+
+#
+# Install BLADE (blade)
+#
+
+RUN apt update && \
+    apt install --no-install-recommends -y \
+        libbenchmark-dev libgtest-dev \
+        && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir numpy astropy pandas
+
+ENV NVCC_PREPEND_FLAGS='-ccbin g++-11'
+RUN git clone https://github.com/luigifcruz/blade.git
+RUN cd blade \
+    && git checkout v1.1 \
+    && git submodule update --init --recursive \
+    && rm -fr build \
+    && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja \
+    && ninja install
+
+#
+# Install Stelline
+#
+
+COPY . ./stelline
+RUN cd ./stelline \
+    && git submodule update --init --recursive \
+    && rm -fr build \
+    && meson setup -Dbuildtype=debugoptimized build \
+    && cd build \
+    && ninja \
+    && ninja install

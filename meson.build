@@ -10,8 +10,8 @@ project(
     ]
 )
 
+cuda = meson.get_compiler('cuda')
 is_static = get_option('default_library') == 'static'
-cuda_args = ['-arch', 'compute_70', '--expt-relaxed-constexpr', '-diag-suppress', '815']
 cdn_url = 'https://stelline.cdn.luigi.ltd/' + meson.project_version() + '/'
 
 cfg_lst = configuration_data({
@@ -19,6 +19,7 @@ cfg_lst = configuration_data({
     'build_type': get_option('buildtype'),
 })
 src_lst = []
+cuda_lst = []
 dep_lst = [
     dependency('cuda', version: '>=11', modules: ['cuda', 'culibos', 'cufile']),
 ]
@@ -28,7 +29,7 @@ inc_lst = [
 
 subdir('meson')
 subdir('src')
-subdir('resources')
+#subdir('resources')
 subdir('include')
 
 lib_stelline = library(
@@ -36,9 +37,19 @@ lib_stelline = library(
     src_lst,
     include_directories: inc_lst,
     dependencies: dep_lst,
+    link_with: static_library(
+        'stelline_device',
+        sources: cuda_lst,
+        include_directories: inc_lst,
+        cuda_args: [
+            '-Xcompiler=-fPIC',
+            '--expt-relaxed-constexpr',
+            '-arch', 'compute_80',
+            '-diag-suppress', '815'
+        ],
+    ),
     gnu_symbol_visibility: 'hidden',
     install: not is_static,
-    cuda_args: cuda_args,
 )
 
 lib_stelline_dep = declare_dependency(

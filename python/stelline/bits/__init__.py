@@ -1,8 +1,8 @@
 from stelline.bits.blade import BladeBit
 from stelline.bits.filesystem import FilesystemBit
-from stelline.bits.transport import TransportBit
+from stelline.bits.frbnn import FrbnnDetectionBit, FrbnnInferenceBit
 from stelline.bits.socket import SocketBit
-from stelline.bits.frbnn import FrbnnInferenceBit, FrbnnDetectionBit
+from stelline.bits.transport import TransportBit
 
 __all__ = [
     "BladeBit",

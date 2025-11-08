@@ -14,8 +14,9 @@ using namespace holoscan;
 class PyModelPreprocessorOp : public ModelPreprocessorOp {
 public:
     using ModelPreprocessorOp::ModelPreprocessorOp;
-    
-    PyModelPreprocessorOp(Fragment* fragment, const py::args& args,
+
+    PyModelPreprocessorOp(Fragment* fragment,
+                          const py::args& args,
                           const std::string& name = "model_preprocessor")
         : ModelPreprocessorOp() {
         name_ = name;
@@ -28,8 +29,9 @@ public:
 class PyModelAdapterOp : public ModelAdapterOp {
 public:
     using ModelAdapterOp::ModelAdapterOp;
-    
-    PyModelAdapterOp(Fragment* fragment, const py::args& args,
+
+    PyModelAdapterOp(Fragment* fragment,
+                     const py::args& args,
                      const std::string& name = "model_adapter")
         : ModelAdapterOp() {
         name_ = name;
@@ -42,8 +44,9 @@ public:
 class PyModelPostprocessorOp : public ModelPostprocessorOp {
 public:
     using ModelPostprocessorOp::ModelPostprocessorOp;
-    
-    PyModelPostprocessorOp(Fragment* fragment, const py::args& args,
+
+    PyModelPostprocessorOp(Fragment* fragment,
+                           const py::args& args,
                            const std::string& name = "model_postprocessor")
         : ModelPostprocessorOp() {
         name_ = name;
@@ -56,8 +59,9 @@ public:
 class PySimpleDetectionOp : public SimpleDetectionOp {
 public:
     using SimpleDetectionOp::SimpleDetectionOp;
-    
-    PySimpleDetectionOp(Fragment* fragment, const py::args& args,
+
+    PySimpleDetectionOp(Fragment* fragment,
+                        const py::args& args,
                         const std::string& csv_file_path,
                         const std::string& hits_directory,
                         const std::string& name = "simple_detection")

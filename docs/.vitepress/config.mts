@@ -3,7 +3,7 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
     title: "Stelline",
     titleTemplate: ":title - Stelline",
-    description: "Software Defined Telescope SDK",
+    description: "Software Defined Observatory SDK",
     cleanUrls: true,
     themeConfig: {
         outline: [2, 3],

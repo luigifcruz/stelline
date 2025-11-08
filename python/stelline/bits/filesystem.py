@@ -1,15 +1,19 @@
+from typing import Any, Tuple
+
 from holoscan.core import Application, Resource
+
 from ..operators import (
     DummyWriterOp,
+    Fbh5WriterRdmaOp,
     SimpleWriterOp,
     SimpleWriterRdmaOp,
-    Fbh5WriterRdmaOp,
     Uvh5WriterRdmaOp,
 )
+from ..registry import register_bit
 from ..utils import logger
-from typing import Tuple, Any
 
 
+@register_bit("filesystem_bit")
 def FilesystemBit(
     app: Application,
     pool: Resource,
@@ -17,8 +21,8 @@ def FilesystemBit(
     config: str,
 ) -> Tuple[Any, Any]:
     cfg = app.kwargs(config)
-    mode = cfg["mode"]
-    file_path = cfg.get("file_path", "./file.bin")
+    mode = cfg.get("mode")
+    file_path = cfg.get("file_path") or "./file.bin"
 
     logger.info("Filesystem Configuration:")
     logger.info(f"  Mode: {mode}")
@@ -57,9 +61,9 @@ def FilesystemBit(
         )
     elif mode == "uvh5_writer_rdma":
         writer_name = f"filesystem-uvh5-writer-rdma-{id}"
-        telinfo_file_path = cfg["telinfo_file_path"]
-        obsantinfo_file_path = cfg["obsantinfo_file_path"]
-        iers_file_path = cfg["iers_file_path"]
+        telinfo_file_path = cfg.get("telinfo_file_path")
+        obsantinfo_file_path = cfg.get("obsantinfo_file_path")
+        iers_file_path = cfg.get("iers_file_path")
         logger.info(f"  Telinfo Path: {telinfo_file_path}")
         logger.info(f"  Obsantinfo Path: {obsantinfo_file_path}")
         logger.info(f"  IERS Path: {iers_file_path}")

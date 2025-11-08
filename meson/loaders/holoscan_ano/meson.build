@@ -1,13 +1,5 @@
 deps = [
-    dependency(
-        'AdvancedNetwork',
-        method : 'cmake',
-        modules: [
-            'holoscan::ops::advanced_network_common',
-            'holoscan::ops::advanced_network_rx',
-        ],
-        required: false,
-    ),
+    dependency('holoscan-networking', required: false),
 ]
 
 all_deps_found = true
