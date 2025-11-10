@@ -27,7 +27,13 @@ class XarrayZarrReaderOperator(Operator):
         super().__init__(fragment, *args, **kwargs)
     
     def setup(self, spec: OperatorSpec):
-        spec.output("output")
+        spec.output("UVW")
+        spec.output("VISIBILITY")
+        spec.output("WEIGHT")
+        spec.output("FLAG")
+        spec.output("FREQ")
+        spec.output("time")
+        # TODO - pass Jones solutions
     
     def start(self):
         dz = xr.open_datatree(
@@ -61,14 +67,13 @@ class XarrayZarrReaderOperator(Operator):
             {'time': slice(self.current_index, self.current_index+1)},  # could use larger chunks
         )
         
-        # Transfer variales required for imaging to GPU
-        image_vars = ['UVW', 'VISIBILITY', 'WEIGHT', 'FLAG', 'time']
-        output = {'FREQ': self.frequencies}
-        for var in image_vars:
-            output[var] = hs.as_tensor(cp.asarray(ds_slice[var].values))
-        
-        # Emit dict of tensors
-        op_output.emit(output, "output")
+        # Emit individual tensors (dict did not work?)
+        op_output.emit(hs.as_tensor(cp.asarray(ds_slice['UVW'].values)), "UVW")
+        op_output.emit(hs.as_tensor(cp.asarray(ds_slice['VISIBILITY'].values)), "VISIBILITY")
+        op_output.emit(hs.as_tensor(cp.asarray(ds_slice['WEIGHT'].values)), "WEIGHT")
+        op_output.emit(hs.as_tensor(cp.asarray(ds_slice['FLAG'].values)), "FLAG")
+        op_output.emit(self.frequencies, "FREQ")
+        op_output.emit(hs.as_tensor(cp.asarray(ds_slice['time'].values)), "time")
         
         self.current_index += 1
     
@@ -104,24 +109,35 @@ class CoreAlgorithmOperator(Operator):
             raise NotImplementedError
 
     def setup(self, spec: OperatorSpec):
-        spec.input("input")
-        spec.output("output")
+        spec.input("UVW")
+        spec.input("VISIBILITY")
+        spec.input("WEIGHT")
+        spec.input("FLAG")
+        spec.input("FREQ")
+        spec.input("time")
+        
+        spec.output("cube")
+        spec.output("time_out")
+        spec.output("freq_out")
     
     def compute(self, op_input, op_output, context):
         # Receive tensor (GPU pointer)
-        input_tensor = op_input.receive("input")
+        uvw = cp.asarray(op_input.receive("UVW"))
+        vis = cp.asarray(op_input.receive("VISIBILITY"))
+        wgt = cp.asarray(op_input.receive("WEIGHT"))
+        flag = cp.asarray(op_input.receive("FLAG"))
+        freq = cp.asarray(op_input.receive("FREQ"))
+        time = cp.asarray(op_input.receive("time"))
         
-        # Get cupy view (no copy, just pointer)
-        image_vars = {}
-        for key, val in input_tensor.items():
-            image_vars[key] = cp.asarray(val)
+        # Core algorithm here. This all on seems to happen in the GPU
+        cube, time_out, freq_out = self._process_on_gpu(
+            uvw, vis, wgt, flag, freq, time
+        )
+
+        op_output.emit(hs.as_tensor(cube), "cube")
+        op_output.emit(hs.as_tensor(time_out), "time_out")
+        op_output.emit(hs.as_tensor(freq_out), "freq_out")
         
-        # Your core algorithm here - all on GPU
-        result = self._process_on_gpu(image_vars)
-        
-        # not sure of hs.as_tensor is required (Claude recommendation)
-        # in general there will be more than one image in the output (e.g. the PSF, BEAM etc.)
-        op_output.emit(result, "output")
 
     def _corr_to_stokes(self, vis, wgt):
         # this can actually be done analytically including Jones matrix application
@@ -130,19 +146,19 @@ class CoreAlgorithmOperator(Operator):
         return stokes_vis, cp.diag(stokes_wgt)  # keep only diagonal wgt
 
     
-    def _process_on_gpu(self, image_vars: dict[cp.ndarray]) -> cp.ndarray:
+    def _process_on_gpu(self,
+                        uvw: cp.ndarray,
+                        vis: cp.ndarray,
+                        wgt: cp.ndarray,
+                        flag: cp.ndarray,
+                        freqs: cp.ndarray,
+                        times: cp.ndarray,
+                        ) -> cp.ndarray:
         """
         Eventually need to duplicate functionality here
 
         https://github.com/ratt-ru/pfb-imaging/blob/main/pfb/utils/stokes2im.py
         """
-        # Example processing
-        uvw = image_vars['UVW']
-        vis = image_vars['VISIBILITY']
-        wgt = image_vars['WEIGHT']
-        flag = image_vars['FLAG']
-        freqs = image_vars['FREQ']
-        times = image_vars['time']
         # currently assume reduction over time and freq
         time_out = cp.mean(times, keepdims=True)
         freq_out = cp.mean(freqs, keepdims=True)
@@ -175,12 +191,7 @@ class CoreAlgorithmOperator(Operator):
         res /= n
         # axes placeholders
         res = res[:, None, None, :, :]
-        out_dict = {
-            'cube': hs.as_tensor(res),
-            'time_out': hs.as_tensor(time_out),
-            'freq_out':hs.as_tensor(freq_out)
-        }
-        return out_dict
+        return res, time_out, freq_out
 
 
 class ResultWriterOperator(Operator):
@@ -243,13 +254,14 @@ class ResultWriterOperator(Operator):
         ds.to_zarr(self.output_dataset, mode='w', compute=True)
 
     def setup(self, spec: OperatorSpec):
-        spec.input("input")
+        spec.input("cube")
+        spec.input("time_out")
+        spec.input("freq_out")
     
     def compute(self, op_input, op_output, context):
-        result_dict = op_input.receive("input")
-        cube = cp.asnumpy(cp.asarray(result_dict['cube']))
-        freq_out = cp.asnumpy(cp.asarray(result_dict['freq_out']))
-        time_out = cp.asnumpy(cp.asarray(result_dict['time_out']))
+        cube = cp.asnumpy(cp.asarray(op_input.receive("cube")))
+        freq_out = cp.asnumpy(cp.asarray(op_input.receive('freq_out')))
+        time_out = cp.asnumpy(cp.asarray(op_input.receive('time_out')))
         
         # these allow us to use region=auto
         coords = {
@@ -352,8 +364,15 @@ class StreamingPipeline(hs.core.Application):
         )
         
         # Connect the pipeline
-        self.add_flow(reader, algorithm, {("output", "input")})
-        self.add_flow(algorithm, writer, {("output", "input")})
+        self.add_flow(reader, algorithm, {("UVW", "UVW"),
+                                          ("VISIBILITY", "VISIBILITY"),
+                                          ("WEIGHT", "WEIGHT"),
+                                          ("FLAG", "FLAG"),
+                                          ("FREQ", "FREQ"),
+                                          ("time", "time")})
+        self.add_flow(algorithm, writer, {("cube", "cube"),
+                                          ("time_out", "time_out"),
+                                          ("freq_out", "freq_out")})
 
 
 if __name__ == "__main__":
