@@ -212,13 +212,22 @@ class Dispatcher {
         return Result::SUCCESS;
     };
 
-    void metrics() {
-        HOLOSCAN_LOG_INFO("  Queueing Statistics:");
-        HOLOSCAN_LOG_INFO("    Successful Enqueues: {}", numberOfSuccessfulEnqueues);
-        HOLOSCAN_LOG_INFO("    Successful Dequeues: {}", numberOfSuccessfulDequeues);
-        HOLOSCAN_LOG_INFO("    Full Enqueues: {}", numberOfFullEnqueues);
-        HOLOSCAN_LOG_INFO("    Dequeue Retries: {}", numberOfDequeueRetries);
-        HOLOSCAN_LOG_INFO("    Premature Dequeues: {}", numberOfPrematureDequeues);
+    struct Metrics {
+        U64 successfulEnqueues;
+        U64 successfulDequeues;
+        U64 fullEnqueues;
+        U64 dequeueRetries;
+        U64 prematureDequeues;
+    };
+
+    Metrics metrics() const {
+        return {
+            numberOfSuccessfulEnqueues,
+            numberOfSuccessfulDequeues,
+            numberOfFullEnqueues,
+            numberOfDequeueRetries,
+            numberOfPrematureDequeues
+        };
     }
 
  private:

@@ -1,6 +1,9 @@
 #include <stelline/types.hh>
 #include <stelline/operators/transport/base.hh>
 #include <stelline/utils/juggler.hh>
+#include <fmt/format.h>
+#include <fmt/ranges.h>
+#include <vector>
 
 #include <matx.h>
 #include <advanced_network/common.h>
@@ -53,10 +56,6 @@ struct AtaReceiverOp::Impl {
     Juggler<holoscan::Tensor> blockTensorPool;
 
     // Metrics.
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 
     uint64_t lostPackets;
     uint64_t receivedPackets;
@@ -164,18 +163,24 @@ void AtaReceiverOp::start() {
     pimpl->packetDuration = pimpl->partialBlock.numberOfSamples;
     pimpl->blockDuration = pimpl->slots.numberOfSamples * pimpl->packetDuration;
 
+    pimpl->lostPackets = 0;
+    pimpl->receivedPackets = 0;
+    pimpl->evictedPackets = 0;
+    pimpl->receivedBlocks = 0;
+    pimpl->computedBlocks = 0;
+    pimpl->lostBlocks = 0;
+    pimpl->allAntennas.clear();
+    pimpl->allChannels.clear();
+    pimpl->payloadSizes.clear();
+    pimpl->filteredAntennas.clear();
+    pimpl->filteredChannels.clear();
+    pimpl->avgBurstReleaseTime = std::chrono::microseconds(0);
+
     // Allocate blocks.
 
     for (uint64_t i = 0; i < pimpl->maxConcurrentBlocks; i++) {
         pimpl->idleQueue.push(std::make_shared<Block>(pimpl->packetsPerBlock));
     }
-
-    // Start reporting thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
 
     // Start burst collector thread.
 
@@ -209,13 +214,6 @@ void AtaReceiverOp::stop() {
     pimpl->burstCollectorThreadRunning = false;
     if (pimpl->burstCollectorThread.joinable()) {
         pimpl->burstCollectorThread.join();
-    }
-
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
     }
 
     advanced_network::shutdown();
@@ -431,74 +429,77 @@ void AtaReceiverOp::Impl::burstCollectorLoop() {
     }
 }
 
-void AtaReceiverOp::Impl::metricsLoop() {
-    std::ofstream file;
-
-    if (enableCsvLogging) {
-        file.open("./TRANSPORT-RUN.csv", std::ios::out);
-        std::string csv_header = fmt::format(
-            "{},{},{},{},{},{},{},{},{},{},{}\n",
-            "UNIX Timestamp",
-            "Received Blocks",
-            "Computed Blocks",
-            "Lost Blocks",
-            "Bursts",
-            "Avg Burst Release Time",
-            "Available Blocks",
-            "Idle Queue",
-            "Receive Queue",
-            "Compute Queue",
-            "Latest Block Timestamp"
-        );
-        file.write(csv_header.c_str(), csv_header.size());
-        file.flush();
+stelline::StoreInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
+    std::vector<uint64_t> blockTimes;
+    blockTimes.reserve(pimpl->blockMap.size());
+    for (const auto& [time, _] : pimpl->blockMap) {
+        blockTimes.push_back(time);
     }
 
-    while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Transport Operator:");
-        HOLOSCAN_LOG_INFO("  Blocks    : {} received, {} computed, {} lost", receivedBlocks, computedBlocks, lostBlocks);
-        HOLOSCAN_LOG_INFO("  Packets   : {} evicted, {} received, {} lost", evictedPackets, receivedPackets, lostPackets);
-        HOLOSCAN_LOG_INFO("  In-Flight : {} idle, {} receive, {} compute", idleQueue.size(), receiveQueue.size(), computeQueue.size());
-        HOLOSCAN_LOG_INFO("  Bursts    : {} in-flight, {} us average per-burst release time", bursts.size(), avgBurstReleaseTime.count());
-        HOLOSCAN_LOG_INFO("  Mem Pool  : {} available, {} referenced", blockTensorPool.available(), blockTensorPool.referenced());
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["blocks_received"] = fmt::format("{}", pimpl->receivedBlocks);
+    metrics["blocks_computed"] = fmt::format("{}", pimpl->computedBlocks);
+    metrics["blocks_lost"] = fmt::format("{}", pimpl->lostBlocks);
+    metrics["packets_evicted"] = fmt::format("{}", pimpl->evictedPackets);
+    metrics["packets_received"] = fmt::format("{}", pimpl->receivedPackets);
+    metrics["packets_lost"] = fmt::format("{}", pimpl->lostPackets);
+    metrics["idle_queue"] = fmt::format("{}", pimpl->idleQueue.size());
+    metrics["receive_queue"] = fmt::format("{}", pimpl->receiveQueue.size());
+    metrics["compute_queue"] = fmt::format("{}", pimpl->computeQueue.size());
+    metrics["bursts_in_flight"] = fmt::format("{}", pimpl->bursts.size());
+    metrics["avg_burst_release_time_us"] = fmt::format("{}", pimpl->avgBurstReleaseTime.count());
+    metrics["mem_pool_available"] = fmt::format("{}", pimpl->blockTensorPool.available());
+    metrics["mem_pool_referenced"] = fmt::format("{}", pimpl->blockTensorPool.referenced());
+    metrics["block_map_latest_time_index"] = fmt::format("{}", pimpl->latestBlockTimeIndex);
+    metrics["block_map_usage"] = fmt::format("{}/{}", pimpl->blockMap.size(), pimpl->maxConcurrentBlocks);
+    metrics["block_map_times"] = fmt::format("[{}]", fmt::join(blockTimes, ","));
+    metrics["payload_sizes"] = fmt::format("[{}]", fmt::join(pimpl->payloadSizes, ","));
+    metrics["all_antennas"] = fmt::format("[{}]", fmt::join(pimpl->allAntennas, ","));
+    metrics["filtered_antennas"] = fmt::format("[{}]", fmt::join(pimpl->filteredAntennas, ","));
+    metrics["all_channels"] = fmt::format("[{}]", fmt::join(pimpl->allChannels, ","));
+    metrics["filtered_channels"] = fmt::format("[{}]", fmt::join(pimpl->filteredChannels, ","));
+    metrics["latest_timestamp"] = fmt::format("{}", pimpl->latestTimestamp);
 
-        std::set<uint64_t> allBlockTimes;
-        for (const auto& [time, _] : blockMap) {
-            allBlockTimes.insert(time);
-        }
-        HOLOSCAN_LOG_INFO("  Block Map : latest time index {}, usage {}/{}, all block times {}", latestBlockTimeIndex, allBlockTimes.size(), maxConcurrentBlocks, allBlockTimes);
+    return metrics;
+}
 
-        HOLOSCAN_LOG_INFO("  Fine Packet Count:");
-        HOLOSCAN_LOG_INFO("    Payload Sizes:   : {}", payloadSizes);
-        HOLOSCAN_LOG_INFO("    All antennas     : {}", allAntennas);
-        HOLOSCAN_LOG_INFO("    Filtered antennas: {}", filteredAntennas);
-        HOLOSCAN_LOG_INFO("    All channels     : {}", allChannels);
-        HOLOSCAN_LOG_INFO("    Filtered channels: {}", filteredChannels);
-
-        if (enableCsvLogging) {
-            const auto p1 = std::chrono::system_clock::now();
-            const auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(p1.time_since_epoch()).count();
-
-            std::string csv_line = fmt::format(
-                "{},{},{},{},{},{},{},{},{},{},{}\n",
-                timestamp,
-                receivedBlocks,
-                computedBlocks,
-                lostBlocks,
-                bursts.size(),
-                avgBurstReleaseTime.count(),
-                blockTensorPool.available(),
-                idleQueue.size(),
-                receiveQueue.size(),
-                computeQueue.size(),
-                latestTimestamp
-            );
-            file.write(csv_line.c_str(), csv_line.size());
-            file.flush();
-        }
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+std::string AtaReceiverOp::collectMetricsString() {
+    const auto metrics = collectMetricsMap();
+    return fmt::format(
+        "Transport Operator:\n"
+        "  Blocks    : {} received, {} computed, {} lost\n"
+        "  Packets   : {} evicted, {} received, {} lost\n"
+        "  In-Flight : {} idle, {} receive, {} compute\n"
+        "  Bursts    : {} in-flight, {} us average per-burst release time\n"
+        "  Mem Pool  : {} available, {} referenced\n"
+        "  Block Map : latest time index {}, usage {}, all block times {}\n"
+        "  Fine Packet Count:\n"
+        "    Payload Sizes    : {}\n"
+        "    All antennas     : {}\n"
+        "    Filtered antennas: {}\n"
+        "    All channels     : {}\n"
+        "    Filtered channels: {}",
+        metrics.at("blocks_received"),
+        metrics.at("blocks_computed"),
+        metrics.at("blocks_lost"),
+        metrics.at("packets_evicted"),
+        metrics.at("packets_received"),
+        metrics.at("packets_lost"),
+        metrics.at("idle_queue"),
+        metrics.at("receive_queue"),
+        metrics.at("compute_queue"),
+        metrics.at("bursts_in_flight"),
+        metrics.at("avg_burst_release_time_us"),
+        metrics.at("mem_pool_available"),
+        metrics.at("mem_pool_referenced"),
+        metrics.at("block_map_latest_time_index"),
+        metrics.at("block_map_usage"),
+        metrics.at("block_map_times"),
+        metrics.at("payload_sizes"),
+        metrics.at("all_antennas"),
+        metrics.at("filtered_antennas"),
+        metrics.at("all_channels"),
+        metrics.at("filtered_channels"));
 }
 
 }  // namespace stelline::operators::transport

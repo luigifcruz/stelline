@@ -5,6 +5,7 @@
 
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
+#include <fmt/format.h>
 
 #include "utils/helpers.hh"
 #include "utils/modifiers.hh"
@@ -29,10 +30,6 @@ struct SimpleWriterOp::Impl {
     std::chrono::time_point<std::chrono::steady_clock> lastMeasurementTime;
     std::atomic<int64_t> bytesSinceLastMeasurement{0};
     std::atomic<double> currentBandwidthMBps{0.0};
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 };
 
 void SimpleWriterOp::initialize() {
@@ -73,24 +70,10 @@ void SimpleWriterOp::start() {
     pimpl->lastMeasurementTime = std::chrono::steady_clock::now();
     pimpl->currentBandwidthMBps = 0.0;
 
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
-
     HOLOSCAN_LOG_INFO("Successfully opened file '{}'.", pimpl->filePath);
 }
 
 void SimpleWriterOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
-
     // Deallocate host bounce buffer.
 
     if (pimpl->bounceBuffer != nullptr) {
@@ -151,23 +134,29 @@ void SimpleWriterOp::compute(InputContext& input, OutputContext&, ExecutionConte
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-void SimpleWriterOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        auto now = std::chrono::steady_clock::now();
-        auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
+stelline::StoreInterface::MetricsMap SimpleWriterOp::collectMetricsMap() {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
 
-        if (elapsedSeconds > 0.0) {
-            int64_t bytes = bytesSinceLastMeasurement.exchange(0);
-            currentBandwidthMBps = static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsedSeconds;
-            lastMeasurementTime = now;
-        }
-
-        HOLOSCAN_LOG_INFO("Simple Writer Operator:");
-        HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps.load());
-        HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    if (elapsedSeconds > 0.0) {
+        int64_t bytes = pimpl->bytesSinceLastMeasurement.exchange(0);
+        pimpl->currentBandwidthMBps = static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsedSeconds;
+        pimpl->lastMeasurementTime = now;
     }
+
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
+    metrics["total_data_written_mb"] = fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0));
+    return metrics;
+}
+
+std::string SimpleWriterOp::collectMetricsString() {
+    const auto metrics = collectMetricsMap();
+    return fmt::format("Simple Writer Operator:\n"
+                       "  Current Bandwidth: {} MB/s\n"
+                       "  Total Data Written: {} MB",
+                       metrics.at("current_bandwidth_mb_s"),
+                       metrics.at("total_data_written_mb"));
 }
 
 }  // namespace stelline::operators::filesystem

@@ -24,10 +24,6 @@ struct ZmqTransmitterOp::Impl {
     std::chrono::time_point<std::chrono::steady_clock> lastMeasurementTime;
     std::atomic<int64_t> bytesSinceLastMeasurement{0};
     std::atomic<double> currentBandwidthMBps{0.0};
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 };
 
 void ZmqTransmitterOp::initialize() {
@@ -65,13 +61,6 @@ void ZmqTransmitterOp::start() {
     pimpl->lastMeasurementTime = std::chrono::steady_clock::now();
     pimpl->currentBandwidthMBps = 0.0;
 
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
-
     // Initialize ZeroMQ context and socket.
 
     pimpl->context = zmq::context_t(1);
@@ -88,13 +77,6 @@ void ZmqTransmitterOp::start() {
 }
 
 void ZmqTransmitterOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
-
     // Deallocate host bounce buffer.
 
     if (pimpl->bounceBuffer != nullptr) {
@@ -137,22 +119,29 @@ void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-void ZmqTransmitterOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        auto now = std::chrono::steady_clock::now();
-        auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
+stelline::StoreInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
 
-        if (elapsedSeconds > 0.0) {
-            int64_t bytes = bytesSinceLastMeasurement.exchange(0);
-            currentBandwidthMBps = static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsedSeconds;
-            lastMeasurementTime = now;
-        }
-
-        HOLOSCAN_LOG_INFO("ZeroMQ Transmitter Operator:");
-        HOLOSCAN_LOG_INFO("  Input Bandwidth: {:.2f} MB/s", currentBandwidthMBps.load());
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+    if (elapsedSeconds > 0.0) {
+        int64_t bytes = pimpl->bytesSinceLastMeasurement.exchange(0);
+        pimpl->currentBandwidthMBps = static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsedSeconds;
+        pimpl->lastMeasurementTime = now;
     }
+
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
+    metrics["total_bytes_written"] = fmt::format("{}", pimpl->bytesWritten);
+    return metrics;
+}
+
+std::string ZmqTransmitterOp::collectMetricsString() {
+    const auto metrics = collectMetricsMap();
+    return fmt::format("ZeroMQ Transmitter Operator:\n"
+                       "  Input Bandwidth: {} MB/s\n"
+                       "  Total Bytes Written: {}",
+                       metrics.at("current_bandwidth_mb_s"),
+                       metrics.at("total_bytes_written"));
 }
 
 }  // namespace stelline::operators::socket

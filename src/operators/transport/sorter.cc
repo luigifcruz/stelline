@@ -1,5 +1,6 @@
 #include <stelline/types.hh>
 #include <stelline/operators/transport/base.hh>
+#include <fmt/format.h>
 
 #include "types.hh"
 #include "block.hh"
@@ -17,10 +18,6 @@ struct SorterOp::Impl {
     std::unordered_map<uint64_t, std::shared_ptr<holoscan::Tensor>> pool;
 
     // Metrics.
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 
     uint64_t numberOfRejectedBlocks = 0;
 };
@@ -58,22 +55,9 @@ void SorterOp::start() {
         HOLOSCAN_LOG_ERROR("Sorter depth must be greater than 0.");
         throw std::runtime_error("Parameter error.");
     }
-
-    // Start reporting thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
 }
 
 void SorterOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
 }
 
 void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -119,13 +103,20 @@ void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionCont
     }
 }
 
-void SorterOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Sorter Operator:");
-        HOLOSCAN_LOG_INFO("  Number of Rejected Blocks: {}", numberOfRejectedBlocks);
+stelline::StoreInterface::MetricsMap SorterOp::collectMetricsMap() {
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["rejected_blocks"] = fmt::format("{}", pimpl->numberOfRejectedBlocks);
+    metrics["pool_size"] = fmt::format("{}", pimpl->pool.size());
+    return metrics;
+}
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+std::string SorterOp::collectMetricsString() {
+    const auto metrics = collectMetricsMap();
+    return fmt::format("Sorter Operator:\n"
+                       "  Number of Rejected Blocks: {}\n"
+                       "  Pool Size: {}",
+                       metrics.at("rejected_blocks"),
+                       metrics.at("pool_size"));
 }
 
 }  // namespace stelline::operators::transport

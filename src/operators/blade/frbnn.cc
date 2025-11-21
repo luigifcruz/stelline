@@ -7,6 +7,7 @@
 
 #include <stelline/operators/blade/base.hh>
 #include <stelline/types.hh>
+#include <fmt/format.h>
 
 #include "utils/dispatcher.hh"
 
@@ -177,12 +178,6 @@ struct FrbnnOp::Impl {
     Dispatcher dispatcher;
     OpFrbnnPipeline::Config config;
     std::shared_ptr<OpFrbnnPipeline> pipeline;
-
-    // Metrics.
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 };
 
 void FrbnnOp::initialize() {
@@ -265,22 +260,9 @@ void FrbnnOp::start() {
 
     // TODO: Make number of buffers configurable.
     pimpl->dispatcher.template initialize<F32>(pimpl->numberOfBuffers, pimpl->config.outputShape);
-
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
 }
 
 void FrbnnOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
 }
 
 void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -312,13 +294,32 @@ void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionConte
     }
 }
 
-void FrbnnOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Frbnn Operator:");
-        dispatcher.metrics();
+stelline::StoreInterface::MetricsMap FrbnnOp::collectMetricsMap() {
+    const auto stats = pimpl->dispatcher.metrics();
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["successful_enqueues"] = fmt::format("{}", stats.successfulEnqueues);
+    metrics["successful_dequeues"] = fmt::format("{}", stats.successfulDequeues);
+    metrics["full_enqueues"] = fmt::format("{}", stats.fullEnqueues);
+    metrics["dequeue_retries"] = fmt::format("{}", stats.dequeueRetries);
+    metrics["premature_dequeues"] = fmt::format("{}", stats.prematureDequeues);
+    return metrics;
+}
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+std::string FrbnnOp::collectMetricsString() {
+    const auto metrics = collectMetricsMap();
+    return fmt::format(
+        "Frbnn Operator:\n"
+        "  Queueing Statistics:\n"
+        "    Successful Enqueues: {}\n"
+        "    Successful Dequeues: {}\n"
+        "    Full Enqueues: {}\n"
+        "    Dequeue Retries: {}\n"
+        "    Premature Dequeues: {}",
+        metrics.at("successful_enqueues"),
+        metrics.at("successful_dequeues"),
+        metrics.at("full_enqueues"),
+        metrics.at("dequeue_retries"),
+        metrics.at("premature_dequeues"));
 }
 
 }  // namespace stelline::operators::blade

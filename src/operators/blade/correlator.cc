@@ -3,6 +3,7 @@
 
 #include <stelline/operators/blade/base.hh>
 #include <stelline/types.hh>
+#include <fmt/format.h>
 
 #include "utils/dispatcher.hh"
 
@@ -63,12 +64,6 @@ struct CorrelatorOp::Impl {
     Dispatcher dispatcher;
     OpCorrelatorPipeline::Config config;
     std::shared_ptr<OpCorrelatorPipeline> pipeline;
-
-    // Metrics.
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 };
 
 void CorrelatorOp::initialize() {
@@ -151,22 +146,9 @@ void CorrelatorOp::start() {
 
     // TODO: Make number of buffers configurable.
     pimpl->dispatcher.template initialize<CF32>(pimpl->numberOfBuffers, pimpl->config.outputShape);
-
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
 }
 
 void CorrelatorOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
 }
 
 void CorrelatorOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
@@ -198,13 +180,32 @@ void CorrelatorOp::compute(InputContext& input, OutputContext& output, Execution
     }
 }
 
-void CorrelatorOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Correlator Operator:");
-        dispatcher.metrics();
+stelline::StoreInterface::MetricsMap CorrelatorOp::collectMetricsMap() {
+    const auto stats = pimpl->dispatcher.metrics();
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["successful_enqueues"] = fmt::format("{}", stats.successfulEnqueues);
+    metrics["successful_dequeues"] = fmt::format("{}", stats.successfulDequeues);
+    metrics["full_enqueues"] = fmt::format("{}", stats.fullEnqueues);
+    metrics["dequeue_retries"] = fmt::format("{}", stats.dequeueRetries);
+    metrics["premature_dequeues"] = fmt::format("{}", stats.prematureDequeues);
+    return metrics;
+}
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+std::string CorrelatorOp::collectMetricsString() {
+    const auto metrics = collectMetricsMap();
+    return fmt::format(
+        "Correlator Operator:\n"
+        "  Queueing Statistics:\n"
+        "    Successful Enqueues: {}\n"
+        "    Successful Dequeues: {}\n"
+        "    Full Enqueues: {}\n"
+        "    Dequeue Retries: {}\n"
+        "    Premature Dequeues: {}",
+        metrics.at("successful_enqueues"),
+        metrics.at("successful_dequeues"),
+        metrics.at("full_enqueues"),
+        metrics.at("dequeue_retries"),
+        metrics.at("premature_dequeues"));
 }
 
 }  // namespace stelline::operators::blade

@@ -1,5 +1,6 @@
 #include <stelline/types.hh>
 #include <stelline/operators/frbnn/base.hh>
+#include <fmt/format.h>
 
 using namespace gxf;
 using namespace holoscan;
@@ -84,12 +85,6 @@ struct SimpleDetectionOp::Impl {
     std::string hitsDirectory;
     void* outputHostBuffer;
     void* hitsHostBuffer;
-
-    // Metrics.
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 };
 
 void SimpleDetectionOp::initialize() {
@@ -129,23 +124,9 @@ void SimpleDetectionOp::start() {
 
     // Create stream.
     cudaStreamCreateWithFlags(&pimpl->stream, cudaStreamNonBlocking);
-
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
 }
 
 void SimpleDetectionOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
-
     // Free host buffers.
 
     if (pimpl->outputHostBuffer != nullptr) {
@@ -228,14 +209,20 @@ void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionCo
     }
 }
 
-void SimpleDetectionOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Simple Detector Operator:");
-        HOLOSCAN_LOG_INFO("  Iterations: {}", iterations);
-        HOLOSCAN_LOG_INFO("  Hits      : {}", numberOfHits);
+stelline::StoreInterface::MetricsMap SimpleDetectionOp::collectMetricsMap() {
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["iterations"] = fmt::format("{}", pimpl->iterations);
+    metrics["hits"] = fmt::format("{}", pimpl->numberOfHits);
+    return metrics;
+}
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
+std::string SimpleDetectionOp::collectMetricsString() {
+    const auto metrics = collectMetricsMap();
+    return fmt::format("Simple Detector Operator:\n"
+                       "  Iterations: {}\n"
+                       "  Hits      : {}",
+                       metrics.at("iterations"),
+                       metrics.at("hits"));
 }
 
 }  // namespace stelline::operators::frbnn
