@@ -19,6 +19,7 @@ struct DummyWriterOp::Impl {
 
     std::thread metricsThread;
     bool metricsThreadRunning;
+    uint64_t latestTimestamp;
     void metricsLoop();
 };
 
@@ -35,7 +36,7 @@ DummyWriterOp::~DummyWriterOp() {
 }
 
 void DummyWriterOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 }
@@ -63,7 +64,12 @@ void DummyWriterOp::stop() {
 void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     // Receive tensor.
 
-    input.receive<std::shared_ptr<int>>("in");
+    input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+
+    // Log latest timestamp.
+
+    const auto& meta = metadata();
+    pimpl->latestTimestamp = meta->get<uint64_t>("timestamp");
 
     // Measure time between messages.
 
@@ -88,6 +94,7 @@ void DummyWriterOp::Impl::metricsLoop() {
         HOLOSCAN_LOG_INFO("Dummy Writer Operator:");
         HOLOSCAN_LOG_INFO("  Iterations      : {}", numIterations);
         HOLOSCAN_LOG_INFO("  Average Duration: {} ms", duration.count() / 100);
+        HOLOSCAN_LOG_INFO("  Latest Timestamp: {}", latestTimestamp);
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }

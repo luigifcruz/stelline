@@ -50,7 +50,7 @@ struct AtaReceiverOp::Impl {
 
     // Memory pools.
 
-    Juggler<Tensor> blockTensorPool;
+    Juggler<holoscan::Tensor> blockTensorPool;
 
     // Metrics.
 
@@ -74,7 +74,7 @@ struct AtaReceiverOp::Impl {
     // Release helpers.
 
     void releaseReceivedBlocks();
-    void releaseComputedBlocks(OutputContext& output);
+    void releaseComputedBlocks(const std::shared_ptr<MetadataDictionary>& meta, OutputContext& output);
 
     // Burst collector.
 
@@ -102,7 +102,7 @@ AtaReceiverOp::~AtaReceiverOp() {
 }
 
 void AtaReceiverOp::setup(OperatorSpec& spec) {
-    spec.output<DspBlock>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -193,7 +193,7 @@ void AtaReceiverOp::start() {
             static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
             static_cast<int64_t>(pimpl->totalBlock.numberOfPolarizations)
         }, matx::MATX_DEVICE_MEMORY);
-        return std::make_shared<Tensor>(tensor.ToDlPack());
+        return std::make_shared<holoscan::Tensor>(tensor.ToDlPack());
     });
 }
 
@@ -312,7 +312,7 @@ void AtaReceiverOp::compute(InputContext& input, OutputContext& output, Executio
     // Run release helpers.
 
     pimpl->releaseReceivedBlocks();
-    pimpl->releaseComputedBlocks(output);
+    pimpl->releaseComputedBlocks(metadata(), output);
 
     // Check for execution errors.
 
@@ -341,7 +341,7 @@ void AtaReceiverOp::Impl::releaseReceivedBlocks() {
 
         if (block->isComplete()) {
             blockMap.erase(block->index());
-            std::shared_ptr<Tensor> tensor;
+            std::shared_ptr<holoscan::Tensor> tensor;
             while ((tensor = blockTensorPool.get()) == nullptr) {
                 HOLOSCAN_LOG_ERROR("Failed to allocate tensor from pool.");
                 throw std::runtime_error("Failed to allocate tensor from pool.");
@@ -365,17 +365,14 @@ void AtaReceiverOp::Impl::releaseReceivedBlocks() {
     }
 }
 
-void AtaReceiverOp::Impl::releaseComputedBlocks(OutputContext& output) {
+void AtaReceiverOp::Impl::releaseComputedBlocks(const std::shared_ptr<MetadataDictionary>& meta, OutputContext& output) {
     while (!computeQueue.empty()) {
         auto block = computeQueue.front();
         computeQueue.pop();
 
         if (!block->isProcessing()) {
-            DspBlock outputBlock = {
-                .timestamp = block->timestamp(),
-                .tensor = block->outputTensor(),
-            };
-            output.emit(outputBlock, "dsp_block_out");
+            meta->set("timestamp", block->timestamp());
+            output.emit(block->outputTensor(), "dsp_block_out");
             block->destroy();
             idleQueue.push(block);
             computedBlocks += 1;

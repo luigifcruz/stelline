@@ -5,7 +5,7 @@ Stelline Application class for building and running pipelines.
 from pathlib import Path
 
 import yaml
-from holoscan.core import Application
+from holoscan.core import Application, MetadataPolicy
 from holoscan.resources import UnboundedAllocator
 from holoscan.schedulers import (
     EventBasedScheduler,
@@ -21,6 +21,10 @@ class App(Application):
         super().__init__()
         # Configure the application
         self.config(config_path)
+
+        # Configure metadata
+        self.enable_metadata(True)
+        self.metadata_policy = MetadataPolicy.INPLACE_UPDATE
 
         # Setup scheduler based on config
         self._setup_scheduler()

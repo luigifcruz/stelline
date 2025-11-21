@@ -65,7 +65,7 @@ Uvh5WriterRdmaOp::~Uvh5WriterRdmaOp() {
 }
 
 void Uvh5WriterRdmaOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -207,13 +207,13 @@ void Uvh5WriterRdmaOp::stop() {
 }
 
 void Uvh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
-    const auto& tensor = input.receive<DspBlock>("in").value().tensor;
+    const auto& tensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
     // Allocate permuted tensor.
 
     if (pimpl->bytesWritten == 0) {
-        CUDA_CHECK_THROW(DspBlockAlloc(tensor, pimpl->permutedTensor), [&]{
+        CUDA_CHECK_THROW(BlockAlloc(tensor, pimpl->permutedTensor), [&]{
             HOLOSCAN_LOG_ERROR("Failed to allocate permuted tensor.");
         });
 
@@ -224,7 +224,7 @@ void Uvh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
 
     // Permute tensor.
 
-    CUDA_CHECK_THROW(DspBlockPermutation(pimpl->permutedTensor->to_dlpack(), tensor->to_dlpack()), [&]{
+    CUDA_CHECK_THROW(BlockPermutation(pimpl->permutedTensor->to_dlpack(), tensor->to_dlpack()), [&]{
         HOLOSCAN_LOG_ERROR("Failed to permute tensor.");
     });
 

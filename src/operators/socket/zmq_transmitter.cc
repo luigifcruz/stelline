@@ -43,7 +43,7 @@ ZmqTransmitterOp::~ZmqTransmitterOp() {
 }
 
 void ZmqTransmitterOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -108,7 +108,7 @@ void ZmqTransmitterOp::stop() {
 }
 
 void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
-    const auto& tensor = input.receive<DspBlock>("in").value().tensor;
+    const auto& tensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
     // Allocate host bounce buffer.

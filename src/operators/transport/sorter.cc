@@ -14,7 +14,7 @@ struct SorterOp::Impl {
 
     uint64_t depth = 0;
     uint64_t timestamp = 0;
-    std::unordered_map<uint64_t, DspBlock> pool;
+    std::unordered_map<uint64_t, std::shared_ptr<holoscan::Tensor>> pool;
 
     // Metrics.
 
@@ -38,10 +38,10 @@ SorterOp::~SorterOp() {
 }
 
 void SorterOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("dsp_block_in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                     holoscan::Arg("capacity", 1024UL));
-    spec.output<DspBlock>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                     holoscan::Arg("capacity", 1024UL));
     spec.param(depth_, "depth");
@@ -77,14 +77,20 @@ void SorterOp::stop() {
 }
 
 void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
+    const auto& meta = metadata();
+
     // Receive all blocks.
 
-    while (auto ptr = input.receive<DspBlock>("dsp_block_in")) {
-        auto block = ptr.value();
+    while (auto ptr = input.receive<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")) {
+        auto tensor = ptr.value();
+
+        // Get the timestamp from the metadata.
+
+        const auto& timestamp = meta->get<uint64_t>("timestamp");
 
         // Check incoming block timestamp.
 
-        if (pimpl->timestamp > block.timestamp) {
+        if (pimpl->timestamp > timestamp) {
             HOLOSCAN_LOG_WARN("Monotonic timestamps required. Discarding block.");
             pimpl->numberOfRejectedBlocks++;
             continue;
@@ -92,7 +98,7 @@ void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionCont
 
         // Add block to pool.
 
-        pimpl->pool[block.timestamp] = block;
+        pimpl->pool[timestamp] = tensor;
     }
 
     // Sort blocks by timestamp.
@@ -104,7 +110,10 @@ void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionCont
                 minTimestamp = timestamp;
             }
         }
+
+        meta->set("timestamp", minTimestamp);
         output.emit(pimpl->pool.at(minTimestamp), "dsp_block_out");
+
         pimpl->pool.erase(minTimestamp);
         pimpl->timestamp = minTimestamp;
     }

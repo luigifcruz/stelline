@@ -11,7 +11,7 @@ namespace stelline::operators::frbnn {
 //
 
 void ModelPreprocessorOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("in");
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in");
     spec.output<holoscan::gxf::Entity>("out");
 }
 
@@ -19,13 +19,13 @@ void ModelPreprocessorOp::start() {
 }
 
 void ModelPreprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
-    auto block = input.receive<DspBlock>("in").value();
+    auto block = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
 
     const auto& meta = metadata();
     meta->set("dsp_block", block);
 
     auto outMessage = holoscan::gxf::Entity::New(&context);
-    outMessage.add(block.tensor, "input");
+    outMessage.add(block, "input");
     output.emit(outMessage, "out");
 };
 
@@ -56,7 +56,7 @@ void ModelAdapterOp::compute(InputContext& input, OutputContext& output, Executi
 
 void ModelPostprocessorOp::setup(OperatorSpec& spec) {
     spec.input<holoscan::gxf::Entity>("in");
-    spec.output<InferenceBlock>("out");
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out");
 }
 
 void ModelPostprocessorOp::start() {
@@ -66,15 +66,7 @@ void ModelPostprocessorOp::compute(InputContext& input, OutputContext& output, E
     auto inputMessage = input.receive<holoscan::gxf::Entity>("in").value();
     auto inputTensor = inputMessage.get<holoscan::Tensor>("output");
 
-    const auto& meta = metadata();
-
-    InferenceBlock block = {
-        .dspBlock = meta->get<DspBlock>("dsp_block"),
-        .tensor = inputTensor,
-    };
-
-    meta->clear();
-    output.emit(block, "out");
+    output.emit(inputTensor, "out");
 };
 
 //
@@ -113,7 +105,7 @@ SimpleDetectionOp::~SimpleDetectionOp() {
 }
 
 void SimpleDetectionOp::setup(OperatorSpec& spec) {
-    spec.input<InferenceBlock>("in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -172,10 +164,14 @@ void SimpleDetectionOp::stop() {
 }
 
 void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
-    auto block = input.receive<InferenceBlock>("in").value();
+    const auto& meta = metadata();
 
-    const auto& outputByteSize = block.tensor->size() * sizeof(float);
-    const auto& hitsByteSize = block.dspBlock.tensor->size() * sizeof(float);
+    const auto& inferenceTensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
+    const auto& originalTensor = meta->get<std::shared_ptr<holoscan::Tensor>>("dsp_block");
+    const auto& timestamp = meta->get<uint64_t>("timestamp");
+
+    const auto& outputByteSize = inferenceTensor->size() * sizeof(float);
+    const auto& hitsByteSize = originalTensor->size() * sizeof(float);
 
     // Download output tensor to host.
 
@@ -186,31 +182,31 @@ void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionCo
         }
     }
 
-    cudaMemcpy(pimpl->outputHostBuffer, block.tensor->data(), outputByteSize, cudaMemcpyDeviceToHost);
+    cudaMemcpy(pimpl->outputHostBuffer, inferenceTensor->data(), outputByteSize, cudaMemcpyDeviceToHost);
 
     // Detect hits, log statistics, and write hits to file.
 
-    for (int i = 0; i < block.tensor->shape()[0]; i++) {
+    for (int i = 0; i < inferenceTensor->shape()[0]; i++) {
         const float* val = reinterpret_cast<const float*>(pimpl->outputHostBuffer);
         const auto& a = val[i * 2];
         const auto& b = val[i * 2 + 1];
 
         const auto p1 = std::chrono::system_clock::now();
-        const auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(p1.time_since_epoch()).count();
+        const auto systemTimestamp = std::chrono::duration_cast<std::chrono::seconds>(p1.time_since_epoch()).count();
         std::string csvLine = fmt::format("{},{},{},{},{},{},{},{}\n", pimpl->iterations++,
                                                                        a,
                                                                        b,
                                                                        (a > b) ? 0 : 1,
                                                                        (a > b) ? "NO" : ">> HIT <<",
                                                                        i,
-                                                                       block.dspBlock.timestamp,
-                                                                       timestamp);
+                                                                       timestamp,
+                                                                       systemTimestamp);
         pimpl->csvFile.write(csvLine.c_str(), csvLine.size());
         pimpl->csvFile.flush();
 
         if (a < b) {
             std::ofstream hitsFile;
-            std::string hitsFilePath = fmt::format("{}/FRBNN-HIT-{}.bin", pimpl->hitsDirectory, block.dspBlock.timestamp);
+            std::string hitsFilePath = fmt::format("{}/FRBNN-HIT-{}.bin", pimpl->hitsDirectory, timestamp);
             hitsFile.open(hitsFilePath, std::ios::out | std::ios::binary);
 
             if (pimpl->hitsHostBuffer == nullptr) {
@@ -220,7 +216,7 @@ void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionCo
                 }
             }
 
-            cudaMemcpyAsync(pimpl->hitsHostBuffer, block.dspBlock.tensor->data(), hitsByteSize, cudaMemcpyDeviceToHost, pimpl->stream);
+            cudaMemcpyAsync(pimpl->hitsHostBuffer, originalTensor->data(), hitsByteSize, cudaMemcpyDeviceToHost, pimpl->stream);
             cudaStreamSynchronize(pimpl->stream);
 
             hitsFile.write(reinterpret_cast<char*>(pimpl->hitsHostBuffer), hitsByteSize);

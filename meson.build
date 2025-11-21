@@ -1,7 +1,7 @@
 project(
     'stelline',
     ['cpp', 'cuda'],
-    version: '0.1.0',
+    version: '0.2.0',
     default_options: [
         'cpp_std=c++20',
         'buildtype=release',
@@ -12,7 +12,7 @@ project(
 
 cuda = meson.get_compiler('cuda')
 is_static = get_option('default_library') == 'static'
-cdn_url = 'https://stelline.cdn.luigi.ltd/' + meson.project_version() + '/'
+cdn_url = 'https://stelline.cdn.luigi.ltd/0.0.0/'
 
 cfg_lst = configuration_data({
     'version': meson.project_version(),

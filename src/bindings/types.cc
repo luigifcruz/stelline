@@ -26,23 +26,4 @@ PYBIND11_MODULE(_types, m) {
                              b.numberOfAntennas, b.numberOfChannels,
                              b.numberOfSamples, b.numberOfPolarizations);
         });
-
-    py::class_<DspBlock, std::shared_ptr<DspBlock>>(m, "DspBlock")
-        .def(py::init<>())
-        .def_readwrite("timestamp", &DspBlock::timestamp)
-        .def_readwrite("tensor", &DspBlock::tensor)
-        .def("set_metadata", &DspBlock::setMetadata)
-        .def("set_data", &DspBlock::setData)
-        .def("__repr__", [](const DspBlock& d) {
-            return fmt::format("DspBlock(timestamp={})", d.timestamp);
-        });
-
-    py::class_<InferenceBlock, std::shared_ptr<InferenceBlock>>(m, "InferenceBlock")
-        .def(py::init<>())
-        .def_readwrite("dsp_block", &InferenceBlock::dspBlock)
-        .def_readwrite("tensor", &InferenceBlock::tensor)
-        .def("set_metadata", &InferenceBlock::setMetadata)
-        .def("__repr__", [](const InferenceBlock&) {
-            return "InferenceBlock()";
-        });
 }

@@ -88,10 +88,10 @@ CorrelatorOp::~CorrelatorOp() {
 }
 
 void CorrelatorOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("dsp_block_in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
-    spec.output<DspBlock>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -171,28 +171,29 @@ void CorrelatorOp::stop() {
 
 void CorrelatorOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     auto receiveCallback = [&](){
-        return input.receive<DspBlock>("dsp_block_in").value();
+        return input.receive<std::shared_ptr<holoscan::Tensor>>("dsp_block_in").value();
     };
 
-    auto convertInputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->config.inputShape);
+    auto convertInputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
+        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(tensor->data(), pimpl->config.inputShape);
         return pimpl->pipeline->transferIn(deviceInputBuffer);
     };
 
-    auto convertOutputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(data.tensor->data(), pimpl->config.outputShape);
+    auto convertOutputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
+        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(tensor->data(), pimpl->config.outputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 
-    auto emitCallback = [&](DspBlock& data){
-        output.emit(data, "dsp_block_out");
+    auto emitCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
+        output.emit(tensor, "dsp_block_out");
     };
 
     if (pimpl->dispatcher.run(pimpl->pipeline,
                               receiveCallback,
                               convertInputCallback,
                               convertOutputCallback,
-                              emitCallback) != Result::SUCCESS) {
+                              emitCallback,
+                              metadata()) != Result::SUCCESS) {
         throw std::runtime_error("Dispatcher failed.");
     }
 }

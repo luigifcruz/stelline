@@ -43,7 +43,7 @@ struct Block {
         return _timestamp;
     }
 
-    constexpr const std::shared_ptr<Tensor>& outputTensor() const {
+    constexpr const std::shared_ptr<holoscan::Tensor>& outputTensor() const {
         return _outputTensor;
     }
 
@@ -74,7 +74,7 @@ struct Block {
         return cudaStreamQuery(stream) != cudaSuccess;
     }
 
-    inline void compute(std::shared_ptr<Tensor>& outputTensor,
+    inline void compute(std::shared_ptr<holoscan::Tensor>& outputTensor,
                         const BlockShape& total,
                         const BlockShape& partial,
                         const BlockShape& slots) {
@@ -96,7 +96,7 @@ struct Block {
     std::unordered_set<std::shared_ptr<BurstParams>> bursts;
 
     cudaStream_t stream;
-    std::shared_ptr<Tensor> _outputTensor;
+    std::shared_ptr<holoscan::Tensor> _outputTensor;
 };
 
 }  // namespace stelline::operators::transport

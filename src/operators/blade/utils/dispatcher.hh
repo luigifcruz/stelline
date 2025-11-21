@@ -6,6 +6,7 @@
 #include <stelline/common.hh>
 #include <stelline/utils/juggler.hh>
 
+using namespace holoscan;
 using namespace Blade;
 
 namespace stelline::operators::blade {
@@ -49,18 +50,23 @@ class Dispatcher {
                auto& receiveCallback,
                auto& convertInputCallback,
                auto& convertOutputCallback,
-               auto& emitCallback) {
+               auto& emitCallback,
+               const std::shared_ptr<holoscan::MetadataDictionary>& meta) {
         // Receive block.
 
-        const auto& block = receiveCallback();
+        const auto& tensor = receiveCallback();
+        const auto& timestamp = meta->get<uint64_t>("timestamp");
+
+        // TODO: (HIGH) All the metadata data should be deep-copied and stored inside the queue.
+        //              Currently, only the timestamp is stored and passed to the next block on dequeue.
 
         // Check incoming block timestamp.
 
-        if (timestamp > block.timestamp) {
+        if (latestTimestamp > timestamp) {
             HOLOSCAN_LOG_ERROR("Incoming block timestamp is older than the current timestamp.");
             return Result::ERROR;
         }
-        timestamp = block.timestamp;
+        latestTimestamp = timestamp;
 
         // Check if in-flight queue state is valid.
 
@@ -76,9 +82,7 @@ class Dispatcher {
             auto& inputBlock = inputPool[inputPoolPhase];
             inFlightInputs.insert(inputPoolPhase);
             inputPoolPhase = (inputPoolPhase + 1) % 2;
-
-            // Configure job.
-            inputBlock.setData(block);
+            inputBlock = tensor;
 
             // Call input callback.
             return convertInputCallback(inputBlock);
@@ -98,11 +102,8 @@ class Dispatcher {
             inFlightOutputs.insert(outputPoolPhase);
             outputPoolPhase = (outputPoolPhase + 1) % 2;
 
-            // Configure output.
-            outputBlock.setMetadata(block);
-
             // Reserve output buffer.
-            if ((outputBlock.tensor = outputTensorPool.get()) == nullptr) {
+            if ((outputBlock = outputTensorPool.get()) == nullptr) {
                 HOLOSCAN_LOG_ERROR("Failed to allocate tensor from pool.");
                 return Result::ERROR;
             }
@@ -223,13 +224,13 @@ class Dispatcher {
  private:
     // State.
 
-    U64 timestamp = 0;
+    U64 latestTimestamp = 0;
 
     U64 inputPoolPhase = 0;
     U64 outputPoolPhase = 0;
 
-    std::vector<DspBlock> inputPool;
-    std::vector<DspBlock> outputPool;
+    std::vector<std::shared_ptr<holoscan::Tensor>> inputPool;
+    std::vector<std::shared_ptr<holoscan::Tensor>> outputPool;
 
     std::unordered_set<U64> inFlightInputs;
     std::unordered_set<U64> inFlightOutputs;

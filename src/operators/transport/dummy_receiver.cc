@@ -58,7 +58,7 @@ DummyReceiverOp::~DummyReceiverOp() {
 }
 
 void DummyReceiverOp::setup(OperatorSpec& spec) {
-    spec.output<DspBlock>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -81,7 +81,7 @@ void DummyReceiverOp::start() {
 
     // Allocate tensor.
 
-    pimpl->tensor = std::make_shared<Tensor>(matx::make_tensor<cuda::std::complex<float>>({
+    pimpl->tensor = std::make_shared<holoscan::Tensor>(matx::make_tensor<cuda::std::complex<float>>({
         static_cast<int64_t>(pimpl->totalBlock.numberOfAntennas),
         static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
         static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
@@ -93,11 +93,10 @@ void DummyReceiverOp::stop() {}
 
 void DummyReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     HOLOSCAN_LOG_INFO("Faking block {}.", pimpl->timestamp);
-    DspBlock outputBlock = {
-        .timestamp = pimpl->timestamp,
-        .tensor = pimpl->tensor,
-    };
-    output.emit(outputBlock, "dsp_block_out");
+
+    const auto& meta = metadata();
+    meta->set("timestamp", pimpl->timestamp);
+    output.emit(pimpl->tensor, "dsp_block_out");
     pimpl->timestamp += 1;
 
     // Check for execution errors.
