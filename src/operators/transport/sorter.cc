@@ -104,6 +104,9 @@ void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionCont
 }
 
 stelline::StoreInterface::MetricsMap SorterOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
+    }
     stelline::StoreInterface::MetricsMap metrics;
     metrics["rejected_blocks"] = fmt::format("{}", pimpl->numberOfRejectedBlocks);
     metrics["pool_size"] = fmt::format("{}", pimpl->pool.size());
@@ -111,9 +114,11 @@ stelline::StoreInterface::MetricsMap SorterOp::collectMetricsMap() {
 }
 
 std::string SorterOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
     const auto metrics = collectMetricsMap();
-    return fmt::format("Sorter Operator:\n"
-                       "  Number of Rejected Blocks: {}\n"
+    return fmt::format("  Number of Rejected Blocks: {}\n"
                        "  Pool Size: {}",
                        metrics.at("rejected_blocks"),
                        metrics.at("pool_size"));

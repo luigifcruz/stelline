@@ -151,6 +151,9 @@ void SimpleWriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionC
 }
 
 stelline::StoreInterface::MetricsMap SimpleWriterRdmaOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
+    }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
 
@@ -167,9 +170,11 @@ stelline::StoreInterface::MetricsMap SimpleWriterRdmaOp::collectMetricsMap() {
 }
 
 std::string SimpleWriterRdmaOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
     const auto metrics = collectMetricsMap();
-    return fmt::format("Simple Writer RDMA Operator:\n"
-                       "  Current Bandwidth: {} MB/s\n"
+    return fmt::format("  Current Bandwidth: {} MB/s\n"
                        "  Total Data Written: {} MB",
                        metrics.at("current_bandwidth_mb_s"),
                        metrics.at("total_data_written_mb"));

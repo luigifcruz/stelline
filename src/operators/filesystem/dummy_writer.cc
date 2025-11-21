@@ -78,6 +78,9 @@ void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContex
 }
 
 stelline::StoreInterface::MetricsMap DummyWriterOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
+    }
     stelline::StoreInterface::MetricsMap metrics;
     metrics["iterations"] = fmt::format("{}", pimpl->numIterations);
     metrics["average_duration_ms"] = fmt::format("{}", pimpl->duration.count() / 100);
@@ -86,9 +89,11 @@ stelline::StoreInterface::MetricsMap DummyWriterOp::collectMetricsMap() {
 }
 
 std::string DummyWriterOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
     const auto metrics = collectMetricsMap();
-    return fmt::format("Dummy Writer Operator:\n"
-                       "  Iterations      : {}\n"
+    return fmt::format("  Iterations      : {}\n"
                        "  Average Duration: {} ms\n"
                        "  Latest Timestamp: {}",
                        metrics.at("iterations"),

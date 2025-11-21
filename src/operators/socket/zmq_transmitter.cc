@@ -120,6 +120,9 @@ void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionCon
 }
 
 stelline::StoreInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
+    }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
 
@@ -136,9 +139,11 @@ stelline::StoreInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
 }
 
 std::string ZmqTransmitterOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
     const auto metrics = collectMetricsMap();
-    return fmt::format("ZeroMQ Transmitter Operator:\n"
-                       "  Input Bandwidth: {} MB/s\n"
+    return fmt::format("  Input Bandwidth: {} MB/s\n"
                        "  Total Bytes Written: {}",
                        metrics.at("current_bandwidth_mb_s"),
                        metrics.at("total_bytes_written"));

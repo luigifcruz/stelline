@@ -293,6 +293,9 @@ void Uvh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
 }
 
 stelline::StoreInterface::MetricsMap Uvh5WriterRdmaOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
+    }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
 
@@ -310,9 +313,11 @@ stelline::StoreInterface::MetricsMap Uvh5WriterRdmaOp::collectMetricsMap() {
 }
 
 std::string Uvh5WriterRdmaOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
     const auto metrics = collectMetricsMap();
-    return fmt::format("HDF5 Sink RDMA Operator:\n"
-                       "  Current Bandwidth: {} MB/s\n"
+    return fmt::format("  Current Bandwidth: {} MB/s\n"
                        "  Total Data Written: {} MB\n"
                        "  Chunks Written: {}",
                        metrics.at("current_bandwidth_mb_s"),

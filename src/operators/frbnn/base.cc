@@ -210,6 +210,9 @@ void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionCo
 }
 
 stelline::StoreInterface::MetricsMap SimpleDetectionOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
+    }
     stelline::StoreInterface::MetricsMap metrics;
     metrics["iterations"] = fmt::format("{}", pimpl->iterations);
     metrics["hits"] = fmt::format("{}", pimpl->numberOfHits);
@@ -217,9 +220,11 @@ stelline::StoreInterface::MetricsMap SimpleDetectionOp::collectMetricsMap() {
 }
 
 std::string SimpleDetectionOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
     const auto metrics = collectMetricsMap();
-    return fmt::format("Simple Detector Operator:\n"
-                       "  Iterations: {}\n"
+    return fmt::format("  Iterations: {}\n"
                        "  Hits      : {}",
                        metrics.at("iterations"),
                        metrics.at("hits"));

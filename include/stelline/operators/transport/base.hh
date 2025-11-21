@@ -16,6 +16,7 @@ using holoscan::OperatorSpec;
 using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
+
 class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)

@@ -430,6 +430,9 @@ void AtaReceiverOp::Impl::burstCollectorLoop() {
 }
 
 stelline::StoreInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
+    }
     std::vector<uint64_t> blockTimes;
     blockTimes.reserve(pimpl->blockMap.size());
     for (const auto& [time, _] : pimpl->blockMap) {
@@ -464,42 +467,43 @@ stelline::StoreInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
 }
 
 std::string AtaReceiverOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
     const auto metrics = collectMetricsMap();
-    return fmt::format(
-        "Transport Operator:\n"
-        "  Blocks    : {} received, {} computed, {} lost\n"
-        "  Packets   : {} evicted, {} received, {} lost\n"
-        "  In-Flight : {} idle, {} receive, {} compute\n"
-        "  Bursts    : {} in-flight, {} us average per-burst release time\n"
-        "  Mem Pool  : {} available, {} referenced\n"
-        "  Block Map : latest time index {}, usage {}, all block times {}\n"
-        "  Fine Packet Count:\n"
-        "    Payload Sizes    : {}\n"
-        "    All antennas     : {}\n"
-        "    Filtered antennas: {}\n"
-        "    All channels     : {}\n"
-        "    Filtered channels: {}",
-        metrics.at("blocks_received"),
-        metrics.at("blocks_computed"),
-        metrics.at("blocks_lost"),
-        metrics.at("packets_evicted"),
-        metrics.at("packets_received"),
-        metrics.at("packets_lost"),
-        metrics.at("idle_queue"),
-        metrics.at("receive_queue"),
-        metrics.at("compute_queue"),
-        metrics.at("bursts_in_flight"),
-        metrics.at("avg_burst_release_time_us"),
-        metrics.at("mem_pool_available"),
-        metrics.at("mem_pool_referenced"),
-        metrics.at("block_map_latest_time_index"),
-        metrics.at("block_map_usage"),
-        metrics.at("block_map_times"),
-        metrics.at("payload_sizes"),
-        metrics.at("all_antennas"),
-        metrics.at("filtered_antennas"),
-        metrics.at("all_channels"),
-        metrics.at("filtered_channels"));
+    return fmt::format("  Blocks    : {} received, {} computed, {} lost\n"
+                       "  Packets   : {} evicted, {} received, {} lost\n"
+                       "  In-Flight : {} idle, {} receive, {} compute\n"
+                       "  Bursts    : {} in-flight, {} us average per-burst release time\n"
+                       "  Mem Pool  : {} available, {} referenced\n"
+                       "  Block Map : latest time index {}, usage {}, all block times {}\n"
+                       "  Fine Packet Count:\n"
+                       "    Payload Sizes    : {}\n"
+                       "    All antennas     : {}\n"
+                       "    Filtered antennas: {}\n"
+                       "    All channels     : {}\n"
+                       "    Filtered channels: {}",
+                       metrics.at("blocks_received"),
+                       metrics.at("blocks_computed"),
+                       metrics.at("blocks_lost"),
+                       metrics.at("packets_evicted"),
+                       metrics.at("packets_received"),
+                       metrics.at("packets_lost"),
+                       metrics.at("idle_queue"),
+                       metrics.at("receive_queue"),
+                       metrics.at("compute_queue"),
+                       metrics.at("bursts_in_flight"),
+                       metrics.at("avg_burst_release_time_us"),
+                       metrics.at("mem_pool_available"),
+                       metrics.at("mem_pool_referenced"),
+                       metrics.at("block_map_latest_time_index"),
+                       metrics.at("block_map_usage"),
+                       metrics.at("block_map_times"),
+                       metrics.at("payload_sizes"),
+                       metrics.at("all_antennas"),
+                       metrics.at("filtered_antennas"),
+                       metrics.at("all_channels"),
+                       metrics.at("filtered_channels"));
 }
 
 }  // namespace stelline::operators::transport
