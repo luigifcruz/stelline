@@ -106,26 +106,34 @@ PYBIND11_MODULE(_filesystem_ops, m) {
     py::class_<DummyWriterOp, PyDummyWriterOp, Operator, std::shared_ptr<DummyWriterOp>>(m, "DummyWriterOp")
         .def(py::init<Fragment*, const py::args&, const std::string&>(),
              py::arg("fragment"),
-             py::arg("name") = "dummy_writer");
+             py::arg("name") = "dummy_writer")
+        .def("collect_metrics_map", &DummyWriterOp::collectMetricsMap)
+        .def("collect_metrics_string", &DummyWriterOp::collectMetricsString);
 
     py::class_<SimpleWriterOp, PySimpleWriterOp, Operator, std::shared_ptr<SimpleWriterOp>>(m, "SimpleWriterOp")
         .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
              py::arg("fragment"),
              py::arg("file_path"),
-             py::arg("name") = "simple_writer");
+             py::arg("name") = "simple_writer")
+        .def("collect_metrics_map", &SimpleWriterOp::collectMetricsMap)
+        .def("collect_metrics_string", &SimpleWriterOp::collectMetricsString);
 
     py::class_<SimpleWriterRdmaOp, PySimpleWriterRdmaOp, Operator, std::shared_ptr<SimpleWriterRdmaOp>>(m, "SimpleWriterRdmaOp")
         .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
              py::arg("fragment"),
              py::arg("file_path"),
-             py::arg("name") = "simple_writer_rdma");
+             py::arg("name") = "simple_writer_rdma")
+        .def("collect_metrics_map", &SimpleWriterRdmaOp::collectMetricsMap)
+        .def("collect_metrics_string", &SimpleWriterRdmaOp::collectMetricsString);
 
 #ifdef STELLINE_LOADER_FBH5
     py::class_<Fbh5WriterRdmaOp, PyFbh5WriterRdmaOp, Operator, std::shared_ptr<Fbh5WriterRdmaOp>>(m, "Fbh5WriterRdmaOp")
         .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
              py::arg("fragment"),
              py::arg("file_path"),
-             py::arg("name") = "fbh5_writer_rdma");
+             py::arg("name") = "fbh5_writer_rdma")
+        .def("collect_metrics_map", &Fbh5WriterRdmaOp::collectMetricsMap)
+        .def("collect_metrics_string", &Fbh5WriterRdmaOp::collectMetricsString);
 #endif
 
 #ifdef STELLINE_LOADER_UVH5
@@ -137,6 +145,8 @@ PYBIND11_MODULE(_filesystem_ops, m) {
              py::arg("telinfo_file_path"),
              py::arg("obsantinfo_file_path"),
              py::arg("iers_file_path"),
-             py::arg("name") = "uvh5_writer_rdma");
+             py::arg("name") = "uvh5_writer_rdma")
+        .def("collect_metrics_map", &Uvh5WriterRdmaOp::collectMetricsMap)
+        .def("collect_metrics_string", &Uvh5WriterRdmaOp::collectMetricsString);
 #endif
 }

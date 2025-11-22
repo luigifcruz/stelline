@@ -13,7 +13,7 @@ auto CreateTensor(auto& t) {
     return std::make_shared<holoscan::Tensor>(tensor.ToDlPack());
 }
 
-cudaError DspBlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
+cudaError BlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
                         std::shared_ptr<holoscan::Tensor>& permutedTensor) {
     switch (tensor->dtype().code) {
         case 2:  //kDLFloat:
@@ -23,7 +23,7 @@ cudaError DspBlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
             permutedTensor = CreateTensor<cuda::std::complex<float>>(tensor);
             break;
         default:
-            HOLOSCAN_LOG_ERROR("DspBlockAlloc: Unsupported data type");
+            HOLOSCAN_LOG_ERROR("BlockAlloc: Unsupported data type");
             return cudaErrorNotSupported;
     }
 

@@ -4,6 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
+#include <stelline/store.hh>
 
 
 namespace stelline::operators::socket {
@@ -14,8 +15,7 @@ using holoscan::OperatorSpec;
 using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
-
-class STELLINE_API ZmqTransmitterOp : public Operator {
+class STELLINE_API ZmqTransmitterOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(ZmqTransmitterOp)
 
@@ -26,6 +26,9 @@ class STELLINE_API ZmqTransmitterOp : public Operator {
     void start() override;
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
 
  private:
     struct Impl;

@@ -6,6 +6,7 @@
 #include <stelline/common.hh>
 
 #include <stelline/yaml/types/block_shape.hh>
+#include <stelline/store.hh>
 
 namespace stelline::operators::transport {
 
@@ -16,7 +17,7 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API AtaReceiverOp : public Operator {
+class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)
 
@@ -27,6 +28,9 @@ class STELLINE_API AtaReceiverOp : public Operator {
     void start() override;
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
 
  private:
     struct Impl;
@@ -61,7 +65,7 @@ class STELLINE_API DummyReceiverOp : public Operator {
     Parameter<BlockShape> totalBlock_;
 };
 
-class STELLINE_API SorterOp : public Operator {
+class STELLINE_API SorterOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)
 
@@ -72,6 +76,9 @@ class STELLINE_API SorterOp : public Operator {
     void start() override;
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
 
  private:
     struct Impl;

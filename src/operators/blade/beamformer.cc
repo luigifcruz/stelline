@@ -5,6 +5,7 @@
 
 #include <stelline/operators/blade/base.hh>
 #include <stelline/types.hh>
+#include <fmt/format.h>
 
 #include "utils/dispatcher.hh"
 
@@ -102,12 +103,6 @@ struct BeamformerOp::Impl {
     Dispatcher dispatcher;
     OpBeamformerPipeline::Config config;
     std::shared_ptr<OpBeamformerPipeline> pipeline;
-
-    // Metrics.
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 };
 
 void BeamformerOp::initialize() {
@@ -127,10 +122,10 @@ BeamformerOp::~BeamformerOp() {
 }
 
 void BeamformerOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("dsp_block_in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
-    spec.output<DspBlock>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -179,59 +174,70 @@ void BeamformerOp::start() {
 
     // TODO: Make number of buffers configurable.
     pimpl->dispatcher.template initialize<CF32>(pimpl->numberOfBuffers, pimpl->config.outputShape);
-
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
 }
 
 void BeamformerOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
 }
 
 void BeamformerOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     auto receiveCallback = [&](){
-        return input.receive<DspBlock>("dsp_block_in").value();
+        return input.receive<std::shared_ptr<holoscan::Tensor>>("dsp_block_in").value();
     };
 
-    auto convertInputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(data.tensor->data(), pimpl->config.inputShape);
+    auto convertInputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
+        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(tensor->data(), pimpl->config.inputShape);
         return pimpl->pipeline->transferIn(deviceInputBuffer);
     };
 
-    auto convertOutputCallback = [&](DspBlock& data){
-        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(data.tensor->data(), pimpl->config.outputShape);
+    auto convertOutputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
+        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(tensor->data(), pimpl->config.outputShape);
         return pimpl->pipeline->transferOut(deviceOutputBuffer);
     };
 
-    auto emitCallback = [&](DspBlock& data){
-        output.emit(data, "dsp_block_out");
+    auto emitCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
+        output.emit(tensor, "dsp_block_out");
     };
 
     if (pimpl->dispatcher.run(pimpl->pipeline,
                               receiveCallback,
                               convertInputCallback,
                               convertOutputCallback,
-                              emitCallback) != Result::SUCCESS) {
+                              emitCallback,
+                              metadata()) != Result::SUCCESS) {
         throw std::runtime_error("Dispatcher failed.");
     }
 }
 
-void BeamformerOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Beamformer Operator:");
-        dispatcher.metrics();
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+stelline::StoreInterface::MetricsMap BeamformerOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
     }
+    const auto stats = pimpl->dispatcher.metrics();
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["successful_enqueues"] = fmt::format("{}", stats.successfulEnqueues);
+    metrics["successful_dequeues"] = fmt::format("{}", stats.successfulDequeues);
+    metrics["full_enqueues"] = fmt::format("{}", stats.fullEnqueues);
+    metrics["dequeue_retries"] = fmt::format("{}", stats.dequeueRetries);
+    metrics["premature_dequeues"] = fmt::format("{}", stats.prematureDequeues);
+    return metrics;
+}
+
+std::string BeamformerOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
+    const auto metrics = collectMetricsMap();
+    return fmt::format("  Queueing Statistics:\n"
+                       "    Successful Enqueues: {}\n"
+                       "    Successful Dequeues: {}\n"
+                       "    Full Enqueues: {}\n"
+                       "    Dequeue Retries: {}\n"
+                       "    Premature Dequeues: {}",
+                       metrics.at("successful_enqueues"),
+                       metrics.at("successful_dequeues"),
+                       metrics.at("full_enqueues"),
+                       metrics.at("dequeue_retries"),
+                       metrics.at("premature_dequeues"));
 }
 
 }  // namespace stelline::operators::blade

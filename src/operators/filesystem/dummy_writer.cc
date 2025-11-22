@@ -1,5 +1,6 @@
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
+#include <fmt/format.h>
 
 #include "utils/helpers.hh"
 
@@ -17,9 +18,7 @@ struct DummyWriterOp::Impl {
 
     // Metrics.
 
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
+    uint64_t latestTimestamp;
 };
 
 void DummyWriterOp::initialize() {
@@ -35,35 +34,30 @@ DummyWriterOp::~DummyWriterOp() {
 }
 
 void DummyWriterOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 }
 
 void DummyWriterOp::start() {
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
-
-
+    pimpl->numIterations = 0;
+    pimpl->duration = std::chrono::milliseconds(0);
+    pimpl->lastTime = {};
+    pimpl->latestTimestamp = 0;
 }
 
 void DummyWriterOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
 }
 
 void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     // Receive tensor.
 
-    input.receive<std::shared_ptr<int>>("in");
+    input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+
+    // Log latest timestamp.
+
+    const auto& meta = metadata();
+    pimpl->latestTimestamp = meta->get<uint64_t>("timestamp");
 
     // Measure time between messages.
 
@@ -83,14 +77,28 @@ void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContex
     pimpl->lastTime = std::chrono::system_clock::now();
 }
 
-void DummyWriterOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        HOLOSCAN_LOG_INFO("Dummy Writer Operator:");
-        HOLOSCAN_LOG_INFO("  Iterations      : {}", numIterations);
-        HOLOSCAN_LOG_INFO("  Average Duration: {} ms", duration.count() / 100);
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+stelline::StoreInterface::MetricsMap DummyWriterOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
     }
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["iterations"] = fmt::format("{}", pimpl->numIterations);
+    metrics["average_duration_ms"] = fmt::format("{}", pimpl->duration.count() / 100);
+    metrics["latest_timestamp"] = fmt::format("{}", pimpl->latestTimestamp);
+    return metrics;
+}
+
+std::string DummyWriterOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
+    const auto metrics = collectMetricsMap();
+    return fmt::format("  Iterations      : {}\n"
+                       "  Average Duration: {} ms\n"
+                       "  Latest Timestamp: {}",
+                       metrics.at("iterations"),
+                       metrics.at("average_duration_ms"),
+                       metrics.at("latest_timestamp"));
 }
 
 }  // namespace stelline::operators::io

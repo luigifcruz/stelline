@@ -1,3 +1,3 @@
-from stelline._types import BlockShape, DspBlock, InferenceBlock
+from stelline._types import BlockShape
 
-__all__ = ["BlockShape", "DspBlock", "InferenceBlock"]
+__all__ = ["BlockShape"]

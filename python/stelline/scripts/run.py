@@ -29,6 +29,17 @@ def run_parser(subparsers):
         action="append",
         help="Python files containing custom bit definitions to load (can be used multiple times)",
     )
+    parser.add_argument(
+        "--metrics",
+        action="store_true",
+        help="Enable periodic metrics printing",
+    )
+    parser.add_argument(
+        "--metrics-interval",
+        type=float,
+        default=1.0,
+        help="Seconds between metrics refreshes (default: 1.0)",
+    )
     return parser
 
 
@@ -64,5 +75,9 @@ def run_command(args):
             spec.loader.exec_module(module)
 
     # Create and run the application
-    app = App(args.config)
+    app = App(
+        args.config,
+        metrics=args.metrics,
+        metrics_interval=args.metrics_interval,
+    )
     app.run()

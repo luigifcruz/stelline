@@ -6,6 +6,7 @@
 
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
+#include <fmt/format.h>
 
 #include "utils/helpers.hh"
 #include "utils/modifiers.hh"
@@ -42,10 +43,6 @@ struct Fbh5WriterRdmaOp::Impl {
     std::chrono::time_point<std::chrono::steady_clock> lastMeasurementTime;
     std::atomic<int64_t> bytesSinceLastMeasurement{0};
     std::atomic<double> currentBandwidthMBps{0.0};
-
-    std::thread metricsThread;
-    bool metricsThreadRunning;
-    void metricsLoop();
 };
 
 void Fbh5WriterRdmaOp::initialize() {
@@ -61,7 +58,7 @@ Fbh5WriterRdmaOp::~Fbh5WriterRdmaOp() {
 }
 
 void Fbh5WriterRdmaOp::setup(OperatorSpec& spec) {
-    spec.input<DspBlock>("in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -123,7 +120,7 @@ void Fbh5WriterRdmaOp::start() {
 
     pimpl->fbh5_file.nchans_per_write = hdr->nchans;
     pimpl->fbh5_file.ntimes_per_write = 8192; // TODO: placeholder. Replace with actual dimensions
-    
+
     // Set up HDF5 library.
 
     pimpl->faplId = H5Pcreate(H5P_FILE_ACCESS);
@@ -149,23 +146,9 @@ void Fbh5WriterRdmaOp::start() {
     pimpl->bytesSinceLastMeasurement = 0;
     pimpl->lastMeasurementTime = std::chrono::steady_clock::now();
     pimpl->currentBandwidthMBps = 0.0;
-
-    // Start metrics thread.
-
-    pimpl->metricsThreadRunning = true;
-    pimpl->metricsThread = std::thread([&]{
-        pimpl->metricsLoop();
-    });
 }
 
 void Fbh5WriterRdmaOp::stop() {
-    // Stop metrics thread.
-
-    pimpl->metricsThreadRunning = false;
-    if (pimpl->metricsThread.joinable()) {
-        pimpl->metricsThread.join();
-    }
-
     // Close HDF5.
     free(pimpl->fbh5_file.mask);
     HDF5_CHECK_THROW(H5DSclose(&pimpl->fbh5_file.ds_data), [&]{
@@ -180,13 +163,13 @@ void Fbh5WriterRdmaOp::stop() {
 }
 
 void Fbh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
-    const auto& tensor = input.receive<DspBlock>("in").value().tensor;
+    const auto& tensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
     // Allocate permuted tensor.
 
     if (pimpl->bytesWritten == 0) {
-        CUDA_CHECK_THROW(DspBlockAlloc(tensor, pimpl->permutedTensor), [&]{
+        CUDA_CHECK_THROW(BlockAlloc(tensor, pimpl->permutedTensor), [&]{
             HOLOSCAN_LOG_ERROR("Failed to allocate permuted tensor.");
         });
 
@@ -197,7 +180,7 @@ void Fbh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
 
     // Permute tensor.
 
-    CUDA_CHECK_THROW(DspBlockPermutation(pimpl->permutedTensor->to_dlpack(), tensor->to_dlpack()), [&]{
+    CUDA_CHECK_THROW(BlockPermutation(pimpl->permutedTensor->to_dlpack(), tensor->to_dlpack()), [&]{
         HOLOSCAN_LOG_ERROR("Failed to permute tensor.");
     });
 
@@ -225,23 +208,37 @@ void Fbh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-void Fbh5WriterRdmaOp::Impl::metricsLoop() {
-    while (metricsThreadRunning) {
-        auto now = std::chrono::steady_clock::now();
-        auto elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
-
-        if (elapsedSeconds > 0.0) {
-            int64_t bytes = bytesSinceLastMeasurement.exchange(0);
-            currentBandwidthMBps = static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsedSeconds;
-            lastMeasurementTime = now;
-        }
-
-        HOLOSCAN_LOG_INFO("HDF5 Sink RDMA Operator:");
-        HOLOSCAN_LOG_INFO("  Current Bandwidth: {:.2f} MB/s", currentBandwidthMBps.load());
-        HOLOSCAN_LOG_INFO("  Total Data Written: {:.0f} MB", static_cast<double>(bytesWritten) / (1024.0 * 1024.0));
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+stelline::StoreInterface::MetricsMap Fbh5WriterRdmaOp::collectMetricsMap() {
+    if (!pimpl) {
+        return {};
     }
+    auto now = std::chrono::steady_clock::now();
+    auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
+
+    if (elapsedSeconds > 0.0) {
+        int64_t bytes = pimpl->bytesSinceLastMeasurement.exchange(0);
+        pimpl->currentBandwidthMBps = static_cast<double>(bytes) / (1024.0 * 1024.0) / elapsedSeconds;
+        pimpl->lastMeasurementTime = now;
+    }
+
+    stelline::StoreInterface::MetricsMap metrics;
+    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
+    metrics["total_data_written_mb"] = fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0));
+    metrics["chunks_written"] = fmt::format("{}", pimpl->chunkCounter);
+    return metrics;
+}
+
+std::string Fbh5WriterRdmaOp::collectMetricsString() {
+    if (!pimpl) {
+        return {};
+    }
+    const auto metrics = collectMetricsMap();
+    return fmt::format("  Current Bandwidth: {} MB/s\n"
+                       "  Total Data Written: {} MB\n"
+                       "  Chunks Written: {}",
+                       metrics.at("current_bandwidth_mb_s"),
+                       metrics.at("total_data_written_mb"),
+                       metrics.at("chunks_written"));
 }
 
 }  // namespace stelline::operators::io

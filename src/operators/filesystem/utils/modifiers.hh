@@ -12,12 +12,12 @@
 namespace stelline::operators::filesystem {
 
 #ifndef __CUDACC__
-cudaError DspBlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
+cudaError BlockAlloc(const std::shared_ptr<holoscan::Tensor>& tensor,
                         std::shared_ptr<holoscan::Tensor>& permutedTensor);
 #endif  // __CUDACC__
 
-cudaError_t DspBlockPermutation(DLManagedTensor* dst, const DLManagedTensor* src);
-// TODO: Add DspBlockTypeCast method.
+cudaError_t BlockPermutation(DLManagedTensor* dst, const DLManagedTensor* src);
+// TODO: Add BlockTypeCast method.
 
 }  // namespace stelline::operators::filesystem
 

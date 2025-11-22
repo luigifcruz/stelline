@@ -7,6 +7,7 @@
 
 #include <stelline/yaml/types/block_shape.hh>
 #include <stelline/yaml/types/map.hh>
+#include <stelline/store.hh>
 
 namespace stelline::operators::blade {
 
@@ -16,8 +17,7 @@ using holoscan::OperatorSpec;
 using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
-
-class STELLINE_API CorrelatorOp : public Operator {
+class STELLINE_API CorrelatorOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(CorrelatorOp)
 
@@ -29,6 +29,9 @@ class STELLINE_API CorrelatorOp : public Operator {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
+
  private:
     struct Impl;
     Impl* pimpl;
@@ -39,7 +42,7 @@ class STELLINE_API CorrelatorOp : public Operator {
     Parameter<Map> options_;
 };
 
-class STELLINE_API FrbnnOp : public Operator {
+class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(FrbnnOp)
 
@@ -51,6 +54,9 @@ class STELLINE_API FrbnnOp : public Operator {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
+
  private:
     struct Impl;
     Impl* pimpl;
@@ -61,7 +67,7 @@ class STELLINE_API FrbnnOp : public Operator {
     Parameter<Map> options_;
 };
 
-class STELLINE_API BeamformerOp : public Operator {
+class STELLINE_API BeamformerOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(BeamformerOp)
 
@@ -72,6 +78,9 @@ class STELLINE_API BeamformerOp : public Operator {
     void start() override;
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
 
  private:
     struct Impl;

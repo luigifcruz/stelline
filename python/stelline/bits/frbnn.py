@@ -54,9 +54,6 @@ def FrbnnInferenceBit(
     logger.info(f"  Preprocessor Path: {frbnn_preprocessor_path}")
     logger.info(f"  Model Path: {frbnn_path}")
 
-    # Configure app for metadata
-    app.is_metadata_enabled(True)
-
     # Build FRBNN Preprocessor configuration
     frbnn_preprocessor_path_map = {"frbnn_preprocessor": frbnn_preprocessor_path}
     frbnn_preprocessor_input_map = {"frbnn_preprocessor": ["input"]}
@@ -167,9 +164,6 @@ def FrbnnDetectionBit(
     logger.info("FRBNN Detection Configuration:")
     logger.info(f"  CSV File Path: {csv_file_path}")
     logger.info(f"  Hits Directory: {hits_directory}")
-
-    # Configure app for metadata
-    app.is_metadata_enabled(True)
 
     # Create detection operator
     frbnn_simple_detection_name = f"frbnn-simple-detection-{id}"

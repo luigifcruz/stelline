@@ -6,10 +6,13 @@ WORKDIR /home/sdk
 
 RUN apt update && \
     apt install --no-install-recommends -y \
-        iproute2 htop btop nvtop nload \
+        iproute2 htop btop nvtop nload pciutils \
         && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" "notebook>=7,<8" "jupyter-server>=2,<3" "jupyterlab-nvdashboard"
+RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" \
+                                          "notebook>=7,<8" \
+                                          "jupyter-server>=2,<3" \
+                                          "jupyterlab-nvdashboard"
 
 EXPOSE 8888
 

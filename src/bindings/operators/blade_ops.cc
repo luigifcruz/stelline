@@ -90,7 +90,9 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("input_shape"),
              py::arg("output_shape"),
              py::arg("options"),
-             py::arg("name") = "correlator");
+             py::arg("name") = "correlator")
+        .def("collect_metrics_map", &CorrelatorOp::collectMetricsMap)
+        .def("collect_metrics_string", &CorrelatorOp::collectMetricsString);
 
     py::class_<BeamformerOp, PyBeamformerOp, Operator, std::shared_ptr<BeamformerOp>>(m, "BeamformerOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -100,7 +102,9 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("input_shape"),
              py::arg("output_shape"),
              py::arg("options"),
-             py::arg("name") = "beamformer");
+             py::arg("name") = "beamformer")
+        .def("collect_metrics_map", &BeamformerOp::collectMetricsMap)
+        .def("collect_metrics_string", &BeamformerOp::collectMetricsString);
 
     py::class_<FrbnnOp, PyFrbnnOp, Operator, std::shared_ptr<FrbnnOp>>(m, "FrbnnOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -110,5 +114,7 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("input_shape"),
              py::arg("output_shape"),
              py::arg("options"),
-             py::arg("name") = "frbnn");
+             py::arg("name") = "frbnn")
+        .def("collect_metrics_map", &FrbnnOp::collectMetricsMap)
+        .def("collect_metrics_string", &FrbnnOp::collectMetricsString);
 }

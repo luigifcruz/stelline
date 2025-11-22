@@ -223,7 +223,9 @@ PYBIND11_MODULE(_transport_ops, m) {
              py::arg("offset_block"),
              py::arg("output_pool_size"),
              py::arg("enable_csv_logging"),
-             py::arg("name") = "ata_receiver");
+             py::arg("name") = "ata_receiver")
+        .def("collect_metrics_map", &AtaReceiverOp::collectMetricsMap)
+        .def("collect_metrics_string", &AtaReceiverOp::collectMetricsString);
 
     py::class_<DummyReceiverOp, PyDummyReceiverOp, Operator, std::shared_ptr<DummyReceiverOp>>(m, "DummyReceiverOp")
         .def(py::init<Fragment*,
@@ -241,5 +243,7 @@ PYBIND11_MODULE(_transport_ops, m) {
                       const std::string&>(),
              py::arg("fragment"),
              py::arg("depth"),
-             py::arg("name") = "sorter");
+             py::arg("name") = "sorter")
+        .def("collect_metrics_map", &SorterOp::collectMetricsMap)
+        .def("collect_metrics_string", &SorterOp::collectMetricsString);
 }

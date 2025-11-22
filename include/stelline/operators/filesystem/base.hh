@@ -4,6 +4,7 @@
 #include <holoscan/holoscan.hpp>
 
 #include <stelline/common.hh>
+#include <stelline/store.hh>
 
 
 namespace stelline::operators::filesystem {
@@ -14,8 +15,7 @@ using holoscan::OperatorSpec;
 using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
-
-class STELLINE_API SimpleWriterOp : public Operator {
+class STELLINE_API SimpleWriterOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleWriterOp)
 
@@ -27,6 +27,9 @@ class STELLINE_API SimpleWriterOp : public Operator {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
+
  private:
     struct Impl;
     Impl* pimpl;
@@ -34,7 +37,7 @@ class STELLINE_API SimpleWriterOp : public Operator {
     Parameter<std::string> filePath_;
 };
 
-class STELLINE_API SimpleWriterRdmaOp : public Operator {
+class STELLINE_API SimpleWriterRdmaOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SimpleWriterRdmaOp)
 
@@ -46,6 +49,9 @@ class STELLINE_API SimpleWriterRdmaOp : public Operator {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
+
  private:
     struct Impl;
     Impl* pimpl;
@@ -53,7 +59,7 @@ class STELLINE_API SimpleWriterRdmaOp : public Operator {
     Parameter<std::string> filePath_;
 };
 
-class STELLINE_API DummyWriterOp : public Operator {
+class STELLINE_API DummyWriterOp : public Operator, public stelline::StoreInterface {
  public:
       HOLOSCAN_OPERATOR_FORWARD_ARGS(DummyWriterOp)
 
@@ -66,13 +72,16 @@ class STELLINE_API DummyWriterOp : public Operator {
       void stop() override;
       void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
+      StoreInterface::MetricsMap collectMetricsMap() override;
+      std::string collectMetricsString() override;
+
  private:
       struct Impl;
       Impl* pimpl;
 };
 
 #ifdef STELLINE_LOADER_FBH5
-class STELLINE_API Fbh5WriterRdmaOp : public Operator {
+class STELLINE_API Fbh5WriterRdmaOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(Fbh5WriterRdmaOp)
 
@@ -84,6 +93,9 @@ class STELLINE_API Fbh5WriterRdmaOp : public Operator {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
+
  private:
     struct Impl;
     Impl* pimpl;
@@ -93,7 +105,7 @@ class STELLINE_API Fbh5WriterRdmaOp : public Operator {
 #endif  // STELLINE_LOADER_FBH5
 
 #ifdef STELLINE_LOADER_UVH5
-class STELLINE_API Uvh5WriterRdmaOp : public Operator {
+class STELLINE_API Uvh5WriterRdmaOp : public Operator, public stelline::StoreInterface {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(Uvh5WriterRdmaOp)
 
@@ -104,6 +116,9 @@ class STELLINE_API Uvh5WriterRdmaOp : public Operator {
     void start() override;
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
+
+    StoreInterface::MetricsMap collectMetricsMap() override;
+    std::string collectMetricsString() override;
 
  private:
     struct Impl;
