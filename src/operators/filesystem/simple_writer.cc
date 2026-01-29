@@ -134,7 +134,7 @@ void SimpleWriterOp::compute(InputContext& input, OutputContext&, ExecutionConte
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::StoreInterface::MetricsMap SimpleWriterOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap SimpleWriterOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }
@@ -147,7 +147,7 @@ stelline::StoreInterface::MetricsMap SimpleWriterOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
     metrics["total_data_written_mb"] = fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0));
     return metrics;

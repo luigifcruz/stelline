@@ -58,7 +58,7 @@ DummyReceiverOp::~DummyReceiverOp() {
 }
 
 void DummyReceiverOp::setup(OperatorSpec& spec) {
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 

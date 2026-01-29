@@ -145,7 +145,7 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         sorter_op = SorterOp(fragment=app, name=sorter_name, depth=sorter_depth)
 
         # Connect operators
-        app.add_flow(ata_receiver_op, sorter_op, {("dsp_block_out", "dsp_block_in")})
+        app.add_flow(ata_receiver_op, sorter_op, {("out", "in")})
 
         return (ata_receiver_op, sorter_op)
 

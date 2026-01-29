@@ -36,5 +36,6 @@ PYBIND11_MODULE(_socket_ops, m) {
              py::arg("address"),
              py::arg("name") = "zmq_transmitter")
         .def("collect_metrics_map", &ZmqTransmitterOp::collectMetricsMap)
-        .def("collect_metrics_string", &ZmqTransmitterOp::collectMetricsString);
+        .def("collect_metrics_string", &ZmqTransmitterOp::collectMetricsString)
+        .def("set_manifest_provider", &ZmqTransmitterOp::setManifestProvider);
 }

@@ -209,11 +209,11 @@ void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionCo
     }
 }
 
-stelline::StoreInterface::MetricsMap SimpleDetectionOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap SimpleDetectionOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["iterations"] = fmt::format("{}", pimpl->iterations);
     metrics["hits"] = fmt::format("{}", pimpl->numberOfHits);
     return metrics;

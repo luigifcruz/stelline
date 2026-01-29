@@ -208,7 +208,7 @@ void Fbh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::StoreInterface::MetricsMap Fbh5WriterRdmaOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap Fbh5WriterRdmaOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }
@@ -221,7 +221,7 @@ stelline::StoreInterface::MetricsMap Fbh5WriterRdmaOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
     metrics["total_data_written_mb"] = fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0));
     metrics["chunks_written"] = fmt::format("{}", pimpl->chunkCounter);

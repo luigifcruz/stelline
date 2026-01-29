@@ -99,5 +99,6 @@ PYBIND11_MODULE(_frbnn_ops, m) {
              py::arg("hits_directory"),
              py::arg("name") = "simple_detection")
         .def("collect_metrics_map", &SimpleDetectionOp::collectMetricsMap)
-        .def("collect_metrics_string", &SimpleDetectionOp::collectMetricsString);
+        .def("collect_metrics_string", &SimpleDetectionOp::collectMetricsString)
+        .def("set_manifest_provider", &SimpleDetectionOp::setManifestProvider);
 }

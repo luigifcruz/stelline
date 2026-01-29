@@ -13,6 +13,7 @@ from holoscan.schedulers import (
     MultiThreadScheduler,
 )
 
+from stelline.manifest import ManifestProvider
 from stelline.registry import create_bit
 
 
@@ -22,6 +23,7 @@ class App(Application):
         config_path: str,
         metrics: bool = False,
         metrics_interval: float = 1.0,
+        manifest_endpoint: str | None = None,
     ):
         super().__init__()
         # Configure the application
@@ -37,6 +39,11 @@ class App(Application):
         self._operators: List[Operator] = []
         self._metrics_thread = None
         self._metrics_stop_event = None
+
+        # Manifest provider
+        self._manifest_provider = None
+        if manifest_endpoint:
+            self._manifest_provider = ManifestProvider(manifest_endpoint)
 
         # Setup scheduler based on config
         self._setup_scheduler()
@@ -116,6 +123,12 @@ class App(Application):
 
         self._operators = ordered_ops
 
+        # Wire manifest provider to operators.
+        if self._manifest_provider:
+            for op in self._operators:
+                if hasattr(op, 'set_manifest_provider'):
+                    op.set_manifest_provider(self._manifest_provider)
+
         if self._metrics_enabled:
             self._start_metrics_thread()
 
@@ -140,6 +153,8 @@ class App(Application):
                 timestamp = time.strftime("%H:%M:%S")
                 print(f"[{timestamp}] Metrics:")
                 for op in self._operators:
+                    if not hasattr(op, "collect_metrics_string"):
+                        continue
                     try:
                         text = op.collect_metrics_string()
                         name = getattr(op, "name", None) or op.__class__.__name__
@@ -163,6 +178,7 @@ def run(
     *,
     metrics: bool = False,
     metrics_interval: float = 1.0,
+    manifest_endpoint: str | None = None,
 ) -> None:
     """
     Run Stelline with the specified configuration file.
@@ -175,6 +191,8 @@ def run(
         Enable periodic metrics printing.
     metrics_interval : float
         Seconds between metrics refreshes.
+    manifest_endpoint : str | None
+        gRPC endpoint for manifest provider (e.g., "localhost:50051").
 
     Example
     -------
@@ -190,6 +208,7 @@ def run(
         config_path,
         metrics=metrics,
         metrics_interval=metrics_interval,
+        manifest_endpoint=manifest_endpoint,
     )
     try:
         app.run()

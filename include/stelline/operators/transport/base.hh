@@ -6,7 +6,8 @@
 #include <stelline/common.hh>
 
 #include <stelline/yaml/types/block_shape.hh>
-#include <stelline/store.hh>
+#include <stelline/manifest.hh>
+#include <stelline/metrics.hh>
 
 namespace stelline::operators::transport {
 
@@ -17,7 +18,9 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API AtaReceiverOp : public Operator,
+                                   public stelline::MetricsInterface,
+                                   public stelline::ManifestConsumer {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)
 
@@ -29,7 +32,7 @@ class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterf
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
+    MetricsInterface::MetricsMap collectMetricsMap() override;
     std::string collectMetricsString() override;
 
  private:
@@ -65,7 +68,9 @@ class STELLINE_API DummyReceiverOp : public Operator {
     Parameter<BlockShape> totalBlock_;
 };
 
-class STELLINE_API SorterOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API SorterOp : public Operator,
+                              public stelline::MetricsInterface,
+                              public stelline::ManifestConsumer {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)
 
@@ -77,7 +82,7 @@ class STELLINE_API SorterOp : public Operator, public stelline::StoreInterface {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
+    MetricsInterface::MetricsMap collectMetricsMap() override;
     std::string collectMetricsString() override;
 
  private:

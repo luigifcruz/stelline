@@ -77,7 +77,7 @@ void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContex
     pimpl->lastTime = std::chrono::system_clock::now();
 }
 
-stelline::StoreInterface::MetricsMap DummyWriterOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap DummyWriterOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }

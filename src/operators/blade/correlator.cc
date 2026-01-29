@@ -83,10 +83,10 @@ CorrelatorOp::~CorrelatorOp() {
 }
 
 void CorrelatorOp::setup(OperatorSpec& spec) {
-    spec.input<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -167,7 +167,7 @@ void CorrelatorOp::compute(InputContext& input, OutputContext& output, Execution
     };
 
     auto emitCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
-        output.emit(tensor, "dsp_block_out");
+        output.emit(tensor, "out");
     };
 
     if (pimpl->dispatcher.run(pimpl->pipeline,
@@ -180,7 +180,7 @@ void CorrelatorOp::compute(InputContext& input, OutputContext& output, Execution
     }
 }
 
-stelline::StoreInterface::MetricsMap CorrelatorOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap CorrelatorOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }

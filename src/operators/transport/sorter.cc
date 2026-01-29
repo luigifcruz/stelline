@@ -35,10 +35,10 @@ SorterOp::~SorterOp() {
 }
 
 void SorterOp::setup(OperatorSpec& spec) {
-    spec.input<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                     holoscan::Arg("capacity", 1024UL));
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                     holoscan::Arg("capacity", 1024UL));
     spec.param(depth_, "depth");
@@ -65,7 +65,7 @@ void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionCont
 
     // Receive all blocks.
 
-    while (auto ptr = input.receive<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")) {
+    while (auto ptr = input.receive<std::shared_ptr<holoscan::Tensor>>("in")) {
         auto tensor = ptr.value();
 
         // Get the timestamp from the metadata.
@@ -96,18 +96,18 @@ void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionCont
         }
 
         meta->set("timestamp", minTimestamp);
-        output.emit(pimpl->pool.at(minTimestamp), "dsp_block_out");
+        output.emit(pimpl->pool.at(minTimestamp), "out");
 
         pimpl->pool.erase(minTimestamp);
         pimpl->timestamp = minTimestamp;
     }
 }
 
-stelline::StoreInterface::MetricsMap SorterOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap SorterOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["rejected_blocks"] = fmt::format("{}", pimpl->numberOfRejectedBlocks);
     metrics["pool_size"] = fmt::format("{}", pimpl->pool.size());
     return metrics;

@@ -1,6 +1,7 @@
-#ifndef STELLINE_STORE_HH
-#define STELLINE_STORE_HH
+#ifndef STELLINE_METRICS_HH
+#define STELLINE_METRICS_HH
 
+#include <any>
 #include <map>
 #include <string>
 
@@ -8,11 +9,11 @@
 
 namespace stelline {
 
-class STELLINE_API StoreInterface {
+class STELLINE_API MetricsInterface {
  public:
     using MetricsMap = std::map<std::string, std::string>;
 
-    virtual ~StoreInterface() = default;
+    virtual ~MetricsInterface() = default;
 
     virtual MetricsMap collectMetricsMap() = 0;
     virtual std::string collectMetricsString() = 0;
@@ -20,4 +21,4 @@ class STELLINE_API StoreInterface {
 
 }  // namespace stelline
 
-#endif  // STELLINE_STORE_HH
+#endif  // STELLINE_METRICS_HH

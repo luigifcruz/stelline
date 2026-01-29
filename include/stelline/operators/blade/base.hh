@@ -7,7 +7,8 @@
 
 #include <stelline/yaml/types/block_shape.hh>
 #include <stelline/yaml/types/map.hh>
-#include <stelline/store.hh>
+#include <stelline/manifest.hh>
+#include <stelline/metrics.hh>
 
 namespace stelline::operators::blade {
 
@@ -17,7 +18,10 @@ using holoscan::OperatorSpec;
 using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
-class STELLINE_API CorrelatorOp : public Operator, public stelline::StoreInterface {
+
+class STELLINE_API CorrelatorOp : public Operator,
+                                  public stelline::MetricsInterface,
+                                  public stelline::ManifestConsumer {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(CorrelatorOp)
 
@@ -29,7 +33,7 @@ class STELLINE_API CorrelatorOp : public Operator, public stelline::StoreInterfa
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
+    MetricsInterface::MetricsMap collectMetricsMap() override;
     std::string collectMetricsString() override;
 
  private:
@@ -42,7 +46,9 @@ class STELLINE_API CorrelatorOp : public Operator, public stelline::StoreInterfa
     Parameter<Map> options_;
 };
 
-class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API FrbnnOp : public Operator,
+                             public stelline::MetricsInterface,
+                             public stelline::ManifestConsumer {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(FrbnnOp)
 
@@ -54,7 +60,7 @@ class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
+    MetricsInterface::MetricsMap collectMetricsMap() override;
     std::string collectMetricsString() override;
 
  private:
@@ -67,7 +73,9 @@ class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
     Parameter<Map> options_;
 };
 
-class STELLINE_API BeamformerOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API BeamformerOp : public Operator,
+                                  public stelline::MetricsInterface,
+                                  public stelline::ManifestConsumer {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(BeamformerOp)
 
@@ -79,7 +87,7 @@ class STELLINE_API BeamformerOp : public Operator, public stelline::StoreInterfa
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
+    MetricsInterface::MetricsMap collectMetricsMap() override;
     std::string collectMetricsString() override;
 
  private:

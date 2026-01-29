@@ -101,7 +101,7 @@ AtaReceiverOp::~AtaReceiverOp() {
 }
 
 void AtaReceiverOp::setup(OperatorSpec& spec) {
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -370,7 +370,7 @@ void AtaReceiverOp::Impl::releaseComputedBlocks(const std::shared_ptr<MetadataDi
 
         if (!block->isProcessing()) {
             meta->set("timestamp", block->timestamp());
-            output.emit(block->outputTensor(), "dsp_block_out");
+            output.emit(block->outputTensor(), "out");
             block->destroy();
             idleQueue.push(block);
             computedBlocks += 1;
@@ -429,7 +429,7 @@ void AtaReceiverOp::Impl::burstCollectorLoop() {
     }
 }
 
-stelline::StoreInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }
@@ -439,7 +439,7 @@ stelline::StoreInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
         blockTimes.push_back(time);
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["blocks_received"] = fmt::format("{}", pimpl->receivedBlocks);
     metrics["blocks_computed"] = fmt::format("{}", pimpl->computedBlocks);
     metrics["blocks_lost"] = fmt::format("{}", pimpl->lostBlocks);

@@ -122,10 +122,10 @@ BeamformerOp::~BeamformerOp() {
 }
 
 void BeamformerOp::setup(OperatorSpec& spec) {
-    spec.input<std::shared_ptr<holoscan::Tensor>>("dsp_block_in")
+    spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -195,7 +195,7 @@ void BeamformerOp::compute(InputContext& input, OutputContext& output, Execution
     };
 
     auto emitCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
-        output.emit(tensor, "dsp_block_out");
+        output.emit(tensor, "out");
     };
 
     if (pimpl->dispatcher.run(pimpl->pipeline,
@@ -208,12 +208,12 @@ void BeamformerOp::compute(InputContext& input, OutputContext& output, Execution
     }
 }
 
-stelline::StoreInterface::MetricsMap BeamformerOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap BeamformerOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }
     const auto stats = pimpl->dispatcher.metrics();
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["successful_enqueues"] = fmt::format("{}", stats.successfulEnqueues);
     metrics["successful_dequeues"] = fmt::format("{}", stats.successfulDequeues);
     metrics["full_enqueues"] = fmt::format("{}", stats.fullEnqueues);

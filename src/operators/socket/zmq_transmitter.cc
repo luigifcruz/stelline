@@ -119,7 +119,7 @@ void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::StoreInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
+stelline::MetricsInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
     if (!pimpl) {
         return {};
     }
@@ -132,7 +132,7 @@ stelline::StoreInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
     metrics["total_bytes_written"] = fmt::format("{}", pimpl->bytesWritten);
     return metrics;
