@@ -200,7 +200,7 @@ void FrbnnOp::setup(OperatorSpec& spec) {
     spec.input<std::shared_ptr<holoscan::Tensor>>("in")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -267,7 +267,12 @@ void FrbnnOp::stop() {
 
 void FrbnnOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     auto receiveCallback = [&](){
-        return input.receive<std::shared_ptr<holoscan::Tensor>>("dsp_block_in").value();
+        auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+        if (!result) {
+            throw std::runtime_error("No input tensor available.");
+        }
+
+        return result.value();
     };
 
     auto convertInputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){

@@ -181,7 +181,12 @@ void BeamformerOp::stop() {
 
 void BeamformerOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     auto receiveCallback = [&](){
-        return input.receive<std::shared_ptr<holoscan::Tensor>>("dsp_block_in").value();
+        auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+        if (!result) {
+            throw std::runtime_error("No input tensor available.");
+        }
+
+        return result.value();
     };
 
     auto convertInputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){

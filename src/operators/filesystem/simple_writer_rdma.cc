@@ -113,7 +113,12 @@ void SimpleWriterRdmaOp::stop() {
 }
 
 void SimpleWriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
-    const auto& tensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
+    auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+    if (!result) {
+        return;
+    }
+
+    const auto& tensor = result.value();
     const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
 
     // Allocate permuted tensor.

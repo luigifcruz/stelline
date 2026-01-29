@@ -20,7 +20,12 @@ void ModelPreprocessorOp::start() {
 }
 
 void ModelPreprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
-    auto block = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
+    auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+    if (!result) {
+        return;
+    }
+
+    auto block = result.value();
 
     const auto& meta = metadata();
     meta->set("dsp_block", block);
@@ -43,7 +48,12 @@ void ModelAdapterOp::start() {
 }
 
 void ModelAdapterOp::compute(InputContext& input, OutputContext& output, ExecutionContext& context) {
-    auto inputMessage = input.receive<holoscan::gxf::Entity>("in").value();
+    auto result = input.receive<holoscan::gxf::Entity>("in");
+    if (!result) {
+        return;
+    }
+
+    auto inputMessage = result.value();
     auto inputTensor = inputMessage.get<holoscan::Tensor>("output");
 
     auto outMessage = holoscan::gxf::Entity::New(&context);
@@ -64,7 +74,12 @@ void ModelPostprocessorOp::start() {
 }
 
 void ModelPostprocessorOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
-    auto inputMessage = input.receive<holoscan::gxf::Entity>("in").value();
+    auto result = input.receive<holoscan::gxf::Entity>("in");
+    if (!result) {
+        return;
+    }
+
+    auto inputMessage = result.value();
     auto inputTensor = inputMessage.get<holoscan::Tensor>("output");
 
     output.emit(inputTensor, "out");
@@ -147,7 +162,12 @@ void SimpleDetectionOp::stop() {
 void SimpleDetectionOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     const auto& meta = metadata();
 
-    const auto& inferenceTensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
+    auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+    if (!result) {
+        return;
+    }
+
+    const auto& inferenceTensor = result.value();
     const auto& originalTensor = meta->get<std::shared_ptr<holoscan::Tensor>>("dsp_block");
     const auto& timestamp = meta->get<uint64_t>("timestamp");
 

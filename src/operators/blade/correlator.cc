@@ -153,7 +153,12 @@ void CorrelatorOp::stop() {
 
 void CorrelatorOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     auto receiveCallback = [&](){
-        return input.receive<std::shared_ptr<holoscan::Tensor>>("dsp_block_in").value();
+        auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+        if (!result) {
+            throw std::runtime_error("No input tensor available.");
+        }
+
+        return result.value();
     };
 
     auto convertInputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
@@ -185,7 +190,7 @@ stelline::MetricsInterface::MetricsMap CorrelatorOp::collectMetricsMap() {
         return {};
     }
     const auto stats = pimpl->dispatcher.metrics();
-    stelline::StoreInterface::MetricsMap metrics;
+    stelline::MetricsInterface::MetricsMap metrics;
     metrics["successful_enqueues"] = fmt::format("{}", stats.successfulEnqueues);
     metrics["successful_dequeues"] = fmt::format("{}", stats.successfulDequeues);
     metrics["full_enqueues"] = fmt::format("{}", stats.fullEnqueues);
