@@ -12,7 +12,8 @@ RUN apt update && \
 RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" \
                                           "notebook>=7,<8" \
                                           "jupyter-server>=2,<3" \
-                                          "jupyterlab-nvdashboard"
+                                          "jupyterlab-nvdashboard" \
+                                          "rich"
 
 EXPOSE 8888
 
