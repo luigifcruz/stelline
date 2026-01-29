@@ -75,7 +75,7 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         packet_data_size = 6144
 
         # UDP configuration
-        udp_src_port = 50100
+        udp_src_port = 10000
         udp_dst_port = 50000
 
         logger.info(f"  Network:")
