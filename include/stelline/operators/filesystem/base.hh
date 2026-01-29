@@ -32,7 +32,7 @@ class STELLINE_API SimpleWriterOp : public Operator, public stelline::StoreInter
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<std::string> filePath_;
 };
@@ -54,7 +54,7 @@ class STELLINE_API SimpleWriterRdmaOp : public Operator, public stelline::StoreI
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<std::string> filePath_;
 };
@@ -77,7 +77,7 @@ class STELLINE_API DummyWriterOp : public Operator, public stelline::StoreInterf
 
  private:
       struct Impl;
-      Impl* pimpl;
+      Impl* pimpl = nullptr;
 };
 
 #ifdef STELLINE_LOADER_FBH5
@@ -98,7 +98,7 @@ class STELLINE_API Fbh5WriterRdmaOp : public Operator, public stelline::StoreInt
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<std::string> filePath_;
 };
@@ -122,7 +122,7 @@ class STELLINE_API Uvh5WriterRdmaOp : public Operator, public stelline::StoreInt
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<std::string> output_filePath_;
     Parameter<std::string> telinfo_filePath_;

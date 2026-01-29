@@ -65,7 +65,7 @@ class STELLINE_API SimpleDetectionOp : public Operator, public stelline::StoreIn
 
  private:
        struct Impl;
-       Impl* pimpl;
+       Impl* pimpl = nullptr;
 
        Parameter<std::string> csvFilePath_;
        Parameter<std::string> hitsDirectory_;

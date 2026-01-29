@@ -32,7 +32,7 @@ class STELLINE_API ZmqTransmitterOp : public Operator, public stelline::StoreInt
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<std::string> address_;
 };

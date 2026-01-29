@@ -34,7 +34,7 @@ class STELLINE_API CorrelatorOp : public Operator, public stelline::StoreInterfa
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;
@@ -59,7 +59,7 @@ class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;
@@ -84,7 +84,7 @@ class STELLINE_API BeamformerOp : public Operator, public stelline::StoreInterfa
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;

@@ -34,7 +34,7 @@ class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterf
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<BlockShape> totalBlock_;
     Parameter<BlockShape> partialBlock_;
@@ -60,7 +60,7 @@ class STELLINE_API DummyReceiverOp : public Operator {
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<BlockShape> totalBlock_;
 };
@@ -82,7 +82,7 @@ class STELLINE_API SorterOp : public Operator, public stelline::StoreInterface {
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> depth_;
 };
