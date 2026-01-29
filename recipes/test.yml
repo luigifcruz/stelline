@@ -38,5 +38,5 @@ ata_shape:
         number_of_polarizations: 2
 
 file_writer:
-    mode: fbh5_writer_rdma
+    mode: simple_writer
     file_path: ./output_f.fbh5

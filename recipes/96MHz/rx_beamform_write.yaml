@@ -31,13 +31,13 @@ stelline:
 
 ata_standard_rx:
     mode: ata
-    rdma_gpu: 0
-    rdma_nic: 01:00.0
-    rdma_master_core: 0
-    rdma_worker_cores: [1]
-    rdma_max_bursts: 32
-    rdma_burst_size: 8192
-    concurrent_blocks: 8
+    gpu_device_id: 0
+    interface_address: "0000:c1:00.1"
+    master_core: 0
+    worker_core: 1
+    max_concurrent_bursts: 32
+    packets_per_burst: 8192
+    max_concurrent_blocks: 16
     output_pool_size: 32
     sorter_depth: 8
     enable_csv_logging: true
@@ -53,7 +53,7 @@ ata_standard_rx:
         number_of_polarizations: 2
     offset_block:
         number_of_antennas: 0
-        number_of_channels: 1120
+        number_of_channels: 352
         number_of_samples: 0
         number_of_polarizations: 0
 
@@ -73,5 +73,5 @@ blade_beamformer:
     options:
 
 file_writer:
-    mode: simple_writer_rdma
-    file_path: /mnt/raid/output.bin
+    mode: simple_writer
+    file_path: ./output.bin
