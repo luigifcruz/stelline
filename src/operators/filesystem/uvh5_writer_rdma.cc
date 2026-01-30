@@ -28,9 +28,7 @@ struct Uvh5WriterRdmaOp::Impl {
     // State.
 
     std::string outputFilePath;
-    std::string telinfoFilePath;
-    std::string obsantinfoFilePath;
-    std::string iersFilePath;
+    Manifest metadata;
 
     // UVH5 file state.
 
@@ -67,18 +65,14 @@ void Uvh5WriterRdmaOp::setup(OperatorSpec& spec) {
                    holoscan::Arg("capacity", 1024UL));
 
     spec.param(output_filePath_, "output_file_path");
-    spec.param(telinfo_filePath_, "telinfo_file_path");
-    spec.param(obsantinfo_filePath_, "obsantinfo_file_path");
-    spec.param(iers_filePath_, "iers_file_path");
+    spec.param(metadata_, "metadata");
 }
 
 void Uvh5WriterRdmaOp::start() {
     // Convert Parameters to variables.
 
     pimpl->outputFilePath = output_filePath_.get();
-    pimpl->telinfoFilePath = telinfo_filePath_.get();
-    pimpl->obsantinfoFilePath = obsantinfo_filePath_.get();
-    pimpl->iersFilePath = iers_filePath_.get();
+    pimpl->metadata = metadata_.get();
 
     // Initialize arrays.
 	pimpl->uvh5_file = {0};
@@ -91,19 +85,76 @@ void Uvh5WriterRdmaOp::start() {
 	uvh5_header->Nspws = 1;
 	uvh5_header->Nblts = uvh5_header->Nbls * uvh5_header->Ntimes;
 
-	UVH5toml_parse_telescope_info(pimpl->telinfoFilePath.data(), uvh5_header);
-	UVH5toml_parse_observation_info(pimpl->obsantinfoFilePath.data(), uvh5_header);
+	// UVH5toml_parse_telescope_info(pimpl->telinfoFilePath.data(), uvh5_header);
+    char* name;
+    double latitude;					/* The latitude of the telescope site, in degrees. */
+    double longitude;					/* The longitude of the telescope site, in degrees. */
+    double altitude;					/* The altitude of the telescope site, in meters. */
+    char* antenna_position_frame;       /* The antenna position frame: {"XYZ", "ENU", "ECEF"}. */
+    double default_antenna_diameter;    /* The fallback antenna diameter, in meters. */
+    int nantenna;                       /* The number of antenna (the length of the `antenna` field). */
+    UVH5_antinfo_t* antenna;            /* The antenna information with positions. */
+    manifest()->get("/telescope_info/name", timestamp);
+    manifest()->get("/telescope_info/latitude", latitude);
+    manifest()->get("/telescope_info/longitude", longitude);
+    manifest()->get("/telescope_info/altitude", altitude);
+    manifest()->get("/telescope_info/antenna_position_frame", antenna_position_frame);
+    manifest()->get("/telescope_info/default_antenna_diameter", default_antenna_diameter);
+    manifest()->get("/telescope_info/antenna/len", nantenna);
+    antenna = malloc(nantenna * sizeof(UVH5_antinfo_t));
+    for (int i = 0; i < nantenna; i++) {
+        manifest()->get(fmt::format("/telescope_info/antenna/{}/name", i), name);
+        manifest()->get(fmt::format("/telescope_info/antenna/{}/number", i), number);
+        manifest()->get(fmt::format("/telescope_info/antenna/{}/diameter", i), diameter);
+        manifest()->get(fmt::format("/telescope_info/antenna/{}/position/0", i), antenna[i].position[0]);
+        manifest()->get(fmt::format("/telescope_info/antenna/{}/position/1", i), antenna[i].position[1]);
+        manifest()->get(fmt::format("/telescope_info/antenna/{}/position/2", i), antenna[i].position[2]);
+        antenna[i].name = name;
+    }
+    UVH5set_telescope_info(
+        name,
+        latitude,
+        longitude,
+        altitude,
+        antenna_position_frame,
+        default_antenna_diameter,
+        nantenna,
+        antenna,
+        uvh5_header
+    );
+    free(name);
+    free(antenna_position_frame);
+    for (int i = 0; i < nantenna; i++) {
+        free(antenna[i].name);
+    }
+    free(antenna);
 
-    // BLADE does not group the auto-baselines first
-    // TODO using uvh5_header->antenna_names like this assumes Nants_data == Nants_telescope
+
+    // UVH5toml_parse_observation_info(pimpl->obsantinfoFilePath.data(), uvh5_header);
+    int nantenna_obs;
+    char* polarization_chars = "xy";
+    manifest()->get("/observation_info/polarizations", polarization_chars);
+    manifest()->get("/observation_info/antenna_names/len", nantenna_obs);
+    char** antenna_names_obs = malloc(nantenna_obs*sizeof(std::string));
+    for (int i = 0; i < nantenna_obs; i++) {
+        manifest()->get(fmt::format("/observation_info/antenna_names/{}", i), antenna_names_obs[i]);
+    }
+    UVH5set_observation_info(
+        nantenna_obs,
+        antenna_names_obs,
+        polarization_chars,
+        uvh5_header
+    );
+
+    // override ant_1/2_array as pipeline does not group the auto-baselines first
     int bl_index = 0;
     for(int a0 = 0; a0 < uvh5_header->Nants_data; a0++) {
         int ant_1_num = uvh5_header->antenna_numbers[
-            UVH5find_antenna_index_by_name(uvh5_header, uvh5_header->antenna_names[a0])
+            UVH5find_antenna_index_by_name(uvh5_header, antenna_names_obs[a0])
         ];
         for(int a1 = a0; a1 < uvh5_header->Nants_data; a1++) {
             int ant_2_num = uvh5_header->antenna_numbers[
-                UVH5find_antenna_index_by_name(uvh5_header, uvh5_header->antenna_names[a1])
+                UVH5find_antenna_index_by_name(uvh5_header, antenna_names_obs[a1])
             ];
             uvh5_header->ant_1_array[bl_index] = ant_1_num;
             uvh5_header->ant_2_array[bl_index] = ant_2_num;
@@ -147,7 +198,7 @@ void Uvh5WriterRdmaOp::start() {
 	pimpl->tau = 1.0;
     uvh5_header->time_array[0] = 2400000.5; // JD float offset
     uvh5_header->time_array[0] += 41684.0; // MJD IERS first day
-    uvh5_header->time_array[0] += 6.5; // midday of 100th day
+    uvh5_header->time_array[0] += 6.5; // midday of 100th day //TODO update with metadata.obsinfo.start_time
     uvh5_header->time_array[0] += (pimpl->tau/2) / RADIOINTERFEROMETERY_DAYSEC; // midpoint of integration
 	for (size_t i = 0; i < uvh5_header->Nbls; i++)
 	{
@@ -215,23 +266,31 @@ void Uvh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->uvh5_file.visdata = pimpl->permutedTensor->data();
     UVH5_header_t* uvh5_header = &pimpl->uvh5_file.header;
 
-    // TODO update from metadata stream
+    // TODO update from metadata.obs.pointing
     double ra_rad = 0.628;
     double dec_rad = 0.628;
+    manifest()->get("/observation/ra_rad", ra_rad);
+    manifest()->get("/observation/dec_rad", dec_rad);
 
     uvh5_header->time_array[0] += + pimpl->tau/RADIOINTERFEROMETERY_DAYSEC;
-    double pos_angle = 0.0;
+    double pm_x_arcsec, pm_y_arcsec, ut1_utc_sec;
+    manifest()->get("/iers/pm_x_arcsec", pm_x_arcsec);
+    manifest()->get("/iers/pm_y_arcsec", pm_y_arcsec);
+    manifest()->get("/iers/ut1_utc_sec", ut1_utc_sec);
+
     int rv;
-    if ((rv = calc_itrs_icrs_frame_pos_angle(
-        uvh5_header->time_array,
-        &ra_rad,
-        &dec_rad,
+    if ((rv = calc_itrs_icrs_frame_pos_angle_with_pm_and_ut1_utc(
+        time_jd,
+        app_ra_radians,
+        app_dec_radians,
+        pm_x_arcsec,
+        pm_y_arcsec,
+        ut1_utc_sec,
         1,
         calc_rad_from_degree(uvh5_header->longitude),
         calc_rad_from_degree(uvh5_header->latitude),
         uvh5_header->altitude,
         RADIOINTERFEROMETERY_PI/360.0, // Offset 0.5 deg, PA is determined over a 1 deg arc.
-        pimpl->iersFilePath.data(),
         &pos_angle
     ))%10 != 0) {
         // RV is Zero if success, otherwise `(index+1)*10+errcode` encoding the index of the

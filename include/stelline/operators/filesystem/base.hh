@@ -125,9 +125,7 @@ class STELLINE_API Uvh5WriterRdmaOp : public Operator, public stelline::StoreInt
     Impl* pimpl;
 
     Parameter<std::string> output_filePath_;
-    Parameter<std::string> telinfo_filePath_;
-    Parameter<std::string> obsantinfo_filePath_;
-    Parameter<std::string> iers_filePath_;
+    Parameter<Manifest> metadata_;
 };
 #endif  // STELLINE_LOADER_UVH5
 
