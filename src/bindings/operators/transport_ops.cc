@@ -10,6 +10,7 @@
 #include <holoscan/core/operator_spec.hpp>
 
 #include <stelline/operators/transport/base.hh>
+#include <stelline/system_info.hh>
 #include <stelline/yaml/types/block_shape.hh>
 
 #include <advanced_network/types.h>
@@ -83,12 +84,15 @@ public:
                 cfg.mrs_.emplace(memory_cfg.name_, memory_cfg);
             }
 
+            const auto& sys = stelline::SystemInfo::instance();
+
             {
                 MemoryRegionConfig memory_cfg = {};
 
                 memory_cfg.name_ = "RX_DATA";
-                memory_cfg.kind_ = MemoryKind::HOST_PINNED;
-                memory_cfg.affinity_ = 0;
+                memory_cfg.kind_ = sys.unifiedMemory() ? MemoryKind::HOST_PINNED :
+                                                         MemoryKind::DEVICE;
+                memory_cfg.affinity_ = gpu_device_id;
                 memory_cfg.buf_size_ = packet_data_size;
                 memory_cfg.num_bufs_ = packets_per_burst * max_concurrent_bursts;
                 memory_cfg.access_ = MEM_ACCESS_LOCAL;
