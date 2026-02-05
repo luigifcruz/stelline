@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 
 #include <stelline/types.hh>
+#include <stelline/system_info.hh>
 #include <stelline/yaml/types/block_shape.hh>
 
 namespace py = pybind11;
@@ -26,4 +27,14 @@ PYBIND11_MODULE(_types, m) {
                              b.numberOfAntennas, b.numberOfChannels,
                              b.numberOfSamples, b.numberOfPolarizations);
         });
+
+    py::class_<SystemInfo>(m, "SystemInfo")
+        .def_static("instance", &SystemInfo::instance, py::return_value_policy::reference)
+        .def("configure", &SystemInfo::configure,
+             py::arg("system_name"),
+             py::arg("unified_memory"),
+             py::arg("discrete_gpu"))
+        .def("system_name", &SystemInfo::systemName)
+        .def("unified_memory", &SystemInfo::unifiedMemory)
+        .def("discrete_gpu", &SystemInfo::discreteGpu);
 }

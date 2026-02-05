@@ -15,6 +15,38 @@ from holoscan.schedulers import (
 
 from stelline.manifest import ManifestProvider
 from stelline.registry import create_bit
+from stelline.types import SystemInfo
+from stelline.utils import logger
+
+
+def _detect_system_info() -> None:
+    """Detect system properties and populate the SystemInfo singleton."""
+    # System name.
+    try:
+        name = Path("/sys/devices/virtual/dmi/id/product_name").read_text().strip()
+    except OSError:
+        name = "Unknown"
+
+    # Unified memory and discrete GPU detection via CUDA runtime.
+    unified = False
+    discrete = True
+    try:
+        import cuda.cudart as cudart
+        err, count = cudart.cudaGetDeviceCount()
+        if err == cudart.cudaError_t.cudaSuccess and count > 0:
+            err, props = cudart.cudaGetDeviceProperties(0)
+            if err == cudart.cudaError_t.cudaSuccess:
+                integrated = props.integrated
+                unified = bool(integrated)
+                discrete = not unified
+    except (ImportError, Exception):
+        pass
+
+    SystemInfo.instance().configure(name, unified, discrete)
+
+    logger.info(f"System: {name}, "
+                f"Unified Memory: {unified}, "
+                f"Discrete GPU: {discrete}")
 
 
 class App(Application):
@@ -28,6 +60,9 @@ class App(Application):
         super().__init__()
         # Configure the application
         self.config(config_path)
+
+        # Detect and set system info globally.
+        _detect_system_info()
 
         # Configure metadata
         self.enable_metadata(True)
