@@ -75,6 +75,10 @@ struct AtaReceiverOp::Impl {
     void releaseReceivedBlocks();
     void releaseComputedBlocks(const std::shared_ptr<MetadataDictionary>& meta, OutputContext& output);
 
+    // Traffic control.
+
+    bool trafficAllowed;
+
     // Burst collector.
 
     std::thread burstCollectorThread;
@@ -189,6 +193,11 @@ void AtaReceiverOp::start() {
         pimpl->burstCollectorLoop();
     });
 
+    // Drop all traffic.
+
+    drop_all_traffic(0);
+    pimpl->trafficAllowed = false;
+
     // Allocate block tensor pool.
 
     pimpl->blockTensorPool.resize(pimpl->outputPoolSize, [&]{
@@ -220,6 +229,14 @@ void AtaReceiverOp::stop() {
 }
 
 void AtaReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
+    // Allow traffic.
+
+    if (!pimpl->trafficAllowed) {
+        flush_port_queue(0, 0);
+        allow_all_traffic(0);
+        pimpl->trafficAllowed = true;
+    }
+
     BurstParams* burstPtr;
     if (get_rx_burst(&burstPtr) != Status::SUCCESS) {
         return;
