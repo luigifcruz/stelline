@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 
 def _read_sysfs(path: str, default: str = "N/A") -> str:
@@ -26,6 +27,68 @@ def _run_cmd(cmd: str) -> Optional[str]:
     except Exception:
         pass
     return None
+
+
+def _parse_cpu_list(text: str) -> set:
+    """Parse kernel CPU list format (e.g., '0-2,5-7') into a set of integers."""
+    cpus = set()
+    text = text.strip()
+    if not text:
+        return cpus
+    for part in text.split(","):
+        part = part.strip()
+        if "-" in part:
+            lo, hi = part.split("-", 1)
+            cpus.update(range(int(lo), int(hi) + 1))
+        else:
+            cpus.add(int(part))
+    return cpus
+
+
+def _parse_cpu_mask(text: str) -> set:
+    """Parse hex CPU bitmask (e.g., '00000000,000000f8') into a set of integers."""
+    text = text.strip().replace(",", "")
+    if not text:
+        return set()
+    cpus = set()
+    mask = int(text, 16)
+    bit = 0
+    while mask:
+        if mask & 1:
+            cpus.add(bit)
+        mask >>= 1
+        bit += 1
+    return cpus
+
+
+def _color_cpus(cpu_str: str, isolated: set, irq_cpus: set) -> Text:
+    """Color-code CPU list. Green=isolated+IRQ-free, Yellow=one of the two, White=normal."""
+    if cpu_str == "N/A":
+        return Text("N/A")
+    try:
+        cpus = sorted(int(x) for x in cpu_str.split())
+    except ValueError:
+        return Text(cpu_str)
+    if not cpus:
+        return Text("N/A")
+
+    def _style(cpu):
+        is_iso = cpu in isolated
+        is_irq_free = cpu not in irq_cpus
+        if is_iso and is_irq_free:
+            return "green"
+        if is_iso:
+            return "yellow"
+        if is_irq_free:
+            return "cyan"
+        return "white"
+
+    text = Text()
+    for i, cpu in enumerate(cpus):
+        if i > 0:
+            text.append(" ")
+        text.append(str(cpu), style=_style(cpu))
+    return text
 
 
 def _get_numa_cpus(numa_node: str) -> str:
@@ -151,6 +214,11 @@ def topo_command(args) -> int:
         console.print("[yellow][⚠] No NVIDIA GPUs found in /sys/bus/pci/drivers/nvidia.[/yellow]")
         return 1
 
+    # Detect isolated and IRQ-free cores for color coding.
+    isolated = _parse_cpu_list(_read_sysfs("/sys/devices/system/cpu/isolated", ""))
+    irq_aff_text = _read_sysfs("/proc/irq/default_smp_affinity", "")
+    irq_cpus = _parse_cpu_mask(irq_aff_text) if irq_aff_text else set()
+
     table = Table(
         title="System Topology",
         box=box.ROUNDED,
@@ -170,6 +238,7 @@ def topo_command(args) -> int:
             table.add_section()
 
         matched_nics = [n for n in nics if n["numa"] == gpu["numa"]]
+        colored_cpus = _color_cpus(gpu["cpus"], isolated, irq_cpus)
 
         if not matched_nics:
             table.add_row(
@@ -177,7 +246,7 @@ def topo_command(args) -> int:
                 gpu["name"],
                 gpu["pcie"],
                 gpu["numa"],
-                gpu["cpus"],
+                colored_cpus,
                 "[dim]none[/dim]",
                 "[dim]-[/dim]",
                 "[dim]-[/dim]",
@@ -190,7 +259,7 @@ def topo_command(args) -> int:
                         gpu["name"],
                         gpu["pcie"],
                         gpu["numa"],
-                        gpu["cpus"],
+                        colored_cpus,
                         nic["name"],
                         nic["pcie"],
                         nic["iface"],
@@ -209,6 +278,20 @@ def topo_command(args) -> int:
 
     console.print()
     console.print(table)
+
+    if isolated:
+        console.print(
+            "  [green]\u25a0[/green] isolated + irq-free"
+            "  [yellow]\u25a0[/yellow] isolated only"
+            "  [cyan]\u25a0[/cyan] irq-free only"
+        )
+    else:
+        console.print(
+            "[yellow][\u26a0] No isolated cores detected.[/yellow]\n"
+            "[dim]    Transport requires: isolcpus, nohz_full, rcu_nocbs,"
+            " irqaffinity kernel parameters.[/dim]"
+        )
+
     console.print()
 
     return 0
