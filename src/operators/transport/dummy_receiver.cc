@@ -1,6 +1,7 @@
 #include <stelline/types.hh>
 #include <stelline/operators/transport/base.hh>
 #include <stelline/utils/juggler.hh>
+#include <stelline/utils/tensor.hh>
 
 #include <matx.h>
 
@@ -79,13 +80,7 @@ void DummyReceiverOp::start() {
     // Allocate output tensor pool.
 
     pimpl->outputPool.resize(2, [&]{
-        auto tensor = matx::make_tensor<cuda::std::complex<float>>({
-            static_cast<int64_t>(pimpl->totalBlock.numberOfAntennas),
-            static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
-            static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
-            static_cast<int64_t>(pimpl->totalBlock.numberOfPolarizations)
-        }, matx::MATX_DEVICE_MEMORY);
-        return std::make_shared<holoscan::Tensor>(tensor.ToDlPack());
+        return MakeBlockTensor<cuda::std::complex<float>>(pimpl->totalBlock);
     });
 }
 
