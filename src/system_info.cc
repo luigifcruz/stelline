@@ -9,11 +9,11 @@ SystemInfo& SystemInfo::instance() {
     return inst;
 }
 
-SystemInfo::SystemInfo()
-    : _configured(false)
-    , _systemName("Unknown")
-    , _unifiedMemory(false)
-    , _discreteGpu(true) {}
+SystemInfo::SystemInfo() : _configured(false),
+                           _systemName("Unknown"),
+                           _unifiedMemory(false),
+                           _discreteGpu(true) {
+}
 
 void SystemInfo::configure(const std::string& systemName, bool unifiedMemory, bool discreteGpu) {
     if (_configured) {
