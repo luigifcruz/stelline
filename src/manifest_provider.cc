@@ -8,13 +8,11 @@
 namespace stelline {
 
 struct ManifestProvider::Impl {
-    std::string endpoint;
-    // TODO: Local cache
+
 };
 
-ManifestProvider::ManifestProvider(const std::string& endpoint) : pimpl(std::make_unique<Impl>()) {
-    pimpl->endpoint = endpoint;
-    HOLOSCAN_LOG_INFO("ManifestProvider created with endpoint '{}'.", endpoint);
+ManifestProvider::ManifestProvider() {
+    pimpl = std::make_unique<Impl>();
 }
 
 ManifestProvider::~ManifestProvider() = default;

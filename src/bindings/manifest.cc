@@ -12,12 +12,12 @@ PYBIND11_MODULE(_manifest, m) {
     // Manifest providers.
 
     py::class_<ManifestProvider, std::shared_ptr<ManifestProvider>>(m, "ManifestProvider")
-        .def(py::init<const std::string&>(), py::arg("endpoint"));
+        .def(py::init<>());
 
     // Metrics providers.
 
     py::class_<MetricsProvider, std::shared_ptr<MetricsProvider>>(m, "MetricsProvider")
-        .def(py::init<const std::string&>(), py::arg("endpoint"))
+        .def(py::init<>())
         .def("push", &MetricsProvider::push)
         .def("collect", &MetricsProvider::collect);
 }

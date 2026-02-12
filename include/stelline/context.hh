@@ -12,7 +12,7 @@ namespace stelline {
 
 class STELLINE_API ManifestProvider {
  public:
-    explicit ManifestProvider(const std::string& endpoint);
+    ManifestProvider();
     ~ManifestProvider();
 
     std::any pull(const std::string& key, uint64_t timestamp);
@@ -26,7 +26,7 @@ class STELLINE_API MetricsProvider {
  public:
     using MetricsMap = std::map<std::string, std::string>;
 
-    explicit MetricsProvider(const std::string& endpoint);
+    MetricsProvider();
     ~MetricsProvider();
 
     void push(const std::string& key, const std::string& value, bool local = false);

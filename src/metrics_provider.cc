@@ -8,13 +8,11 @@
 namespace stelline {
 
 struct MetricsProvider::Impl {
-    std::string endpoint;
     MetricsProvider::MetricsMap metrics;
 };
 
-MetricsProvider::MetricsProvider(const std::string& endpoint) : pimpl(std::make_unique<Impl>()) {
-    pimpl->endpoint = endpoint;
-    HOLOSCAN_LOG_INFO("MetricsProvider created with endpoint '{}'.", endpoint);
+MetricsProvider::MetricsProvider() {
+    pimpl = std::make_unique<Impl>();
 }
 
 MetricsProvider::~MetricsProvider() = default;

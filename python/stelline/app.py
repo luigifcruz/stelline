@@ -79,7 +79,7 @@ class App(Application):
         # Manifest provider
         self._manifest_provider = None
         if manifest_endpoint:
-            self._manifest_provider = ManifestProvider(manifest_endpoint)
+            self._manifest_provider = ManifestProvider()
 
         # Setup scheduler based on config
         self._setup_scheduler()
@@ -164,7 +164,7 @@ class App(Application):
             if hasattr(op, 'set_manifest_provider') and self._manifest_provider:
                 op.set_manifest_provider(self._manifest_provider)
             if hasattr(op, 'set_metrics_provider'):
-                provider = MetricsProvider("")
+                provider = MetricsProvider()
                 self._metrics_providers[id(op)] = provider
                 op.set_metrics_provider(provider)
 
