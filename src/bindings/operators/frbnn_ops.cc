@@ -98,7 +98,8 @@ PYBIND11_MODULE(_frbnn_ops, m) {
              py::arg("csv_file_path"),
              py::arg("hits_directory"),
              py::arg("name") = "simple_detection")
-        .def("collect_metrics_map", &SimpleDetectionOp::collectMetricsMap)
-        .def("collect_metrics_string", &SimpleDetectionOp::collectMetricsString)
-        .def("set_manifest_provider", &SimpleDetectionOp::setManifestProvider);
+        .def("tick", &SimpleDetectionOp::tick)
+        .def("format_metrics", &SimpleDetectionOp::formatMetrics)
+        .def("set_manifest_provider", &SimpleDetectionOp::setManifestProvider)
+        .def("set_metrics_provider", &SimpleDetectionOp::setMetricsProvider);
 }

@@ -103,21 +103,15 @@ void SorterOp::compute(InputContext& input, OutputContext& output, ExecutionCont
     }
 }
 
-stelline::MetricsInterface::MetricsMap SorterOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void SorterOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
-    stelline::MetricsInterface::MetricsMap metrics;
-    metrics["rejected_blocks"] = fmt::format("{}", pimpl->numberOfRejectedBlocks);
-    metrics["pool_size"] = fmt::format("{}", pimpl->pool.size());
-    return metrics;
+    metrics()->push("rejected_blocks", fmt::format("{}", pimpl->numberOfRejectedBlocks));
+    metrics()->push("pool_size", fmt::format("{}", pimpl->pool.size()));
 }
 
-std::string SorterOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string SorterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Number of Rejected Blocks: {}\n"
                        "  Pool Size: {}",
                        metrics.at("rejected_blocks"),

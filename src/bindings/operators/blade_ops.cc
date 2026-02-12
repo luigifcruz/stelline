@@ -91,9 +91,10 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("output_shape"),
              py::arg("options"),
              py::arg("name") = "correlator")
-        .def("collect_metrics_map", &CorrelatorOp::collectMetricsMap)
-        .def("collect_metrics_string", &CorrelatorOp::collectMetricsString)
-        .def("set_manifest_provider", &CorrelatorOp::setManifestProvider);
+        .def("tick", &CorrelatorOp::tick)
+        .def("format_metrics", &CorrelatorOp::formatMetrics)
+        .def("set_manifest_provider", &CorrelatorOp::setManifestProvider)
+        .def("set_metrics_provider", &CorrelatorOp::setMetricsProvider);
 
     py::class_<BeamformerOp, PyBeamformerOp, Operator, std::shared_ptr<BeamformerOp>>(m, "BeamformerOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -104,9 +105,10 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("output_shape"),
              py::arg("options"),
              py::arg("name") = "beamformer")
-        .def("collect_metrics_map", &BeamformerOp::collectMetricsMap)
-        .def("collect_metrics_string", &BeamformerOp::collectMetricsString)
-        .def("set_manifest_provider", &BeamformerOp::setManifestProvider);
+        .def("tick", &BeamformerOp::tick)
+        .def("format_metrics", &BeamformerOp::formatMetrics)
+        .def("set_manifest_provider", &BeamformerOp::setManifestProvider)
+        .def("set_metrics_provider", &BeamformerOp::setMetricsProvider);
 
     py::class_<FrbnnOp, PyFrbnnOp, Operator, std::shared_ptr<FrbnnOp>>(m, "FrbnnOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -117,7 +119,8 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("output_shape"),
              py::arg("options"),
              py::arg("name") = "frbnn")
-        .def("collect_metrics_map", &FrbnnOp::collectMetricsMap)
-        .def("collect_metrics_string", &FrbnnOp::collectMetricsString)
-        .def("set_manifest_provider", &FrbnnOp::setManifestProvider);
+        .def("tick", &FrbnnOp::tick)
+        .def("format_metrics", &FrbnnOp::formatMetrics)
+        .def("set_manifest_provider", &FrbnnOp::setManifestProvider)
+        .def("set_metrics_provider", &FrbnnOp::setMetricsProvider);
 }

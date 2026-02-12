@@ -124,9 +124,9 @@ void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::MetricsInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void ZmqTransmitterOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
@@ -137,17 +137,11 @@ stelline::MetricsInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::MetricsInterface::MetricsMap metrics;
-    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
-    metrics["total_bytes_written"] = fmt::format("{}", pimpl->bytesWritten);
-    return metrics;
+    metrics()->push("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->push("total_bytes_written", fmt::format("{}", pimpl->bytesWritten));
 }
 
-std::string ZmqTransmitterOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string ZmqTransmitterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Input Bandwidth: {} MB/s\n"
                        "  Total Bytes Written: {}",
                        metrics.at("current_bandwidth_mb_s"),

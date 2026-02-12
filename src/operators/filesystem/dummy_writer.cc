@@ -64,27 +64,21 @@ void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContex
     pimpl->numIterations++;
 }
 
-stelline::MetricsInterface::MetricsMap DummyWriterOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void DummyWriterOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
 
     auto elapsed = std::chrono::steady_clock::now() - pimpl->startTime;
     auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     double avgMs = (pimpl->numIterations > 0) ? static_cast<double>(elapsedMs) / pimpl->numIterations : 0.0;
 
-    stelline::MetricsInterface::MetricsMap metrics;
-    metrics["iterations"] = fmt::format("{}", pimpl->numIterations);
-    metrics["average_duration_ms"] = fmt::format("{:.2f}", avgMs);
-    metrics["latest_timestamp"] = fmt::format("{}", pimpl->latestTimestamp);
-    return metrics;
+    metrics()->push("iterations", fmt::format("{}", pimpl->numIterations));
+    metrics()->push("average_duration_ms", fmt::format("{:.2f}", avgMs));
+    metrics()->push("latest_timestamp", fmt::format("{}", pimpl->latestTimestamp));
 }
 
-std::string DummyWriterOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string DummyWriterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Iterations      : {}\n"
                        "  Average Duration: {} ms\n"
                        "  Latest Timestamp: {}",

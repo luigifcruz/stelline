@@ -6,8 +6,7 @@
 #include <stelline/common.hh>
 
 #include <stelline/yaml/types/block_shape.hh>
-#include <stelline/manifest.hh>
-#include <stelline/metrics.hh>
+#include <stelline/context.hh>
 
 namespace stelline::operators::transport {
 
@@ -19,8 +18,7 @@ using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
 class STELLINE_API AtaReceiverOp : public Operator,
-                                   public stelline::MetricsInterface,
-                                   public stelline::ManifestConsumer {
+                                   public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)
 
@@ -32,8 +30,8 @@ class STELLINE_API AtaReceiverOp : public Operator,
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    MetricsInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
@@ -69,8 +67,7 @@ class STELLINE_API DummyReceiverOp : public Operator {
 };
 
 class STELLINE_API SorterOp : public Operator,
-                              public stelline::MetricsInterface,
-                              public stelline::ManifestConsumer {
+                              public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)
 
@@ -82,8 +79,8 @@ class STELLINE_API SorterOp : public Operator,
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    MetricsInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;

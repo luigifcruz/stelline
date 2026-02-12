@@ -213,9 +213,9 @@ void Fbh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::MetricsInterface::MetricsMap Fbh5WriterRdmaOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void Fbh5WriterRdmaOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
@@ -226,18 +226,12 @@ stelline::MetricsInterface::MetricsMap Fbh5WriterRdmaOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::MetricsInterface::MetricsMap metrics;
-    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
-    metrics["total_data_written_mb"] = fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0));
-    metrics["chunks_written"] = fmt::format("{}", pimpl->chunkCounter);
-    return metrics;
+    metrics()->push("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->push("total_data_written_mb", fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0)));
+    metrics()->push("chunks_written", fmt::format("{}", pimpl->chunkCounter));
 }
 
-std::string Fbh5WriterRdmaOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string Fbh5WriterRdmaOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Current Bandwidth: {} MB/s\n"
                        "  Total Data Written: {} MB\n"
                        "  Chunks Written: {}",

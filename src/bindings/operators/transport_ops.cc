@@ -228,9 +228,10 @@ PYBIND11_MODULE(_transport_ops, m) {
              py::arg("output_pool_size"),
              py::arg("enable_csv_logging"),
              py::arg("name") = "ata_receiver")
-        .def("collect_metrics_map", &AtaReceiverOp::collectMetricsMap)
-        .def("collect_metrics_string", &AtaReceiverOp::collectMetricsString)
-        .def("set_manifest_provider", &AtaReceiverOp::setManifestProvider);
+        .def("tick", &AtaReceiverOp::tick)
+        .def("format_metrics", &AtaReceiverOp::formatMetrics)
+        .def("set_manifest_provider", &AtaReceiverOp::setManifestProvider)
+        .def("set_metrics_provider", &AtaReceiverOp::setMetricsProvider);
 
     py::class_<DummyReceiverOp, PyDummyReceiverOp, Operator, std::shared_ptr<DummyReceiverOp>>(m, "DummyReceiverOp")
         .def(py::init<Fragment*,
@@ -249,7 +250,8 @@ PYBIND11_MODULE(_transport_ops, m) {
              py::arg("fragment"),
              py::arg("depth"),
              py::arg("name") = "sorter")
-        .def("collect_metrics_map", &SorterOp::collectMetricsMap)
-        .def("collect_metrics_string", &SorterOp::collectMetricsString)
-        .def("set_manifest_provider", &SorterOp::setManifestProvider);
+        .def("tick", &SorterOp::tick)
+        .def("format_metrics", &SorterOp::formatMetrics)
+        .def("set_manifest_provider", &SorterOp::setManifestProvider)
+        .def("set_metrics_provider", &SorterOp::setMetricsProvider);
 }

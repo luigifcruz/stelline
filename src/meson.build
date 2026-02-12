@@ -1,6 +1,8 @@
 subdir('operators')
 
 src_lst += files([
-    'manifest.cc',
+    'context.cc',
+    'manifest_provider.cc',
+    'metrics_provider.cc',
     'system_info.cc',
 ])

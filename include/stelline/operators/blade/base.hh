@@ -7,8 +7,7 @@
 
 #include <stelline/yaml/types/block_shape.hh>
 #include <stelline/yaml/types/map.hh>
-#include <stelline/manifest.hh>
-#include <stelline/metrics.hh>
+#include <stelline/context.hh>
 
 namespace stelline::operators::blade {
 
@@ -20,8 +19,7 @@ using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
 class STELLINE_API CorrelatorOp : public Operator,
-                                  public stelline::MetricsInterface,
-                                  public stelline::ManifestConsumer {
+                                  public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(CorrelatorOp)
 
@@ -33,8 +31,8 @@ class STELLINE_API CorrelatorOp : public Operator,
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    MetricsInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
@@ -47,8 +45,7 @@ class STELLINE_API CorrelatorOp : public Operator,
 };
 
 class STELLINE_API FrbnnOp : public Operator,
-                             public stelline::MetricsInterface,
-                             public stelline::ManifestConsumer {
+                             public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(FrbnnOp)
 
@@ -60,8 +57,8 @@ class STELLINE_API FrbnnOp : public Operator,
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    MetricsInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
@@ -74,8 +71,7 @@ class STELLINE_API FrbnnOp : public Operator,
 };
 
 class STELLINE_API BeamformerOp : public Operator,
-                                  public stelline::MetricsInterface,
-                                  public stelline::ManifestConsumer {
+                                  public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(BeamformerOp)
 
@@ -87,8 +83,8 @@ class STELLINE_API BeamformerOp : public Operator,
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    MetricsInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;

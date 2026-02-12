@@ -213,25 +213,19 @@ void BeamformerOp::compute(InputContext& input, OutputContext& output, Execution
     }
 }
 
-stelline::MetricsInterface::MetricsMap BeamformerOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void BeamformerOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     const auto stats = pimpl->dispatcher.metrics();
-    stelline::MetricsInterface::MetricsMap metrics;
-    metrics["successful_enqueues"] = fmt::format("{}", stats.successfulEnqueues);
-    metrics["successful_dequeues"] = fmt::format("{}", stats.successfulDequeues);
-    metrics["full_enqueues"] = fmt::format("{}", stats.fullEnqueues);
-    metrics["dequeue_retries"] = fmt::format("{}", stats.dequeueRetries);
-    metrics["premature_dequeues"] = fmt::format("{}", stats.prematureDequeues);
-    return metrics;
+    metrics()->push("successful_enqueues", fmt::format("{}", stats.successfulEnqueues));
+    metrics()->push("successful_dequeues", fmt::format("{}", stats.successfulDequeues));
+    metrics()->push("full_enqueues", fmt::format("{}", stats.fullEnqueues));
+    metrics()->push("dequeue_retries", fmt::format("{}", stats.dequeueRetries));
+    metrics()->push("premature_dequeues", fmt::format("{}", stats.prematureDequeues));
 }
 
-std::string BeamformerOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string BeamformerOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Queueing Statistics:\n"
                        "    Successful Enqueues: {}\n"
                        "    Successful Dequeues: {}\n"

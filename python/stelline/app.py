@@ -13,7 +13,7 @@ from holoscan.schedulers import (
     MultiThreadScheduler,
 )
 
-from stelline.manifest import ManifestProvider
+from stelline.manifest import ManifestProvider, MetricsProvider
 from stelline.registry import create_bit
 from stelline.types import SystemInfo
 from stelline.utils import logger
@@ -72,6 +72,7 @@ class App(Application):
         self._metrics_enabled = metrics
         self._metrics_interval = max(metrics_interval, 0.1)
         self._operators: List[Operator] = []
+        self._metrics_providers: dict = {}
         self._metrics_thread = None
         self._metrics_stop_event = None
 
@@ -158,11 +159,14 @@ class App(Application):
 
         self._operators = ordered_ops
 
-        # Wire manifest provider to operators.
-        if self._manifest_provider:
-            for op in self._operators:
-                if hasattr(op, 'set_manifest_provider'):
-                    op.set_manifest_provider(self._manifest_provider)
+        # Wire manifest and metrics providers to operators.
+        for op in self._operators:
+            if hasattr(op, 'set_manifest_provider') and self._manifest_provider:
+                op.set_manifest_provider(self._manifest_provider)
+            if hasattr(op, 'set_metrics_provider'):
+                provider = MetricsProvider("")
+                self._metrics_providers[id(op)] = provider
+                op.set_metrics_provider(provider)
 
         if self._metrics_enabled:
             self._start_metrics_thread()
@@ -188,11 +192,16 @@ class App(Application):
                 timestamp = time.strftime("%H:%M:%S")
                 print(f"[{timestamp}] Metrics:")
                 for op in self._operators:
-                    if not hasattr(op, "collect_metrics_string"):
+                    if not hasattr(op, "tick"):
+                        continue
+                    provider = self._metrics_providers.get(id(op))
+                    if not provider:
                         continue
                     try:
-                        text = op.collect_metrics_string()
+                        op.tick()
+                        data = provider.collect()
                         name = getattr(op, "name", None) or op.__class__.__name__
+                        text = op.format_metrics(data)
                         print(f"- {name}:\n{text}")
                     except Exception as exc:
                         print(f"- ERROR collecting metrics: {exc}")

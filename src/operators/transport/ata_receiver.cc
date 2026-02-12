@@ -441,9 +441,9 @@ void AtaReceiverOp::Impl::burstCollectorLoop() {
     }
 }
 
-stelline::MetricsInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void AtaReceiverOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     std::vector<uint64_t> blockTimes;
     blockTimes.reserve(pimpl->blockMap.size());
@@ -451,38 +451,31 @@ stelline::MetricsInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
         blockTimes.push_back(time);
     }
 
-    stelline::MetricsInterface::MetricsMap metrics;
-    metrics["blocks_received"] = fmt::format("{}", pimpl->receivedBlocks);
-    metrics["blocks_computed"] = fmt::format("{}", pimpl->computedBlocks);
-    metrics["blocks_lost"] = fmt::format("{}", pimpl->lostBlocks);
-    metrics["packets_evicted"] = fmt::format("{}", pimpl->evictedPackets);
-    metrics["packets_received"] = fmt::format("{}", pimpl->receivedPackets);
-    metrics["packets_lost"] = fmt::format("{}", pimpl->lostPackets);
-    metrics["idle_queue"] = fmt::format("{}", pimpl->idleQueue.size());
-    metrics["receive_queue"] = fmt::format("{}", pimpl->receiveQueue.size());
-    metrics["compute_queue"] = fmt::format("{}", pimpl->computeQueue.size());
-    metrics["bursts_in_flight"] = fmt::format("{}", pimpl->bursts.size());
-    metrics["avg_burst_release_time_us"] = fmt::format("{}", pimpl->avgBurstReleaseTime.count());
-    metrics["mem_pool_available"] = fmt::format("{}", pimpl->blockTensorPool.available());
-    metrics["mem_pool_referenced"] = fmt::format("{}", pimpl->blockTensorPool.referenced());
-    metrics["block_map_latest_time_index"] = fmt::format("{}", pimpl->latestBlockTimeIndex);
-    metrics["block_map_usage"] = fmt::format("{}/{}", pimpl->blockMap.size(), pimpl->maxConcurrentBlocks);
-    metrics["block_map_times"] = fmt::format("[{}]", fmt::join(blockTimes, ","));
-    metrics["payload_sizes"] = fmt::format("[{}]", fmt::join(pimpl->payloadSizes, ","));
-    metrics["all_antennas"] = fmt::format("[{}]", fmt::join(pimpl->allAntennas, ","));
-    metrics["filtered_antennas"] = fmt::format("[{}]", fmt::join(pimpl->filteredAntennas, ","));
-    metrics["all_channels"] = fmt::format("[{}]", fmt::join(pimpl->allChannels, ","));
-    metrics["filtered_channels"] = fmt::format("[{}]", fmt::join(pimpl->filteredChannels, ","));
-    metrics["latest_timestamp"] = fmt::format("{}", pimpl->latestTimestamp);
-
-    return metrics;
+    metrics()->push("blocks_received", fmt::format("{}", pimpl->receivedBlocks));
+    metrics()->push("blocks_computed", fmt::format("{}", pimpl->computedBlocks));
+    metrics()->push("blocks_lost", fmt::format("{}", pimpl->lostBlocks));
+    metrics()->push("packets_evicted", fmt::format("{}", pimpl->evictedPackets));
+    metrics()->push("packets_received", fmt::format("{}", pimpl->receivedPackets));
+    metrics()->push("packets_lost", fmt::format("{}", pimpl->lostPackets));
+    metrics()->push("idle_queue", fmt::format("{}", pimpl->idleQueue.size()));
+    metrics()->push("receive_queue", fmt::format("{}", pimpl->receiveQueue.size()));
+    metrics()->push("compute_queue", fmt::format("{}", pimpl->computeQueue.size()));
+    metrics()->push("bursts_in_flight", fmt::format("{}", pimpl->bursts.size()));
+    metrics()->push("avg_burst_release_time_us", fmt::format("{}", pimpl->avgBurstReleaseTime.count()));
+    metrics()->push("mem_pool_available", fmt::format("{}", pimpl->blockTensorPool.available()));
+    metrics()->push("mem_pool_referenced", fmt::format("{}", pimpl->blockTensorPool.referenced()));
+    metrics()->push("block_map_latest_time_index", fmt::format("{}", pimpl->latestBlockTimeIndex));
+    metrics()->push("block_map_usage", fmt::format("{}/{}", pimpl->blockMap.size(), pimpl->maxConcurrentBlocks));
+    metrics()->push("block_map_times", fmt::format("[{}]", fmt::join(blockTimes, ",")));
+    metrics()->push("payload_sizes", fmt::format("[{}]", fmt::join(pimpl->payloadSizes, ",")));
+    metrics()->push("all_antennas", fmt::format("[{}]", fmt::join(pimpl->allAntennas, ",")));
+    metrics()->push("filtered_antennas", fmt::format("[{}]", fmt::join(pimpl->filteredAntennas, ",")));
+    metrics()->push("all_channels", fmt::format("[{}]", fmt::join(pimpl->allChannels, ",")));
+    metrics()->push("filtered_channels", fmt::format("[{}]", fmt::join(pimpl->filteredChannels, ",")));
+    metrics()->push("latest_timestamp", fmt::format("{}", pimpl->latestTimestamp));
 }
 
-std::string AtaReceiverOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string AtaReceiverOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Blocks    : {} received, {} computed, {} lost\n"
                        "  Packets   : {} evicted, {} received, {} lost\n"
                        "  In-Flight : {} idle, {} receive, {} compute\n"
