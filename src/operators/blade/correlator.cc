@@ -135,6 +135,8 @@ void CorrelatorOp::start() {
         .correlatorUseSharedMemory = FetchMap<bool>(pimpl->options, "correlator_use_shared_memory", false),
         .correlatorCalculationMode = CALC_MODE::INTEGER,
 
+        .postCorrelatorFrequencyIntegrationRate = FetchMap<U64>(pimpl->options, "post_correlator_frequency_integration_rate", 1),
+
         .stackerBlockSize = FetchMap<U64>(pimpl->options, "stacker_block_size", 512),
         .casterBlockSize = FetchMap<U64>(pimpl->options, "caster_block_size", 512),
         .channelizerBlockSize = FetchMap<U64>(pimpl->options, "channelizer_block_size", 512),
