@@ -101,5 +101,7 @@ PYBIND11_MODULE(_frbnn_ops, m) {
         .def("tick", &SimpleDetectionOp::tick)
         .def("format_metrics", &SimpleDetectionOp::formatMetrics)
         .def("set_manifest_provider", &SimpleDetectionOp::setManifestProvider)
-        .def("set_metrics_provider", &SimpleDetectionOp::setMetricsProvider);
+        .def("set_metrics_provider", &SimpleDetectionOp::setMetricsProvider)
+        .def_property_readonly("manifest", &SimpleDetectionOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &SimpleDetectionOp::metrics, py::return_value_policy::reference);
 }

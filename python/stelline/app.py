@@ -2,8 +2,14 @@
 Stelline Application class for building and running pipelines.
 """
 
+import time
 from pathlib import Path
 from typing import Iterable, List
+
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.rule import Rule
+from rich.text import Text
 
 from holoscan.core import Application, MetadataPolicy, Operator
 from holoscan.resources import UnboundedAllocator
@@ -14,6 +20,7 @@ from holoscan.schedulers import (
 )
 
 from stelline.manifest import ManifestProvider, MetricsProvider
+from stelline.nexus import NexusClient
 from stelline.registry import create_bit
 from stelline.types import SystemInfo
 from stelline.utils import logger
@@ -55,7 +62,6 @@ class App(Application):
         config_path: str,
         metrics: bool = False,
         metrics_interval: float = 1.0,
-        manifest_endpoint: str | None = None,
     ):
         super().__init__()
         # Configure the application
@@ -68,7 +74,7 @@ class App(Application):
         self.enable_metadata(True)
         self.metadata_policy = MetadataPolicy.INPLACE_UPDATE
 
-        # Metrics display configuration
+        # Configure metrics
         self._metrics_enabled = metrics
         self._metrics_interval = max(metrics_interval, 0.1)
         self._operators: List[Operator] = []
@@ -77,12 +83,17 @@ class App(Application):
         self._metrics_stop_event = None
 
         # Manifest provider
-        self._manifest_provider = None
-        if manifest_endpoint:
-            self._manifest_provider = ManifestProvider()
+        self._manifest_provider = ManifestProvider()
+
+        # Configure Nexus
+        self._nexus = NexusClient(self._manifest_provider)
 
         # Setup scheduler based on config
         self._setup_scheduler()
+
+    @property
+    def manifest(self):
+        return self._manifest_provider
 
     def _setup_scheduler(self):
         """Setup the scheduler based on configuration."""
@@ -181,39 +192,84 @@ class App(Application):
             self._metrics_thread = None
             self._metrics_stop_event = None
 
+    def _tick_operators(self):
+        for op in self._operators:
+            if hasattr(op, "tick"):
+                op.tick()
+
+    def _print_metrics(self):
+        console = Console()
+        timestamp = time.strftime("%H:%M:%S")
+        parts = []
+        for op in self._operators:
+            provider = self._metrics_providers.get(id(op))
+            if not provider:
+                continue
+            try:
+                data = provider.snapshot()
+                if not data:
+                    continue
+                name = getattr(op, "name", None) or op.__class__.__name__
+                text = op.format_metrics(data)
+                if parts:
+                    parts.append(Rule(style="dim"))
+                parts.append(Text(name, style="bold"))
+                parts.append(Text(text))
+            except Exception as exc:
+                if parts:
+                    parts.append(Rule(style="dim"))
+                parts.append(Text(f"ERROR: {exc}", style="bold red"))
+        if parts:
+            console.print(Panel(Group(*parts), title=f"Metrics {timestamp}", border_style="cyan"))
+
+    def _send_metrics(self):
+        if not self._nexus.available:
+            return
+        global_metrics = {}
+        for op in self._operators:
+            provider = self._metrics_providers.get(id(op))
+            if not provider:
+                continue
+            data = provider.snapshot(True)
+            if not data:
+                continue
+            name = getattr(op, "name", None) or op.__class__.__name__
+            group = {}
+            for key, metric in data.items():
+                value = metric.value
+                if metric.type == "number":
+                    try:
+                        value = float(value)
+                    except ValueError:
+                        pass
+                group[key] = {"type": metric.type, "value": value}
+            global_metrics[name] = group
+        self._nexus.sync_metrics(global_metrics)
+
     def _start_metrics_thread(self) -> None:
         import threading
-        import time
 
         self._metrics_stop_event = threading.Event()
 
         def _loop():
             while not self._metrics_stop_event.is_set():
-                timestamp = time.strftime("%H:%M:%S")
-                print(f"[{timestamp}] Metrics:")
-                for op in self._operators:
-                    if not hasattr(op, "tick"):
-                        continue
-                    provider = self._metrics_providers.get(id(op))
-                    if not provider:
-                        continue
-                    try:
-                        op.tick()
-                        data = provider.collect()
-                        name = getattr(op, "name", None) or op.__class__.__name__
-                        text = op.format_metrics(data)
-                        print(f"- {name}:\n{text}")
-                    except Exception as exc:
-                        print(f"- ERROR collecting metrics: {exc}")
+                self._tick_operators()
+                self._print_metrics()
+                self._send_metrics()
                 time.sleep(self._metrics_interval)
 
         self._metrics_thread = threading.Thread(target=_loop, daemon=True)
         self._metrics_thread.start()
 
     def run(self) -> None:
+        if self._nexus.available:
+            self._nexus.sync_status("RUNNING")
         try:
             super().run()
         finally:
+            if self._nexus.available:
+                self._nexus.sync_status("STOPPED")
+                self._nexus.close()
             self.stop_metrics_display()
 
 
@@ -222,7 +278,6 @@ def run(
     *,
     metrics: bool = False,
     metrics_interval: float = 1.0,
-    manifest_endpoint: str | None = None,
 ) -> None:
     """
     Run Stelline with the specified configuration file.
@@ -235,8 +290,6 @@ def run(
         Enable periodic metrics printing.
     metrics_interval : float
         Seconds between metrics refreshes.
-    manifest_endpoint : str | None
-        gRPC endpoint for manifest provider (e.g., "localhost:50051").
 
     Example
     -------
@@ -252,7 +305,6 @@ def run(
         config_path,
         metrics=metrics,
         metrics_interval=metrics_interval,
-        manifest_endpoint=manifest_endpoint,
     )
     try:
         app.run()

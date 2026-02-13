@@ -1,4 +1,5 @@
 #include <memory>
+#include <set>
 #include <string>
 
 #include <holoscan/holoscan.hpp>
@@ -9,6 +10,7 @@ namespace stelline {
 
 struct MetricsProvider::Impl {
     MetricsProvider::MetricsMap metrics;
+    std::set<std::string> globalKeys;
 };
 
 MetricsProvider::MetricsProvider() {
@@ -17,12 +19,27 @@ MetricsProvider::MetricsProvider() {
 
 MetricsProvider::~MetricsProvider() = default;
 
-void MetricsProvider::push(const std::string& key, const std::string& value, bool local) {
-    pimpl->metrics[key] = value;
+void MetricsProvider::record(const std::string& key,
+                             const std::string& value,
+                             const std::string& type,
+                             const bool& global) {
+    pimpl->metrics[key] = {type, value};
+    if (global) {
+        pimpl->globalKeys.insert(key);
+    }
 }
 
-MetricsProvider::MetricsMap MetricsProvider::collect() {
-    return pimpl->metrics;
+MetricsProvider::MetricsMap MetricsProvider::snapshot(const bool& global) const {
+    if (!global) {
+        return pimpl->metrics;
+    }
+    MetricsMap result;
+    for (const auto& [key, value] : pimpl->metrics) {
+        if (pimpl->globalKeys.contains(key)) {
+            result[key] = value;
+        }
+    }
+    return result;
 }
 
 }  // namespace stelline

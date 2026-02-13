@@ -233,15 +233,15 @@ void SimpleDetectionOp::tick() {
     if (!pimpl || !metrics()) {
         return;
     }
-    metrics()->push("iterations", fmt::format("{}", pimpl->iterations));
-    metrics()->push("hits", fmt::format("{}", pimpl->numberOfHits));
+    metrics()->record("iterations", fmt::format("{}", pimpl->iterations));
+    metrics()->record("hits", fmt::format("{}", pimpl->numberOfHits));
 }
 
 std::string SimpleDetectionOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Iterations: {}\n"
                        "  Hits      : {}",
-                       metrics.at("iterations"),
-                       metrics.at("hits"));
+                       metrics.at("iterations").value,
+                       metrics.at("hits").value);
 }
 
 }  // namespace stelline::operators::frbnn

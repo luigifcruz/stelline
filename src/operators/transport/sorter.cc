@@ -107,15 +107,15 @@ void SorterOp::tick() {
     if (!pimpl || !metrics()) {
         return;
     }
-    metrics()->push("rejected_blocks", fmt::format("{}", pimpl->numberOfRejectedBlocks));
-    metrics()->push("pool_size", fmt::format("{}", pimpl->pool.size()));
+    metrics()->record("rejected_blocks", fmt::format("{}", pimpl->numberOfRejectedBlocks));
+    metrics()->record("pool_size", fmt::format("{}", pimpl->pool.size()));
 }
 
 std::string SorterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Number of Rejected Blocks: {}\n"
                        "  Pool Size: {}",
-                       metrics.at("rejected_blocks"),
-                       metrics.at("pool_size"));
+                       metrics.at("rejected_blocks").value,
+                       metrics.at("pool_size").value);
 }
 
 }  // namespace stelline::operators::transport

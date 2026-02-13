@@ -231,7 +231,9 @@ PYBIND11_MODULE(_transport_ops, m) {
         .def("tick", &AtaReceiverOp::tick)
         .def("format_metrics", &AtaReceiverOp::formatMetrics)
         .def("set_manifest_provider", &AtaReceiverOp::setManifestProvider)
-        .def("set_metrics_provider", &AtaReceiverOp::setMetricsProvider);
+        .def("set_metrics_provider", &AtaReceiverOp::setMetricsProvider)
+        .def_property_readonly("manifest", &AtaReceiverOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &AtaReceiverOp::metrics, py::return_value_policy::reference);
 
     py::class_<DummyReceiverOp, PyDummyReceiverOp, Operator, std::shared_ptr<DummyReceiverOp>>(m, "DummyReceiverOp")
         .def(py::init<Fragment*,
@@ -253,5 +255,7 @@ PYBIND11_MODULE(_transport_ops, m) {
         .def("tick", &SorterOp::tick)
         .def("format_metrics", &SorterOp::formatMetrics)
         .def("set_manifest_provider", &SorterOp::setManifestProvider)
-        .def("set_metrics_provider", &SorterOp::setMetricsProvider);
+        .def("set_metrics_provider", &SorterOp::setMetricsProvider)
+        .def_property_readonly("manifest", &SorterOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &SorterOp::metrics, py::return_value_policy::reference);
 }

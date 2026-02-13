@@ -110,7 +110,9 @@ PYBIND11_MODULE(_filesystem_ops, m) {
         .def("tick", &DummyWriterOp::tick)
         .def("format_metrics", &DummyWriterOp::formatMetrics)
         .def("set_manifest_provider", &DummyWriterOp::setManifestProvider)
-        .def("set_metrics_provider", &DummyWriterOp::setMetricsProvider);
+        .def("set_metrics_provider", &DummyWriterOp::setMetricsProvider)
+        .def_property_readonly("manifest", &DummyWriterOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &DummyWriterOp::metrics, py::return_value_policy::reference);
 
     py::class_<SimpleWriterOp, PySimpleWriterOp, Operator, std::shared_ptr<SimpleWriterOp>>(m, "SimpleWriterOp")
         .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
@@ -120,7 +122,9 @@ PYBIND11_MODULE(_filesystem_ops, m) {
         .def("tick", &SimpleWriterOp::tick)
         .def("format_metrics", &SimpleWriterOp::formatMetrics)
         .def("set_manifest_provider", &SimpleWriterOp::setManifestProvider)
-        .def("set_metrics_provider", &SimpleWriterOp::setMetricsProvider);
+        .def("set_metrics_provider", &SimpleWriterOp::setMetricsProvider)
+        .def_property_readonly("manifest", &SimpleWriterOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &SimpleWriterOp::metrics, py::return_value_policy::reference);
 
     py::class_<SimpleWriterRdmaOp, PySimpleWriterRdmaOp, Operator, std::shared_ptr<SimpleWriterRdmaOp>>(m, "SimpleWriterRdmaOp")
         .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
@@ -130,7 +134,9 @@ PYBIND11_MODULE(_filesystem_ops, m) {
         .def("tick", &SimpleWriterRdmaOp::tick)
         .def("format_metrics", &SimpleWriterRdmaOp::formatMetrics)
         .def("set_manifest_provider", &SimpleWriterRdmaOp::setManifestProvider)
-        .def("set_metrics_provider", &SimpleWriterRdmaOp::setMetricsProvider);
+        .def("set_metrics_provider", &SimpleWriterRdmaOp::setMetricsProvider)
+        .def_property_readonly("manifest", &SimpleWriterRdmaOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &SimpleWriterRdmaOp::metrics, py::return_value_policy::reference);
 
 #ifdef STELLINE_LOADER_FBH5
     py::class_<Fbh5WriterRdmaOp, PyFbh5WriterRdmaOp, Operator, std::shared_ptr<Fbh5WriterRdmaOp>>(m, "Fbh5WriterRdmaOp")
@@ -141,7 +147,9 @@ PYBIND11_MODULE(_filesystem_ops, m) {
         .def("tick", &Fbh5WriterRdmaOp::tick)
         .def("format_metrics", &Fbh5WriterRdmaOp::formatMetrics)
         .def("set_manifest_provider", &Fbh5WriterRdmaOp::setManifestProvider)
-        .def("set_metrics_provider", &Fbh5WriterRdmaOp::setMetricsProvider);
+        .def("set_metrics_provider", &Fbh5WriterRdmaOp::setMetricsProvider)
+        .def_property_readonly("manifest", &Fbh5WriterRdmaOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &Fbh5WriterRdmaOp::metrics, py::return_value_policy::reference);
 #endif
 
 #ifdef STELLINE_LOADER_UVH5
@@ -157,6 +165,8 @@ PYBIND11_MODULE(_filesystem_ops, m) {
         .def("tick", &Uvh5WriterRdmaOp::tick)
         .def("format_metrics", &Uvh5WriterRdmaOp::formatMetrics)
         .def("set_manifest_provider", &Uvh5WriterRdmaOp::setManifestProvider)
-        .def("set_metrics_provider", &Uvh5WriterRdmaOp::setMetricsProvider);
+        .def("set_metrics_provider", &Uvh5WriterRdmaOp::setMetricsProvider)
+        .def_property_readonly("manifest", &Uvh5WriterRdmaOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &Uvh5WriterRdmaOp::metrics, py::return_value_policy::reference);
 #endif
 }

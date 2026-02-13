@@ -137,15 +137,15 @@ void ZmqTransmitterOp::tick() {
         pimpl->lastMeasurementTime = now;
     }
 
-    metrics()->push("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
-    metrics()->push("total_bytes_written", fmt::format("{}", pimpl->bytesWritten));
+    metrics()->record("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->record("total_bytes_written", fmt::format("{}", pimpl->bytesWritten));
 }
 
 std::string ZmqTransmitterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Input Bandwidth: {} MB/s\n"
                        "  Total Bytes Written: {}",
-                       metrics.at("current_bandwidth_mb_s"),
-                       metrics.at("total_bytes_written"));
+                       metrics.at("current_bandwidth_mb_s").value,
+                       metrics.at("total_bytes_written").value);
 }
 
 }  // namespace stelline::operators::socket

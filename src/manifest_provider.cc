@@ -1,5 +1,7 @@
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <holoscan/holoscan.hpp>
 
@@ -7,8 +9,14 @@
 
 namespace stelline {
 
-struct ManifestProvider::Impl {
+struct Entry {
+    uint64_t start;
+    uint64_t end;
+    std::any value;
+};
 
+struct ManifestProvider::Impl {
+    std::unordered_map<std::string, std::vector<Entry>> cache;
 };
 
 ManifestProvider::ManifestProvider() {
@@ -17,9 +25,23 @@ ManifestProvider::ManifestProvider() {
 
 ManifestProvider::~ManifestProvider() = default;
 
-std::any ManifestProvider::pull(const std::string& key, uint64_t timestamp) {
-    HOLOSCAN_LOG_INFO("ManifestProvider::pull('{}', {}) called.", key, timestamp);
-    // TODO: Implement local lookup
+void ManifestProvider::store(const std::string& key,
+                             const std::any& value,
+                             const uint64_t& start,
+                             const uint64_t& end) {
+    pimpl->cache[key].push_back({start, end, value});
+}
+
+std::any ManifestProvider::fetch(const std::string& key, const uint64_t& timestamp) const {
+    auto it = pimpl->cache.find(key);
+    if (it == pimpl->cache.end()) {
+        return {};
+    }
+    for (const auto& entry : it->second) {
+        if (timestamp >= entry.start && timestamp < entry.end) {
+            return entry.value;
+        }
+    }
     return {};
 }
 

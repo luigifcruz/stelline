@@ -73,18 +73,18 @@ void DummyWriterOp::tick() {
     auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     double avgMs = (pimpl->numIterations > 0) ? static_cast<double>(elapsedMs) / pimpl->numIterations : 0.0;
 
-    metrics()->push("iterations", fmt::format("{}", pimpl->numIterations));
-    metrics()->push("average_duration_ms", fmt::format("{:.2f}", avgMs));
-    metrics()->push("latest_timestamp", fmt::format("{}", pimpl->latestTimestamp));
+    metrics()->record("iterations", fmt::format("{}", pimpl->numIterations));
+    metrics()->record("average_duration_ms", fmt::format("{:.2f}", avgMs));
+    metrics()->record("latest_timestamp", fmt::format("{}", pimpl->latestTimestamp));
 }
 
 std::string DummyWriterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Iterations      : {}\n"
                        "  Average Duration: {} ms\n"
                        "  Latest Timestamp: {}",
-                       metrics.at("iterations"),
-                       metrics.at("average_duration_ms"),
-                       metrics.at("latest_timestamp"));
+                       metrics.at("iterations").value,
+                       metrics.at("average_duration_ms").value,
+                       metrics.at("latest_timestamp").value);
 }
 
 }  // namespace stelline::operators::io

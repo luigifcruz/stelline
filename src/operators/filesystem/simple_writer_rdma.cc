@@ -168,15 +168,15 @@ void SimpleWriterRdmaOp::tick() {
         pimpl->lastMeasurementTime = now;
     }
 
-    metrics()->push("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
-    metrics()->push("total_data_written_mb", fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0)));
+    metrics()->record("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->record("total_data_written_mb", fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0)));
 }
 
 std::string SimpleWriterRdmaOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Current Bandwidth: {} MB/s\n"
                        "  Total Data Written: {} MB",
-                       metrics.at("current_bandwidth_mb_s"),
-                       metrics.at("total_data_written_mb"));
+                       metrics.at("current_bandwidth_mb_s").value,
+                       metrics.at("total_data_written_mb").value);
 }
 
 }  // namespace stelline::operators::filesystem

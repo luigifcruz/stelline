@@ -94,7 +94,9 @@ PYBIND11_MODULE(_blade_ops, m) {
         .def("tick", &CorrelatorOp::tick)
         .def("format_metrics", &CorrelatorOp::formatMetrics)
         .def("set_manifest_provider", &CorrelatorOp::setManifestProvider)
-        .def("set_metrics_provider", &CorrelatorOp::setMetricsProvider);
+        .def("set_metrics_provider", &CorrelatorOp::setMetricsProvider)
+        .def_property_readonly("manifest", &CorrelatorOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &CorrelatorOp::metrics, py::return_value_policy::reference);
 
     py::class_<BeamformerOp, PyBeamformerOp, Operator, std::shared_ptr<BeamformerOp>>(m, "BeamformerOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -108,7 +110,9 @@ PYBIND11_MODULE(_blade_ops, m) {
         .def("tick", &BeamformerOp::tick)
         .def("format_metrics", &BeamformerOp::formatMetrics)
         .def("set_manifest_provider", &BeamformerOp::setManifestProvider)
-        .def("set_metrics_provider", &BeamformerOp::setMetricsProvider);
+        .def("set_metrics_provider", &BeamformerOp::setMetricsProvider)
+        .def_property_readonly("manifest", &BeamformerOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &BeamformerOp::metrics, py::return_value_policy::reference);
 
     py::class_<FrbnnOp, PyFrbnnOp, Operator, std::shared_ptr<FrbnnOp>>(m, "FrbnnOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -122,5 +126,7 @@ PYBIND11_MODULE(_blade_ops, m) {
         .def("tick", &FrbnnOp::tick)
         .def("format_metrics", &FrbnnOp::formatMetrics)
         .def("set_manifest_provider", &FrbnnOp::setManifestProvider)
-        .def("set_metrics_provider", &FrbnnOp::setMetricsProvider);
+        .def("set_metrics_provider", &FrbnnOp::setMetricsProvider)
+        .def_property_readonly("manifest", &FrbnnOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &FrbnnOp::metrics, py::return_value_policy::reference);
 }

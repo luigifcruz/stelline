@@ -226,18 +226,18 @@ void Fbh5WriterRdmaOp::tick() {
         pimpl->lastMeasurementTime = now;
     }
 
-    metrics()->push("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
-    metrics()->push("total_data_written_mb", fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0)));
-    metrics()->push("chunks_written", fmt::format("{}", pimpl->chunkCounter));
+    metrics()->record("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->record("total_data_written_mb", fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0)));
+    metrics()->record("chunks_written", fmt::format("{}", pimpl->chunkCounter));
 }
 
 std::string Fbh5WriterRdmaOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Current Bandwidth: {} MB/s\n"
                        "  Total Data Written: {} MB\n"
                        "  Chunks Written: {}",
-                       metrics.at("current_bandwidth_mb_s"),
-                       metrics.at("total_data_written_mb"),
-                       metrics.at("chunks_written"));
+                       metrics.at("current_bandwidth_mb_s").value,
+                       metrics.at("total_data_written_mb").value,
+                       metrics.at("chunks_written").value);
 }
 
 }  // namespace stelline::operators::io

@@ -190,11 +190,11 @@ void CorrelatorOp::tick() {
         return;
     }
     const auto stats = pimpl->dispatcher.metrics();
-    metrics()->push("successful_enqueues", fmt::format("{}", stats.successfulEnqueues));
-    metrics()->push("successful_dequeues", fmt::format("{}", stats.successfulDequeues));
-    metrics()->push("full_enqueues", fmt::format("{}", stats.fullEnqueues));
-    metrics()->push("dequeue_retries", fmt::format("{}", stats.dequeueRetries));
-    metrics()->push("premature_dequeues", fmt::format("{}", stats.prematureDequeues));
+    metrics()->record("successful_enqueues", fmt::format("{}", stats.successfulEnqueues));
+    metrics()->record("successful_dequeues", fmt::format("{}", stats.successfulDequeues));
+    metrics()->record("full_enqueues", fmt::format("{}", stats.fullEnqueues));
+    metrics()->record("dequeue_retries", fmt::format("{}", stats.dequeueRetries));
+    metrics()->record("premature_dequeues", fmt::format("{}", stats.prematureDequeues));
 }
 
 std::string CorrelatorOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
@@ -204,11 +204,11 @@ std::string CorrelatorOp::formatMetrics(const MetricsProvider::MetricsMap& metri
                        "    Full Enqueues: {}\n"
                        "    Dequeue Retries: {}\n"
                        "    Premature Dequeues: {}",
-                       metrics.at("successful_enqueues"),
-                       metrics.at("successful_dequeues"),
-                       metrics.at("full_enqueues"),
-                       metrics.at("dequeue_retries"),
-                       metrics.at("premature_dequeues"));
+                       metrics.at("successful_enqueues").value,
+                       metrics.at("successful_dequeues").value,
+                       metrics.at("full_enqueues").value,
+                       metrics.at("dequeue_retries").value,
+                       metrics.at("premature_dequeues").value);
 }
 
 }  // namespace stelline::operators::blade

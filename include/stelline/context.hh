@@ -15,23 +15,34 @@ class STELLINE_API ManifestProvider {
     ManifestProvider();
     ~ManifestProvider();
 
-    std::any pull(const std::string& key, uint64_t timestamp);
+    void store(const std::string& key,
+               const std::any& value,
+               const uint64_t& start = 0,
+               const uint64_t& end = UINT64_MAX);
+    std::any fetch(const std::string& key, const uint64_t& timestamp = 0) const;
 
  private:
     struct Impl;
     std::unique_ptr<Impl> pimpl;
 };
 
+struct Metric {
+    std::string type;
+    std::string value;
+};
+
 class STELLINE_API MetricsProvider {
  public:
-    using MetricsMap = std::map<std::string, std::string>;
+    using MetricsMap = std::map<std::string, Metric>;
 
     MetricsProvider();
     ~MetricsProvider();
 
-    void push(const std::string& key, const std::string& value, bool local = false);
-
-    MetricsMap collect();
+    void record(const std::string& key,
+                const std::string& value,
+                const std::string& type = "text",
+                const bool& global = false);
+    MetricsMap snapshot(const bool& global = false) const;
 
  private:
     struct Impl;
@@ -53,9 +64,8 @@ class STELLINE_API Context {
     virtual void tick() = 0;
     virtual std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) = 0;
 
- protected:
-    ManifestProvider* manifest();
-    MetricsProvider* metrics();
+    ManifestProvider* manifest() const;
+    MetricsProvider* metrics() const;
 
  private:
     struct Impl;

@@ -26,11 +26,11 @@ void Context::setMetricsProvider(MetricsProvider* provider) {
     pimpl->metrics = provider;
 }
 
-ManifestProvider* Context::manifest() {
+ManifestProvider* Context::manifest() const {
     return pimpl->manifest;
 }
 
-MetricsProvider* Context::metrics() {
+MetricsProvider* Context::metrics() const {
     return pimpl->metrics;
 }
 

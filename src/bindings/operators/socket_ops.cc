@@ -38,5 +38,7 @@ PYBIND11_MODULE(_socket_ops, m) {
         .def("tick", &ZmqTransmitterOp::tick)
         .def("format_metrics", &ZmqTransmitterOp::formatMetrics)
         .def("set_manifest_provider", &ZmqTransmitterOp::setManifestProvider)
-        .def("set_metrics_provider", &ZmqTransmitterOp::setMetricsProvider);
+        .def("set_metrics_provider", &ZmqTransmitterOp::setMetricsProvider)
+        .def_property_readonly("manifest", &ZmqTransmitterOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &ZmqTransmitterOp::metrics, py::return_value_policy::reference);
 }
