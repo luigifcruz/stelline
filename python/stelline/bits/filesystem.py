@@ -60,21 +60,12 @@ def FilesystemBit(
             file_path=file_path,
         )
     elif mode == "uvh5_writer_rdma":
+        logger.info("Creating UVH5 Writer RDMA operator.")
         writer_name = f"filesystem-uvh5-writer-rdma-{id}"
-        telinfo_file_path = cfg.get("telinfo_file_path")
-        obsantinfo_file_path = cfg.get("obsantinfo_file_path")
-        iers_file_path = cfg.get("iers_file_path")
-        logger.info(f"  Telinfo Path: {telinfo_file_path}")
-        logger.info(f"  Obsantinfo Path: {obsantinfo_file_path}")
-        logger.info(f"  IERS Path: {iers_file_path}")
-        logger.info("Creating FBH5 Writer RDMA operator.")
         writer_op = Uvh5WriterRdmaOp(
             fragment=app,
             name=writer_name,
-            output_file_path=file_path,
-            telinfo_file_path=telinfo_file_path,
-            obsantinfo_file_path=obsantinfo_file_path,
-            iers_file_path=iers_file_path,
+            file_path=file_path,
         )
     else:
         raise ValueError(f"Unsupported filesystem mode: {mode}")

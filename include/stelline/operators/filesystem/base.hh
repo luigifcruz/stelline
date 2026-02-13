@@ -130,10 +130,7 @@ class STELLINE_API Uvh5WriterRdmaOp : public Operator,
     struct Impl;
     Impl* pimpl = nullptr;
 
-    Parameter<std::string> output_filePath_;
-    Parameter<std::string> telinfo_filePath_;
-    Parameter<std::string> obsantinfo_filePath_;
-    Parameter<std::string> iers_filePath_;
+    Parameter<std::string> filePath_;
 };
 #endif  // STELLINE_LOADER_UVH5
 
