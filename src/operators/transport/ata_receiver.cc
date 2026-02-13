@@ -80,6 +80,10 @@ struct AtaReceiverOp::Impl {
 
     bool trafficAllowed;
 
+    // Data type.
+
+    std::string dtype;
+
     // Burst collector.
 
     std::thread burstCollectorThread;
@@ -118,6 +122,7 @@ void AtaReceiverOp::setup(OperatorSpec& spec) {
     spec.param(offsetBlock_, "offset_block");
     spec.param(outputPoolSize_, "output_pool_size");
     spec.param(enableCsvLogging_, "enable_csv_logging");
+    spec.param(dtype_, "dtype");
 }
 
 void AtaReceiverOp::start() {
@@ -131,8 +136,7 @@ void AtaReceiverOp::start() {
     pimpl->maxConcurrentBlocks = maxConcurrentBlocks_.get();
     pimpl->outputPoolSize = outputPoolSize_.get();
     pimpl->enableCsvLogging = enableCsvLogging_.get();
-
-    // Validate configuration.
+    pimpl->dtype = dtype_.get();
 
     assert((pimpl->offsetBlock.numberOfAntennas % pimpl->partialBlock.numberOfAntennas) == 0);
     assert(pimpl->offsetBlock.numberOfSamples == 0);
@@ -202,7 +206,7 @@ void AtaReceiverOp::start() {
     // Allocate block tensor pool.
 
     pimpl->blockTensorPool.resize(pimpl->outputPoolSize, [&]{
-        return MakeBlockTensor<cuda::std::complex<float>>(pimpl->totalBlock);
+        return MakeBlockTensor(pimpl->totalBlock, pimpl->dtype);
     });
 }
 
@@ -356,7 +360,7 @@ void AtaReceiverOp::Impl::releaseReceivedBlocks() {
                 HOLOSCAN_LOG_ERROR("Failed to allocate tensor from pool.");
                 throw std::runtime_error("Failed to allocate tensor from pool.");
             }
-            block->compute(tensor, totalBlock, partialBlock, slots);
+            block->compute(tensor, totalBlock, partialBlock, slots, dtype);
             computeQueue.push(block);
             receivedBlocks += 1;
         } else if (isStale) {

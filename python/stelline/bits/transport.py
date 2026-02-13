@@ -41,9 +41,14 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
     cfg = app.kwargs(config)
     mode = cfg.get("mode")
     total_block = cfg.get("total_block")
+    dtype = cfg.get("dtype", "cf32")
+
+    if dtype not in ("cf32", "ci8"):
+        raise ValueError(f"Unsupported dtype: {dtype}. Must be 'cf32' or 'ci8'.")
 
     logger.info("Transport Configuration:")
     logger.info(f"  Mode: {mode}")
+    logger.info(f"  Data Type: {dtype}")
 
     total_block_shape = BlockShape(
         total_block["number_of_antennas"],
@@ -95,6 +100,7 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         logger.info(f"    Output Pool Size: {output_pool_size}")
         logger.info(f"    Enable CSV Logging: {enable_csv_logging}")
         logger.info(f"    Sorter Depth: {sorter_depth}")
+        logger.info(f"    Data Type: {dtype}")
 
         logger.info(f"  Block Configuration:")
         logger.info(f"    Total Block: {total_block}")
@@ -137,6 +143,7 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
             offset_block=offset_block_shape,
             output_pool_size=output_pool_size,
             enable_csv_logging=enable_csv_logging,
+            dtype=dtype,
             name=ata_receiver_name,
         )
 

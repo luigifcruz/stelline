@@ -8,8 +8,9 @@
 
 namespace stelline::operators::transport {
 
+template<typename SrcType, typename DstType>
 __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
-                       BlockShape totalShape, BlockShape partialShape, BlockShape slots, 
+                       BlockShape totalShape, BlockShape partialShape, BlockShape slots,
                        int counter) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -50,8 +51,8 @@ __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
 
     // Get the source and destination pointers.
 
-    cuda::std::complex<int8_t>* src = ((cuda::std::complex<int8_t>**)input)[idx];
-    cuda::std::complex<float>* dst = &((cuda::std::complex<float>*)output)[defragmentationOffset];
+    SrcType* src = ((SrcType**)input)[idx];
+    DstType* dst = &((DstType*)output)[defragmentationOffset];
 
     // Copy the fragment into the defragmented data.
 
@@ -60,24 +61,15 @@ __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
             for (int T = 0; T < pT; T++) {
                 for (int P = 0; P < pP; P++) {
                     int srcOffset = A * pF * pT * pP + F * pT * pP + T * pP + P;
-                    int dstOffset = A * tF * tT * tP + F * tT * tP + T * tP + P;  
+                    int dstOffset = A * tF * tT * tP + F * tT * tP + T * tP + P;
 
 #ifndef ENABLE_KERNEL_DEBUG_MODE
-                    dst[dstOffset] = {
-                        static_cast<float>(src[srcOffset].real()),
-                        static_cast<float>(src[srcOffset].imag())
-                    };
+                    dst[dstOffset] = static_cast<DstType>(src[srcOffset]);
 #else
                     if ((counter % 2) == 0) {
-                        dst[dstOffset] = {
-                            static_cast<float>(src[srcOffset].real()),
-                            static_cast<float>(src[srcOffset].imag())
-                        };
+                        dst[dstOffset] = static_cast<DstType>(src[srcOffset]);
                     } else {
-                        dst[dstOffset] = {
-                            static_cast<float>((counter % 8) * 2.0),
-                            static_cast<float>(0.0)
-                        };
+                        dst[dstOffset] = DstType(static_cast<float>((counter % 8) * 2.0), static_cast<float>(0.0));
                     }
 #endif
                 }
@@ -88,7 +80,7 @@ __global__ void Kernel(void* output, void** input, uint64_t numberOfPackets,
 
 cudaError_t LaunchKernel(void* output, void** input, uint64_t numberOfPackets,
                          BlockShape totalShape, BlockShape partialShape, BlockShape slots,
-                         cudaStream_t stream) {
+                         const std::string& dtype, cudaStream_t stream) {
     dim3 threadsPerBlock = {512, 1, 1};
     dim3 blocksPerGrid = {
         (static_cast<int32_t>(numberOfPackets) + threadsPerBlock.x - 1) / threadsPerBlock.x,
@@ -99,15 +91,21 @@ cudaError_t LaunchKernel(void* output, void** input, uint64_t numberOfPackets,
     static int counter = 0;
     counter++;
 
-    Kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(output, 
-                                                          input, 
-                                                          numberOfPackets,
-                                                          totalShape, 
-                                                          partialShape, 
-                                                          slots, 
-                                                          counter);
+    if (dtype == "ci8") {
+        Kernel<cuda::std::complex<int8_t>, cuda::std::complex<int8_t>>
+            <<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
+                output, input, numberOfPackets, totalShape, partialShape, slots, counter);
+        return cudaGetLastError();
+    }
 
-    return cudaGetLastError();
+    if (dtype == "cf32") {
+        Kernel<cuda::std::complex<int8_t>, cuda::std::complex<float>>
+            <<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
+                output, input, numberOfPackets, totalShape, partialShape, slots, counter);
+        return cudaGetLastError();
+    }
+
+    throw std::runtime_error("Unsupported data type.");
 }
 
 }  // namespace stelline::operators::transport

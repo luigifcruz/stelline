@@ -44,6 +44,7 @@ public:
                     const stelline::BlockShape& offset_block,
                     uint64_t output_pool_size,
                     bool enable_csv_logging,
+                    const std::string& dtype,
                     const std::string& name = "ata_receiver")
         : AtaReceiverOp(ArgList{Arg("max_concurrent_blocks", max_concurrent_blocks),
                                 Arg("total_block", total_block),
@@ -52,7 +53,8 @@ public:
                                 Arg("partial_block", partial_block),
                                 Arg("offset_block", offset_block),
                                 Arg("output_pool_size", output_pool_size),
-                                Arg("enable_csv_logging", enable_csv_logging)}) {
+                                Arg("enable_csv_logging", enable_csv_logging),
+                                Arg("dtype", dtype)}) {
         // Configure ANO.
 
         {
@@ -207,6 +209,7 @@ PYBIND11_MODULE(_transport_ops, m) {
                       const stelline::BlockShape&,
                       uint64_t,
                       bool,
+                      const std::string&,
                       const std::string&>(),
              py::arg("fragment"),
              py::arg("gpu_device_id"),
@@ -227,6 +230,7 @@ PYBIND11_MODULE(_transport_ops, m) {
              py::arg("offset_block"),
              py::arg("output_pool_size"),
              py::arg("enable_csv_logging"),
+             py::arg("dtype"),
              py::arg("name") = "ata_receiver")
         .def("tick", &AtaReceiverOp::tick)
         .def("format_metrics", &AtaReceiverOp::formatMetrics)

@@ -45,6 +45,7 @@ class STELLINE_API AtaReceiverOp : public Operator,
     Parameter<uint64_t> packetHeaderOffset_;
     Parameter<uint64_t> outputPoolSize_;
     Parameter<bool> enableCsvLogging_;
+    Parameter<std::string> dtype_;
 };
 
 class STELLINE_API DummyReceiverOp : public Operator {
