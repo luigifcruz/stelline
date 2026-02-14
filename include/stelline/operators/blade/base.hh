@@ -42,6 +42,7 @@ class STELLINE_API CorrelatorOp : public Operator,
     Parameter<BlockShape> inputShape_;
     Parameter<BlockShape> outputShape_;
     Parameter<Map> options_;
+    Parameter<std::string> dtype_;
 };
 
 class STELLINE_API FrbnnOp : public Operator,

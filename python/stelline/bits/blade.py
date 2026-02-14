@@ -22,12 +22,14 @@ def BladeBit(
     mode = cfg.get("mode")
     number_of_buffers = cfg.get("number_of_buffers") or 4
     options = cfg.get("options") or {}
+    dtype = cfg.get("dtype", "cf32")
 
     logger.info("Blade Configuration:")
     logger.info(f"  Input Shape: {input_shape_config}")
     logger.info(f"  Output Shape: {output_shape_config}")
     logger.info(f"  Mode: {mode}")
     logger.info(f"  Number of Buffers: {number_of_buffers}")
+    logger.info(f"  Data Type: {dtype}")
     logger.info(f"  Options: {options}")
 
     input_block_shape = BlockShape(
@@ -44,6 +46,9 @@ def BladeBit(
     )
 
     if mode == "correlator":
+        if dtype not in ("cf32", "ci8"):
+            raise ValueError(f"Invalid dtype {dtype} for correlator mode. Must be 'cf32' or 'ci8'.")
+
         logger.info("Creating Correlator operator.")
         blade_name = f"blade-correlator-{id}"
         blade_op = CorrelatorOp(
@@ -52,9 +57,13 @@ def BladeBit(
             input_shape=input_block_shape,
             output_shape=output_block_shape,
             options={k: str(v) for k, v in options.items()},
+            dtype=dtype,
             name=blade_name,
         )
     elif mode == "beamformer":
+        if dtype not in ("cf32"):
+            raise ValueError(f"Invalid dtype {dtype} for beamformer mode. Must be 'cf32'.")
+
         logger.info("Creating Beamformer operator.")
         blade_name = f"blade-beamformer-{id}"
         blade_op = BeamformerOp(
@@ -66,6 +75,9 @@ def BladeBit(
             name=blade_name,
         )
     elif mode == "frbnn":
+        if dtype not in ("cf32"):
+            raise ValueError(f"Invalid dtype {dtype} for frbnn mode. Must be 'cf32'.")
+
         logger.info("Creating FRBNN operator.")
         blade_name = f"blade-frbnn-{id}"
         blade_op = FrbnnOp(

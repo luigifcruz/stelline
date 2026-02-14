@@ -23,11 +23,13 @@ public:
                    const stelline::BlockShape& input_shape,
                    const stelline::BlockShape& output_shape,
                    const stelline::Map& options,
+                   const std::string& dtype,
                    const std::string& name = "correlator")
         : CorrelatorOp(ArgList{Arg("number_of_buffers", number_of_buffers),
                                 Arg("input_shape", input_shape),
                                 Arg("output_shape", output_shape),
-                                Arg("options", options)}) {
+                                Arg("options", options),
+                                Arg("dtype", dtype)}) {
         name_ = name;
         fragment_ = fragment;
         spec_ = std::make_shared<OperatorSpec>(fragment);
@@ -84,12 +86,14 @@ PYBIND11_MODULE(_blade_ops, m) {
 
     py::class_<CorrelatorOp, PyCorrelatorOp, Operator, std::shared_ptr<CorrelatorOp>>(m, "CorrelatorOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
-                      const stelline::BlockShape&, const stelline::Map&, const std::string&>(),
+                      const stelline::BlockShape&, const stelline::Map&, const std::string&,
+                      const std::string&>(),
              py::arg("fragment"),
              py::arg("number_of_buffers"),
              py::arg("input_shape"),
              py::arg("output_shape"),
              py::arg("options"),
+             py::arg("dtype"),
              py::arg("name") = "correlator")
         .def("tick", &CorrelatorOp::tick)
         .def("format_metrics", &CorrelatorOp::formatMetrics)

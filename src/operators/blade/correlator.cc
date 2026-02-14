@@ -13,11 +13,9 @@ using namespace holoscan::ops;
 
 namespace stelline::operators::blade {
 
+template<typename IT, typename OT>
 class OpCorrelatorPipeline : public Blade::Runner {
 public:
-    using IT = CF32;
-    using OT = CF32;
-
     using ModeX = Bundles::Generic::ModeX<IT, OT>;
     using Config = ModeX::Config;
 
@@ -51,6 +49,9 @@ private:
     Duet<ArrayTensor<Device::CUDA, OT>> outputBuffer;
 };
 
+using OpCorrelatorPipelineCF32 = OpCorrelatorPipeline<CF32, CF32>;
+using OpCorrelatorPipelineCI8 = OpCorrelatorPipeline<CI8, CF32>;
+
 struct CorrelatorOp::Impl {
     // Derived configuration parameters.
 
@@ -58,12 +59,15 @@ struct CorrelatorOp::Impl {
     BlockShape inputShape;
     BlockShape outputShape;
     Map options;
+    std::string dtype;
 
     // State.
 
     Dispatcher dispatcher;
-    OpCorrelatorPipeline::Config config;
-    std::shared_ptr<OpCorrelatorPipeline> pipeline;
+    OpCorrelatorPipelineCF32::Config configCF32;
+    OpCorrelatorPipelineCI8::Config configCI8;
+    std::shared_ptr<OpCorrelatorPipelineCF32> pipelineCF32;
+    std::shared_ptr<OpCorrelatorPipelineCI8> pipelineCI8;
 };
 
 void CorrelatorOp::initialize() {
@@ -94,6 +98,7 @@ void CorrelatorOp::setup(OperatorSpec& spec) {
     spec.param(inputShape_, "input_shape");
     spec.param(outputShape_, "output_shape");
     spec.param(options_, "options");
+    spec.param(dtype_, "dtype");
 }
 
 void CorrelatorOp::start() {
@@ -103,6 +108,7 @@ void CorrelatorOp::start() {
     pimpl->inputShape = inputShape_.get();
     pimpl->outputShape = outputShape_.get();
     pimpl->options = options_.get();
+    pimpl->dtype = dtype_.get();
 
     // Validate configuration.
 
@@ -110,44 +116,66 @@ void CorrelatorOp::start() {
 
     // Create pipeline.
 
-    pimpl->config = {
-        .inputShape = ArrayShape({
+    if (pimpl->dtype == "ci8") {
+        pimpl->configCI8.inputShape = ArrayShape({
             pimpl->inputShape.numberOfAntennas,
             pimpl->inputShape.numberOfChannels,
             pimpl->inputShape.numberOfSamples,
             pimpl->inputShape.numberOfPolarizations
-        }),
-        .outputShape = ArrayShape({
+        });
+        pimpl->configCI8.outputShape = ArrayShape({
             pimpl->outputShape.numberOfAntennas,
             pimpl->outputShape.numberOfChannels,
             pimpl->outputShape.numberOfSamples,
             pimpl->outputShape.numberOfPolarizations
-        }),
+        });
 
-        .preChannelizerStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_channelizer_stacker_multiplier", 1),
+        pimpl->configCI8.preChannelizerStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_channelizer_stacker_multiplier", 1);
+        pimpl->configCI8.channelizerBypass = FetchMap<bool>(pimpl->options, "channelizer_bypass", false);
+        pimpl->configCI8.preCorrelatorStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_correlator_stacker_multiplier", 8);
+        pimpl->configCI8.correlatorIntegrationRate = FetchMap<U64>(pimpl->options, "correlator_integration_rate", 128);
+        pimpl->configCI8.correlatorConjugateAntennaIndex = FetchMap<U64>(pimpl->options, "correlator_conjugate_antenna_index", 1);
+        pimpl->configCI8.correlatorUseSharedMemory = FetchMap<bool>(pimpl->options, "correlator_use_shared_memory", false);
+        pimpl->configCI8.correlatorCalculationMode = CALC_MODE::INTEGER;
+        pimpl->configCI8.postCorrelatorFrequencyIntegrationRate = FetchMap<U64>(pimpl->options, "post_correlator_frequency_integration_rate", 1);
+        pimpl->configCI8.stackerBlockSize = FetchMap<U64>(pimpl->options, "stacker_block_size", 512);
+        pimpl->configCI8.casterBlockSize = FetchMap<U64>(pimpl->options, "caster_block_size", 512);
+        pimpl->configCI8.channelizerBlockSize = FetchMap<U64>(pimpl->options, "channelizer_block_size", 512);
+        pimpl->configCI8.correlatorBlockSize = FetchMap<U64>(pimpl->options, "correlator_block_size", 64);
 
-        .channelizerBypass = FetchMap<bool>(pimpl->options, "channelizer_bypass", false),
+        pimpl->pipelineCI8 = std::make_shared<OpCorrelatorPipelineCI8>(pimpl->configCI8);
+        pimpl->dispatcher.template initialize<CF32>(pimpl->numberOfBuffers, pimpl->configCI8.outputShape);
+    }
 
-        .preCorrelatorStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_correlator_stacker_multiplier", 8),
+    if (pimpl->dtype == "cf32") {
+        pimpl->configCF32.inputShape = ArrayShape({
+            pimpl->inputShape.numberOfAntennas,
+            pimpl->inputShape.numberOfChannels,
+            pimpl->inputShape.numberOfSamples,
+            pimpl->inputShape.numberOfPolarizations
+        });
+        pimpl->configCF32.outputShape = ArrayShape({
+            pimpl->outputShape.numberOfAntennas,
+            pimpl->outputShape.numberOfChannels,
+            pimpl->outputShape.numberOfSamples,
+            pimpl->outputShape.numberOfPolarizations
+        });
+        pimpl->configCF32.preChannelizerStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_channelizer_stacker_multiplier", 1);
+        pimpl->configCF32.channelizerBypass = FetchMap<bool>(pimpl->options, "channelizer_bypass", false);
+        pimpl->configCF32.preCorrelatorStackerMultiplier = FetchMap<U64>(pimpl->options, "pre_correlator_stacker_multiplier", 8);
+        pimpl->configCF32.correlatorIntegrationRate = FetchMap<U64>(pimpl->options, "correlator_integration_rate", 128);
+        pimpl->configCF32.correlatorConjugateAntennaIndex = FetchMap<U64>(pimpl->options, "correlator_conjugate_antenna_index", 1);
+        pimpl->configCF32.correlatorUseSharedMemory = FetchMap<bool>(pimpl->options, "correlator_use_shared_memory", false);
+        pimpl->configCF32.correlatorCalculationMode = CALC_MODE::INTEGER;
+        pimpl->configCF32.postCorrelatorFrequencyIntegrationRate = FetchMap<U64>(pimpl->options, "post_correlator_frequency_integration_rate", 1);
+        pimpl->configCF32.stackerBlockSize = FetchMap<U64>(pimpl->options, "stacker_block_size", 512);
+        pimpl->configCF32.casterBlockSize = FetchMap<U64>(pimpl->options, "caster_block_size", 512);
+        pimpl->configCF32.channelizerBlockSize = FetchMap<U64>(pimpl->options, "channelizer_block_size", 512);
+        pimpl->configCF32.correlatorBlockSize = FetchMap<U64>(pimpl->options, "correlator_block_size", 64);
 
-        .correlatorIntegrationRate = FetchMap<U64>(pimpl->options, "correlator_integration_rate", 128),
-        .correlatorConjugateAntennaIndex = FetchMap<U64>(pimpl->options, "correlator_conjugate_antenna_index", 1),
-        .correlatorUseSharedMemory = FetchMap<bool>(pimpl->options, "correlator_use_shared_memory", false),
-        .correlatorCalculationMode = CALC_MODE::INTEGER,
-
-        .postCorrelatorFrequencyIntegrationRate = FetchMap<U64>(pimpl->options, "post_correlator_frequency_integration_rate", 1),
-
-        .stackerBlockSize = FetchMap<U64>(pimpl->options, "stacker_block_size", 512),
-        .casterBlockSize = FetchMap<U64>(pimpl->options, "caster_block_size", 512),
-        .channelizerBlockSize = FetchMap<U64>(pimpl->options, "channelizer_block_size", 512),
-        .correlatorBlockSize = FetchMap<U64>(pimpl->options, "correlator_block_size", 64),
-    };
-    pimpl->pipeline = std::make_shared<OpCorrelatorPipeline>(pimpl->config);
-
-    // Initialize Dispatcher.
-
-    // TODO: Make number of buffers configurable.
-    pimpl->dispatcher.template initialize<CF32>(pimpl->numberOfBuffers, pimpl->config.outputShape);
+        pimpl->pipelineCF32 = std::make_shared<OpCorrelatorPipelineCF32>(pimpl->configCF32);
+        pimpl->dispatcher.template initialize<CF32>(pimpl->numberOfBuffers, pimpl->configCF32.outputShape);
+    }
 }
 
 void CorrelatorOp::stop() {
@@ -164,26 +192,53 @@ void CorrelatorOp::compute(InputContext& input, OutputContext& output, Execution
     };
 
     auto convertInputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
-        ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(tensor->data(), pimpl->config.inputShape);
-        return pimpl->pipeline->transferIn(deviceInputBuffer);
+        if (pimpl->dtype == "ci8") {
+            ArrayTensor<Device::CUDA, CI8> deviceInputBuffer(tensor->data(), pimpl->configCI8.inputShape);
+            return pimpl->pipelineCI8->transferIn(deviceInputBuffer);
+        }
+        if (pimpl->dtype == "cf32") {
+            ArrayTensor<Device::CUDA, CF32> deviceInputBuffer(tensor->data(), pimpl->configCF32.inputShape);
+            return pimpl->pipelineCF32->transferIn(deviceInputBuffer);
+        }
+        throw std::runtime_error("Unsupported data type");
     };
 
     auto convertOutputCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
-        ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(tensor->data(), pimpl->config.outputShape);
-        return pimpl->pipeline->transferOut(deviceOutputBuffer);
+        if (pimpl->dtype == "ci8") {
+            ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(tensor->data(), pimpl->configCI8.outputShape);
+            return pimpl->pipelineCI8->transferOut(deviceOutputBuffer);
+        }
+        if (pimpl->dtype == "cf32") {
+            ArrayTensor<Device::CUDA, CF32> deviceOutputBuffer(tensor->data(), pimpl->configCF32.outputShape);
+            return pimpl->pipelineCF32->transferOut(deviceOutputBuffer);
+        }
+        throw std::runtime_error("Unsupported data type");
     };
 
     auto emitCallback = [&](std::shared_ptr<holoscan::Tensor>& tensor){
         output.emit(tensor, "out");
     };
 
-    if (pimpl->dispatcher.run(pimpl->pipeline,
-                              receiveCallback,
-                              convertInputCallback,
-                              convertOutputCallback,
-                              emitCallback,
-                              metadata()) != Result::SUCCESS) {
-        throw std::runtime_error("Dispatcher failed.");
+    if (pimpl->dtype == "ci8") {
+        if (pimpl->dispatcher.run(pimpl->pipelineCI8,
+                                  receiveCallback,
+                                  convertInputCallback,
+                                  convertOutputCallback,
+                                  emitCallback,
+                                  metadata()) != Result::SUCCESS) {
+            throw std::runtime_error("Dispatcher failed.");
+        }
+    }
+
+    if (pimpl->dtype == "cf32") {
+        if (pimpl->dispatcher.run(pimpl->pipelineCF32,
+                                  receiveCallback,
+                                  convertInputCallback,
+                                  convertOutputCallback,
+                                  emitCallback,
+                                  metadata()) != Result::SUCCESS) {
+            throw std::runtime_error("Dispatcher failed.");
+        }
     }
 }
 
