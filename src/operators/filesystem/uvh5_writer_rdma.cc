@@ -8,6 +8,8 @@
 #include <stelline/operators/filesystem/base.hh>
 #include <fmt/format.h>
 
+#include <time.h>
+
 #include "utils/helpers.hh"
 #include "utils/modifiers.hh"
 
@@ -23,6 +25,41 @@ using namespace gxf;
 using namespace holoscan;
 
 namespace stelline::operators::filesystem {
+
+// Replicate sla_Cldj, based on Hatcher (1984) QJRAS 25, 53-55
+// https://github.com/scottransom/fixbeampos/blob/7b0590a068028eb9ada59678ef0d42640fbdbf4a/cal2mjd.c
+int cal2mjd(int iy, int im, int id) 
+{
+  int leap;
+
+  /* month lengths in days for normal and leap years */
+  static int mtab[2][13] = {
+    {0,31,28,31,30,31,30,31,31,30,31,30,31},
+    {0,31,29,31,30,31,30,31,31,30,31,30,31}
+  };
+
+  /*validate year*/
+  if (iy<-4699) {
+    HOLOSCAN_LOG_ERROR("Invalid year passed to cal2mjd.");
+    return 0;
+  } else {
+    /* validate month */
+    if (im<1 || im>12) {
+      HOLOSCAN_LOG_ERROR("Invalid month passed to cal2mjd.");
+      return 0;
+    } else {
+      /* allow for leap year */
+      leap = (iy%4 == 0 && iy%100 != 00) || iy%400 == 0;
+      /* validate day */
+      if (id<1 || id>mtab[leap][im]) {
+    	HOLOSCAN_LOG_ERROR("Invalid day passed to cal2mjd.");
+        return 0;
+      }
+    }
+  }
+
+  return (1461*(iy-(12-im)/10+4712))/4 + (5+306*((im+9)%12))/10 - (3*((iy-(12-im)/10+4900)/100))/4 + id - 2399904;
+}
 
 struct Uvh5WriterRdmaOp::Impl {
     // Manifest data - populated from manifest on start().
@@ -43,7 +80,7 @@ struct Uvh5WriterRdmaOp::Impl {
         };
         std::vector<AntennaInfo> antennas;
 
-        // Instance subband info (lifetime static)
+        // Instance subband info (lifetime static).
         std::string instance_bands;
         std::string instance_tuning;
         int instance_band_index;
@@ -55,6 +92,9 @@ struct Uvh5WriterRdmaOp::Impl {
         double pointing_ra;
         double pointing_dec;
         std::string pointing_source_name;
+
+        // Timestamp offset (static - first antenna as representative).
+        uint64_t packet_timestamp_offset;
 
         // IERS (dynamic).
         double iers_pm_x_arcsec;
@@ -107,6 +147,7 @@ void Uvh5WriterRdmaOp::setup(OperatorSpec& spec) {
 
 void Uvh5WriterRdmaOp::start() {
     pimpl->filePath = filePath_.get();
+    const auto& meta = metadata();
 
     // Validate and populate manifest data.
 
@@ -174,11 +215,16 @@ void Uvh5WriterRdmaOp::start() {
     fetchValue(fmt::format("observatory.antenna.{}.pointing.source_name", first_ant),
                md.pointing_source_name);
 
+    // Pointing (from first observation antenna).
+    md.packet_timestamp_offset = 0;
+    // TODO
+    // fetchValue(fmt::format("observatory.antenna.{}.fengine.synctime", first_ant), md.packet_timestamp_offset);
+
     // IERS.
     fetchValue("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
     fetchValue("observation.iers.pm_y_arcsec", md.iers_pm_y_arcsec);
     fetchValue("observation.iers.ut1_utc", md.iers_ut1_utc);
-	
+
     // Observation frequency band
     fetchValue("instance.bands", md.instance_bands);
     std::string instance_bands_tuningkey = "'tuning': '";
@@ -277,8 +323,8 @@ void Uvh5WriterRdmaOp::start() {
 	UVH5Hmalloc_phase_center_catalog(uvh5_header, 1);
     uvh5_header->phase_center_catalog[0].name = const_cast<char*>(md.pointing_source_name.c_str());
 	uvh5_header->phase_center_catalog[0].type = UVH5_PHASE_CENTER_SIDEREAL;
-	uvh5_header->phase_center_catalog[0].lon = 0.0;
-	uvh5_header->phase_center_catalog[0].lat = 0.0;
+    uvh5_header->phase_center_catalog[0].lon = calc_rad_from_degree(md.pointing_ra*360.0/24.0);
+    uvh5_header->phase_center_catalog[0].lat = calc_rad_from_degree(md.pointing_dec);
 	uvh5_header->phase_center_catalog[0].frame = "icrs";
 	uvh5_header->phase_center_catalog[0].epoch = 2000.0;
 
@@ -315,10 +361,38 @@ void Uvh5WriterRdmaOp::start() {
 		uvh5_header->freq_array[i] = (instance_subband_lower + (i+0.5)*chan_bw) * 1e6;
 	}
 
-	pimpl->tau = 1.0;
+    
+    const auto& timestamp = meta->get<uint64_t>("timestamp");
+
+    double realtime_secs = 0.0;
+    // Calc real-time seconds since SYNCTIME for pktidx, taken to be a multiple of PKTNTIME:
+    //
+    //                          pktidx
+    //     realtime_secs = -------------------
+    //                        1e6 * chan_bw
+    if(chan_bw != 0.0) {
+        realtime_secs = timestamp / (1e6 * fabs(chan_bw));
+    }
+    
+    struct timespec ts;
+    ts.tv_sec = (time_t)(md.packet_timestamp_offset + rint(realtime_secs));
+    ts.tv_nsec = (long)((realtime_secs - rint(realtime_secs)) * 1e9);
+
+    struct tm gmt;
+    if (gmtime_r(&ts.tv_sec, &gmt) == NULL) {
+        HOLOSCAN_LOG_ERROR("Error calling gmtime_r.");
+        return;
+    }
+
+    // Gregorian calendar to MJD
+    int stt_imjd = cal2mjd(gmt.tm_year+1900, gmt.tm_mon+1, gmt.tm_mday);
+    int stt_smjd = gmt.tm_hour*3600 + gmt.tm_min*60+ gmt.tm_sec;
+    double stt_offs = ts.tv_nsec*1e-9;
+
+	pimpl->tau = 1.0; // TODO infer from sample_timespan*pipeline_integration_rate
     uvh5_header->time_array[0] = 2400000.5; // JD float offset
-    uvh5_header->time_array[0] += 41684.0; // TODO from metadata
-    uvh5_header->time_array[0] += 6.5; // TODO from metadata
+    uvh5_header->time_array[0] += (double) stt_imjd;
+    uvh5_header->time_array[0] += ((double) stt_smjd)/86400.0;
     uvh5_header->time_array[0] += (pimpl->tau/2) / RADIOINTERFEROMETERY_DAYSEC; // midpoint of integration
 	for (size_t i = 0; i < uvh5_header->Nbls; i++)
 	{
