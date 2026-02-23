@@ -217,8 +217,7 @@ void Uvh5WriterRdmaOp::start() {
 
     // Pointing (from first observation antenna).
     md.packet_timestamp_offset = 0;
-    // TODO
-    // fetchValue(fmt::format("observatory.antenna.{}.fengine.synctime", first_ant), md.packet_timestamp_offset);
+    fetchValue(fmt::format("observatory.antenna.{}.fengine.synctime", first_ant), md.packet_timestamp_offset);
 
     // IERS.
     fetchValue("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
