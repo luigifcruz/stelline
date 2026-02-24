@@ -3,7 +3,7 @@ FROM nvcr.io/nvidia/clara-holoscan/holoscan:v3.7.0-cuda12-dgpu
 ARG DEBIAN_FRONTEND=noninteractive
 
 ENV PYTHONPATH="/usr/local/lib/python3/dist-packages:${PYTHONPATH}"
-ENV LD_LIBRARY_PATH="/opt/nvidia/holoscan/lib:${LD_LIBRARY_PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/lib/x86_64-linux-gnu:/opt/nvidia/holoscan/lib:${LD_LIBRARY_PATH}"
 
 #
 # Global Dependencies
@@ -52,8 +52,8 @@ RUN git clone https://github.com/luigifcruz/holoscan-networking.git && \
 # Install MatX (transport)
 #
 
-RUN git clone https://github.com/NVIDIA/MatX.git
-RUN cd MatX && \
+RUN git clone https://github.com/NVIDIA/MatX.git && \
+    cd MatX && \
     git checkout ad55c6b894f0fdef65294858d9561ba31baa8734 && \
     git submodule update --init --recursive && \
     mkdir build && cd build && \
@@ -80,8 +80,8 @@ RUN apt update && \
         liberfa-dev \
         && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/HDFGroup/hdf5.git
-RUN cd hdf5 && \
+RUN git clone https://github.com/HDFGroup/hdf5.git && \
+    cd hdf5 && \
     git checkout hdf5-1.14.6 && \
     git submodule update --init --recursive && \
     mkdir build && cd build && \
@@ -89,8 +89,8 @@ RUN cd hdf5 && \
     make -j && \
     make install
 
-RUN git clone https://github.com/hpc-io/vfd-gds.git
-RUN cd vfd-gds && \
+RUN git clone https://github.com/hpc-io/vfd-gds.git && \
+    cd vfd-gds && \
     git checkout e33bae67a16238c2677f23abac76b9fe30b99869 && \
     git submodule update --init --recursive && \
     mkdir build && cd build && \
@@ -98,21 +98,21 @@ RUN cd vfd-gds && \
     make -j && \
     make install
 
-RUN git clone https://github.com/MydonSolutions/filterbankc99.git
-RUN cd filterbankc99 \
-    && git checkout v1.5.0 \
-    && git submodule update --init --recursive \
-    && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
-    && cd build \
-    && ninja install
+RUN git clone https://github.com/MydonSolutions/filterbankc99.git && \
+    cd filterbankc99 && \
+    git checkout v1.5.0 && \
+    git submodule update --init --recursive && \
+    CC=gcc-11 meson setup -Dbuildtype=debugoptimized build && \
+    cd build && \
+    ninja install
 
-RUN git clone https://github.com/MydonSolutions/uvh5c99.git
-RUN cd uvh5c99 \
-    && git checkout v0.9.0 \
-    && git submodule update --init --recursive \
-    && CC=gcc-11 meson setup -Dbuildtype=debugoptimized build \
-    && cd build \
-    && ninja install
+RUN git clone https://github.com/MydonSolutions/uvh5c99.git && \
+    cd uvh5c99 && \
+    git checkout v0.9.2 && \
+    git submodule update --init --recursive && \
+    CC=gcc-11 meson setup -Dbuildtype=debugoptimized build && \
+    cd build && \
+    ninja install
 
 #
 # Install CyberEther (cyberether)
@@ -132,14 +132,14 @@ RUN apt update && \
         soapysdr-module-airspy soapysdr-module-lms7 soapysdr-tools \
         && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/luigifcruz/CyberEther.git
-RUN cd CyberEther \
-    && git checkout 813c33d23905b053912b9fc3c7e26bce49f270a3 \
-    && rm -fr build \
-    && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
-    && cd build \
-    && ninja \
-    && ninja install
+RUN git clone https://github.com/luigifcruz/CyberEther.git && \
+    cd CyberEther && \
+    git checkout 813c33d23905b053912b9fc3c7e26bce49f270a3 && \
+    rm -fr build && \
+    CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build && \
+    cd build && \
+    ninja && \
+    ninja install
 
 #
 # Install BLADE (blade)
@@ -153,25 +153,25 @@ RUN apt update && \
 RUN python3 -m pip install --no-cache-dir numpy astropy pandas
 
 ENV NVCC_PREPEND_FLAGS='-ccbin g++-11'
-RUN git clone https://github.com/luigifcruz/blade.git
-RUN cd blade \
-    && git checkout v1.1 \
-    && git submodule update --init --recursive \
-    && rm -fr build \
-    && CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build \
-    && cd build \
-    && ninja \
-    && ninja install
+RUN git clone https://github.com/luigifcruz/blade.git && \
+    cd blade && \
+    git checkout v1.1 && \
+    git submodule update --init --recursive && \
+    rm -fr build && \
+    CC=gcc-11 CXX=g++-11 meson setup -Dbuildtype=debugoptimized build && \
+    cd build && \
+    ninja && \
+    ninja install
 
 #
 # Install Stelline
 #
 
 COPY . ./stelline
-RUN cd ./stelline \
-    && git submodule update --init --recursive \
-    && rm -fr build \
-    && meson setup -Dbuildtype=debugoptimized build \
-    && cd build \
-    && ninja \
-    && ninja install
+RUN cd ./stelline && \
+    git submodule update --init --recursive && \
+    rm -fr build && \
+    meson setup -Dbuildtype=debugoptimized build && \
+    cd build && \
+    ninja && \
+    ninja install
