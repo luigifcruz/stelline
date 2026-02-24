@@ -4,9 +4,13 @@
 #include <sys/stat.h>
 #include <hdf5.h>
 
+#include <cassert>
+
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
 #include <fmt/format.h>
+
+#include <time.h>
 
 #include "utils/helpers.hh"
 #include "utils/modifiers.hh"
@@ -23,6 +27,54 @@ using namespace gxf;
 using namespace holoscan;
 
 namespace stelline::operators::filesystem {
+
+// Replicate sla_Cldj, based on Hatcher (1984) QJRAS 25, 53-55
+// https://github.com/scottransom/pyslalib/blob/fcb0650a140a8002cc6c0e8918c3e4c6fe3f8e01/cldj.f
+// https://github.com/scottransom/fixbeampos/blob/7b0590a068028eb9ada59678ef0d42640fbdbf4a/cal2mjd.c
+/* Validations
+  int test_1 = cal2mjd(1999, 07, 10);
+  printf("1999-07-10: %d MJD (51639)\n", test_1);
+  int test_2 = cal2mjd(1899, 12, 31);
+  printf("1899-12-31: %d MJD (15019)\n", test_2);
+  int test_3 = cal2mjd(1900, 1, 1);
+  printf("1900-01-01: %d MJD (15020)\n", test_3);
+  int test_4 = cal2mjd(2000, 1, 1);
+  printf("2000-01-01: %d MJD (51544)\n", test_4);
+  int test_5 = cal2mjd(2026, 2, 16);
+  printf("2026-02-16: %d MJD (61087)\n", test_5);
+*/
+int cal2mjd(int iy, int im, int id) 
+{
+  int leap;
+
+  /* month lengths in days for normal and leap years */
+  static int mtab[2][13] = {
+    {0,31,28,31,30,31,30,31,31,30,31,30,31},
+    {0,31,29,31,30,31,30,31,31,30,31,30,31}
+  };
+
+  /*validate year*/
+  if (iy<-4699) {
+    HOLOSCAN_LOG_ERROR("Invalid year passed to cal2mjd.");
+    return 0;
+  } else {
+    /* validate month */
+    if (im<1 || im>12) {
+      HOLOSCAN_LOG_ERROR("Invalid month passed to cal2mjd.");
+      return 0;
+    } else {
+      /* allow for leap year */
+      leap = (iy%4 == 0 && iy%100 != 00) || iy%400 == 0;
+      /* validate day */
+      if (id<1 || id>mtab[leap][im]) {
+    	HOLOSCAN_LOG_ERROR("Invalid day passed to cal2mjd.");
+        return 0;
+      }
+    }
+  }
+
+  return (1461*(iy-(12-im)/10+4712))/4 + (5+306*((im+9)%12))/10 - (3*((iy-(12-im)/10+4900)/100))/4 + id - 2399904;
+}
 
 struct Uvh5WriterRdmaOp::Impl {
     // Manifest data - populated from manifest on start().
@@ -43,10 +95,21 @@ struct Uvh5WriterRdmaOp::Impl {
         };
         std::vector<AntennaInfo> antennas;
 
+        // Instance subband info (lifetime static).
+        std::string instance_bands;
+        std::string instance_tuning;
+        int instance_band_index;
+        double instance_bandcenter;
+        double instance_bandwidth;
+        uint64_t instance_nof_channels;
+
         // Pointing (dynamic - first antenna as representative).
         double pointing_ra;
         double pointing_dec;
         std::string pointing_source_name;
+
+        // Timestamp offset (static - first antenna as representative).
+        uint64_t packet_timestamp_offset;
 
         // IERS (dynamic).
         double iers_pm_x_arcsec;
@@ -99,46 +162,28 @@ void Uvh5WriterRdmaOp::setup(OperatorSpec& spec) {
 
 void Uvh5WriterRdmaOp::start() {
     pimpl->filePath = filePath_.get();
+    const auto& meta = metadata();
 
     // Validate and populate manifest data.
 
     auto& md = pimpl->manifestData;
     md.valid = false;
 
+    assert(manifest() && "UVH5 Writer: manifest provider not set.");
     if (!manifest()) {
         HOLOSCAN_LOG_ERROR("UVH5 Writer: manifest provider not set.");
         return;
     }
 
-    bool ok = true;
-
-    auto fetchValue = [&](const std::string& key, auto& out) -> bool {
-        auto val = manifest()->fetch(key);
-        if (!val.has_value()) {
-            HOLOSCAN_LOG_ERROR("UVH5 Writer: missing manifest key '{}'", key);
-            ok = false;
-            return false;
-        }
-        using T = std::decay_t<decltype(out)>;
-        if (auto* ptr = std::any_cast<T>(&val)) {
-            out = *ptr;
-            return true;
-        }
-        HOLOSCAN_LOG_ERROR("UVH5 Writer: manifest key '{}' has unexpected type", key);
-        ok = false;
-        return false;
-    };
-
     // Observatory.
-    fetchValue("observatory.name", md.telescope_name);
-    fetchValue("observatory.coordinates.latitude", md.latitude);
-    fetchValue("observatory.coordinates.longitude", md.longitude);
-    fetchValue("observatory.coordinates.altitude", md.altitude);
+    manifest()->fetch("observatory.name", md.telescope_name);
+    manifest()->fetch("observatory.coordinates.latitude", md.latitude);
+    manifest()->fetch("observatory.coordinates.longitude", md.longitude);
+    manifest()->fetch("observatory.coordinates.altitude", md.altitude);
 
     // Observation antennas.
     int32_t nantenna = 0;
-    fetchValue("observation.antennas.length", nantenna);
-    if (!ok) return;
+    manifest()->fetch("observation.antennas.length", nantenna);
     if (nantenna <= 0) {
         HOLOSCAN_LOG_ERROR("UVH5 Writer: observation.antennas.length is {}", nantenna);
         return;
@@ -147,31 +192,79 @@ void Uvh5WriterRdmaOp::start() {
     md.antennas.resize(nantenna);
     for (int i = 0; i < nantenna; i++) {
         std::string ant_name;
-        fetchValue(fmt::format("observation.antennas.{}", i), ant_name);
-        if (!ok) return;
+        manifest()->fetch(fmt::format("observation.antennas.{}", i), ant_name);
 
         md.antennas[i].name = ant_name;
-        fetchValue(fmt::format("observatory.antenna.{}.number", ant_name), md.antennas[i].number);
-        fetchValue(fmt::format("observatory.antenna.{}.diameter", ant_name), md.antennas[i].diameter);
-        fetchValue(fmt::format("observatory.antenna.{}.position.x", ant_name), md.antennas[i].position[0]);
-        fetchValue(fmt::format("observatory.antenna.{}.position.y", ant_name), md.antennas[i].position[1]);
-        fetchValue(fmt::format("observatory.antenna.{}.position.z", ant_name), md.antennas[i].position[2]);
+        manifest()->fetch(fmt::format("observatory.antenna.{}.number", ant_name), md.antennas[i].number);
+        manifest()->fetch(fmt::format("observatory.antenna.{}.diameter", ant_name), md.antennas[i].diameter);
+        manifest()->fetch(fmt::format("observatory.antenna.{}.position.x", ant_name), md.antennas[i].position[0]);
+        manifest()->fetch(fmt::format("observatory.antenna.{}.position.y", ant_name), md.antennas[i].position[1]);
+        manifest()->fetch(fmt::format("observatory.antenna.{}.position.z", ant_name), md.antennas[i].position[2]);
     }
-    if (!ok) return;
 
     // Pointing (from first observation antenna).
     const auto& first_ant = md.antennas[0].name;
-    fetchValue(fmt::format("observatory.antenna.{}.pointing.ra", first_ant), md.pointing_ra);
-    fetchValue(fmt::format("observatory.antenna.{}.pointing.dec", first_ant), md.pointing_dec);
-    fetchValue(fmt::format("observatory.antenna.{}.pointing.source_name", first_ant),
-               md.pointing_source_name);
+    manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.ra", first_ant), md.pointing_ra);
+    manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.dec", first_ant), md.pointing_dec);
+    manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.source_name", first_ant),
+                      md.pointing_source_name);
+
+    // Pointing (from first observation antenna).
+    md.packet_timestamp_offset = 0;
+    manifest()->fetch(fmt::format("observatory.antenna.{}.fengine.synctime", first_ant),
+                      md.packet_timestamp_offset);
 
     // IERS.
-    fetchValue("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
-    fetchValue("observation.iers.pm_y_arcsec", md.iers_pm_y_arcsec);
-    fetchValue("observation.iers.ut1_utc", md.iers_ut1_utc);
+    manifest()->fetch("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
+    manifest()->fetch("observation.iers.pm_y_arcsec", md.iers_pm_y_arcsec);
+    manifest()->fetch("observation.iers.ut1_utc", md.iers_ut1_utc);
 
-    if (!ok) return;
+    // Observation frequency band
+    manifest()->fetch("instance.bands", md.instance_bands);
+    std::string instance_bands_tuningkey = "'tuning': '";
+    std::string instance_bands_indexkey = "'band_index': ";
+    size_t tuningkey_pos = md.instance_bands.find(instance_bands_tuningkey);
+    size_t indexkey_pos = md.instance_bands.find(instance_bands_indexkey);
+    if (tuningkey_pos != std::string::npos && indexkey_pos != std::string::npos) {
+        md.instance_tuning = md.instance_bands.substr(tuningkey_pos+instance_bands_tuningkey.length(), 1);
+        std::string index_substr = md.instance_bands.substr(indexkey_pos+instance_bands_indexkey.length(), 1);
+        md.instance_band_index = std::stoi(index_substr);
+
+        double freq_start, freq_stop;
+        uint64_t chan_start, chan_stop;
+        manifest()->fetch(
+            fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.frequency_start",
+                        first_ant,
+                        md.instance_tuning,
+                        md.instance_band_index),
+            freq_start);
+        manifest()->fetch(
+            fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.frequency_stop",
+                        first_ant,
+                        md.instance_tuning,
+                        md.instance_band_index),
+            freq_stop);
+        manifest()->fetch(
+            fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.channel_start",
+                        first_ant,
+                        md.instance_tuning,
+                        md.instance_band_index),
+            chan_start);
+        manifest()->fetch(
+            fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.channel_stop",
+                        first_ant,
+                        md.instance_tuning,
+                        md.instance_band_index),
+            chan_stop);
+        md.instance_bandcenter = (freq_stop + freq_start)/2;
+        md.instance_bandwidth = freq_stop - freq_start;
+        md.instance_nof_channels = chan_stop - chan_start;
+        HOLOSCAN_LOG_INFO("UVH5 Writer: ascertained instance band metadata of {} channel(s) ({} MHz wide) centered at {} MHz.", md.instance_nof_channels, md.instance_bandwidth/md.instance_nof_channels, md.instance_bandcenter);
+    }
+    else {
+        HOLOSCAN_LOG_ERROR("UVH5 Writer: could not parse the 'instance.bands' string for metadata: '{}'", md.instance_bands);
+    }
+
     md.valid = true;
 
     HOLOSCAN_LOG_INFO("UVH5 Writer: manifest loaded ({} antennas, telescope='{}')",
@@ -185,7 +278,7 @@ void Uvh5WriterRdmaOp::start() {
 
 	// set header scalar data
 	uvh5_header->Ntimes = 0; // initially
-	uvh5_header->Nfreqs = 192; // TODO placeholder
+	uvh5_header->Nfreqs = md.instance_nof_channels;
 	uvh5_header->Nspws = 1;
 	uvh5_header->Nblts = uvh5_header->Nbls * uvh5_header->Ntimes;
 
@@ -195,6 +288,7 @@ void Uvh5WriterRdmaOp::start() {
     std::vector<UVH5_antinfo_t> antinfo(nant);
     for (int i = 0; i < nant; i++) {
         antinfo[i].name = const_cast<char*>(md.antennas[i].name.data());
+        antinfo[i].number = md.antennas[i].number;
         antinfo[i].position[0] = md.antennas[i].position[0];
         antinfo[i].position[1] = md.antennas[i].position[1];
         antinfo[i].position[2] = md.antennas[i].position[2];
@@ -205,7 +299,7 @@ void Uvh5WriterRdmaOp::start() {
         md.latitude,
         md.longitude,
         md.altitude,
-        const_cast<char*>("ECEF"),
+        const_cast<char*>("ecef"),
         md.antennas[0].diameter,
         nant,
         antinfo.data(),
@@ -229,13 +323,9 @@ void Uvh5WriterRdmaOp::start() {
     // Override ant_1/2_array - pipeline does not group auto-baselines first.
     int bl_index = 0;
     for(int a0 = 0; a0 < uvh5_header->Nants_data; a0++) {
-        int ant_1_num = uvh5_header->antenna_numbers[
-            UVH5find_antenna_index_by_name(uvh5_header, uvh5_header->antenna_names[a0])
-        ];
+        int ant_1_num = uvh5_header->antenna_numbers[a0];
         for(int a1 = a0; a1 < uvh5_header->Nants_data; a1++) {
-            int ant_2_num = uvh5_header->antenna_numbers[
-                UVH5find_antenna_index_by_name(uvh5_header, uvh5_header->antenna_names[a1])
-            ];
+            int ant_2_num = uvh5_header->antenna_numbers[a1];
             uvh5_header->ant_1_array[bl_index] = ant_1_num;
             uvh5_header->ant_2_array[bl_index] = ant_2_num;
             bl_index++;
@@ -246,8 +336,8 @@ void Uvh5WriterRdmaOp::start() {
 	UVH5Hmalloc_phase_center_catalog(uvh5_header, 1);
     uvh5_header->phase_center_catalog[0].name = const_cast<char*>(md.pointing_source_name.c_str());
 	uvh5_header->phase_center_catalog[0].type = UVH5_PHASE_CENTER_SIDEREAL;
-	uvh5_header->phase_center_catalog[0].lon = 0.0;
-	uvh5_header->phase_center_catalog[0].lat = 0.0;
+    uvh5_header->phase_center_catalog[0].lon = calc_rad_from_degree(md.pointing_ra*360.0/24.0);
+    uvh5_header->phase_center_catalog[0].lat = calc_rad_from_degree(md.pointing_dec);
 	uvh5_header->phase_center_catalog[0].frame = "icrs";
 	uvh5_header->phase_center_catalog[0].epoch = 2000.0;
 
@@ -275,10 +365,47 @@ void Uvh5WriterRdmaOp::start() {
 
 	uvh5_header->flex_spw = H5_FALSE;
 
-	pimpl->tau = 1.0;
+	uvh5_header->spw_array[0] = 1;
+	double instance_subband_lower = md.instance_bandcenter - (md.instance_bandwidth/2);
+	double chan_bw = md.instance_bandwidth / md.instance_nof_channels;
+	uvh5_header->channel_width[0] = chan_bw * 1e6;
+	for(size_t i = 0; i < uvh5_header->Nfreqs; i++) {
+		uvh5_header->channel_width[i] = uvh5_header->channel_width[0];
+		uvh5_header->freq_array[i] = (instance_subband_lower + (i+0.5)*chan_bw) * 1e6;
+	}
+
+    
+    const auto& timestamp = meta->get<uint64_t>("timestamp");
+
+    double realtime_secs = 0.0;
+    // Calc real-time seconds since SYNCTIME for pktidx, taken to be a multiple of PKTNTIME:
+    //
+    //                          pktidx
+    //     realtime_secs = -------------------
+    //                        1e6 * chan_bw
+    if(chan_bw != 0.0) {
+        realtime_secs = timestamp / (1e6 * fabs(chan_bw));
+    }
+    
+    struct timespec ts;
+    ts.tv_sec = (time_t)(md.packet_timestamp_offset + rint(realtime_secs));
+    ts.tv_nsec = (long)((realtime_secs - rint(realtime_secs)) * 1e9);
+
+    struct tm gmt;
+    if (gmtime_r(&ts.tv_sec, &gmt) == NULL) {
+        HOLOSCAN_LOG_ERROR("Error calling gmtime_r.");
+        return;
+    }
+
+    // Gregorian calendar to MJD
+    int stt_imjd = cal2mjd(gmt.tm_year+1900, gmt.tm_mon+1, gmt.tm_mday);
+    int stt_smjd = gmt.tm_hour*3600 + gmt.tm_min*60+ gmt.tm_sec;
+    double stt_offs = ts.tv_nsec*1e-9;
+
+	pimpl->tau = 1.0; // TODO infer from sample_timespan*pipeline_integration_rate
     uvh5_header->time_array[0] = 2400000.5; // JD float offset
-    uvh5_header->time_array[0] += 41684.0; // MJD IERS first day
-    uvh5_header->time_array[0] += 6.5; // midday of 100th day
+    uvh5_header->time_array[0] += (double) stt_imjd;
+    uvh5_header->time_array[0] += ((double) stt_smjd)/86400.0;
     uvh5_header->time_array[0] += (pimpl->tau/2) / RADIOINTERFEROMETERY_DAYSEC; // midpoint of integration
 	for (size_t i = 0; i < uvh5_header->Nbls; i++)
 	{
@@ -352,17 +479,11 @@ void Uvh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     if (md.valid && manifest()) {
         const auto& first_ant = md.antennas[0].name;
 
-        auto ra_val = manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.ra", first_ant));
-        auto dec_val = manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.dec", first_ant));
-        if (auto* ptr = std::any_cast<double>(&ra_val)) md.pointing_ra = *ptr;
-        if (auto* ptr = std::any_cast<double>(&dec_val)) md.pointing_dec = *ptr;
-
-        auto pmx = manifest()->fetch("observation.iers.pm_x_arcsec");
-        auto pmy = manifest()->fetch("observation.iers.pm_y_arcsec");
-        auto ut1 = manifest()->fetch("observation.iers.ut1_utc");
-        if (auto* ptr = std::any_cast<double>(&pmx)) md.iers_pm_x_arcsec = *ptr;
-        if (auto* ptr = std::any_cast<double>(&pmy)) md.iers_pm_y_arcsec = *ptr;
-        if (auto* ptr = std::any_cast<double>(&ut1)) md.iers_ut1_utc = *ptr;
+        manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.ra", first_ant), md.pointing_ra);
+        manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.dec", first_ant), md.pointing_dec);
+        manifest()->fetch("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
+        manifest()->fetch("observation.iers.pm_y_arcsec", md.iers_pm_y_arcsec);
+        manifest()->fetch("observation.iers.ut1_utc", md.iers_ut1_utc);
     }
 
     double ra_rad = md.pointing_ra;

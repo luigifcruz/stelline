@@ -4,7 +4,9 @@
 #include <any>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
 
 #include <stelline/common.hh>
 
@@ -19,11 +21,30 @@ class STELLINE_API ManifestProvider {
                const std::any& value,
                const uint64_t& start = 0,
                const uint64_t& end = UINT64_MAX);
-    std::any fetch(const std::string& key, const uint64_t& timestamp = 0) const;
+
+    template <typename T>
+    bool fetch(const std::string& key, T& out, const uint64_t& timestamp = 0) const {
+        const std::any val = fetchAny(key, timestamp);
+        if (!val.has_value()) {
+            throw std::runtime_error("Manifest key not found: " + key);
+        }
+        using U = std::decay_t<T>;
+        if constexpr (std::is_same_v<U, std::any>) {
+            out = val;
+            return true;
+        }
+        if (auto* ptr = std::any_cast<U>(&val)) {
+            out = *ptr;
+            return true;
+        }
+        throw std::runtime_error("Manifest key has unexpected type: " + key);
+    }
 
  private:
     struct Impl;
     std::unique_ptr<Impl> pimpl;
+
+    std::any fetchAny(const std::string& key, const uint64_t& timestamp = 0) const;
 };
 
 struct Metric {

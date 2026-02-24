@@ -29,10 +29,11 @@ void ManifestProvider::store(const std::string& key,
                              const std::any& value,
                              const uint64_t& start,
                              const uint64_t& end) {
+    HOLOSCAN_LOG_INFO("Storing manifest entry for key '{}' with start {} and end {}", key, start, end);
     pimpl->cache[key].push_back({start, end, value});
 }
 
-std::any ManifestProvider::fetch(const std::string& key, const uint64_t& timestamp) const {
+std::any ManifestProvider::fetchAny(const std::string& key, const uint64_t& timestamp) const {
     auto it = pimpl->cache.find(key);
     if (it == pimpl->cache.end()) {
         return {};

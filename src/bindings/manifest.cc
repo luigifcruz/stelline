@@ -35,8 +35,10 @@ PYBIND11_MODULE(_manifest, m) {
         }, py::arg("key"), py::arg("value"), py::arg("type") = "string",
            py::arg("start") = 0, py::arg("end") = UINT64_MAX)
         .def("fetch", [](ManifestProvider& self, const std::string& key, uint64_t timestamp) -> py::object {
-            auto result = self.fetch(key, timestamp);
-            if (!result.has_value()) {
+            std::any result;
+            try {
+                self.fetch(key, result, timestamp);
+            } catch (const std::runtime_error&) {
                 return py::none();
             }
             if (auto* v = std::any_cast<double>(&result)) {
