@@ -6,6 +6,7 @@ import json
 import os
 import threading
 import urllib.request
+from typing import Any
 
 from stelline.utils import logger
 
@@ -22,9 +23,10 @@ class NexusClient:
         self._metadata_url = os.environ.get("NEXUS_METADATA_URL", "")
         self._manifest_provider = manifest_provider
 
-        self._ws: WebSocketApp | None = None
+        self._ws: Any = None
         self._ws_thread: threading.Thread | None = None
         self._ws_ready = threading.Event()
+        self._last_ws_error: str | None = None
         self._on_signal: dict = {}
 
         if self.available:
@@ -56,13 +58,16 @@ class NexusClient:
             on_close=self._on_close,
         )
 
-        self._ws_thread = threading.Thread(
-            target=self._ws.run_forever, daemon=True
-        )
+        self._ws_thread = threading.Thread(target=self._ws.run_forever, daemon=True)
+        self._last_ws_error = None
         self._ws_ready.clear()
         self._ws_thread.start()
         logger.info(f"Nexus WS connecting to {ws_url}")
         self._ws_ready.wait(timeout=5)
+        if not self._ws_ready.is_set():
+            error = self._last_ws_error or "timeout while opening websocket"
+            self.close()
+            raise RuntimeError(f"Nexus WS connection failed: {error}")
 
     def on(self, signal: str, callback):
         self._on_signal[signal] = callback
@@ -86,9 +91,7 @@ class NexusClient:
             return
         url = self._metadata_url
         if not url:
-            url = (
-                f"{self._server_url}/api/v1/instances/{self._instance_id}/metadata"
-            )
+            url = f"{self._server_url}/api/v1/instances/{self._instance_id}/metadata"
         try:
             body = json.dumps({"keys": []}).encode()
             req = urllib.request.Request(url, data=body, method="POST")
@@ -107,6 +110,7 @@ class NexusClient:
                 self._manifest_provider.store(key, value, dtype, start, end)
         except Exception as exc:
             logger.error(f"Failed to sync metadata from {url}: {exc}")
+            raise RuntimeError(f"Failed to sync metadata from {url}") from exc
 
     def sync_metrics(self, metrics: dict):
         if self._ws:
@@ -117,7 +121,7 @@ class NexusClient:
 
     def sync_status(self, status: str, log: dict | None = None):
         if self._ws:
-            payload = {"type": "status", "status": status}
+            payload: dict[str, object] = {"type": "status", "status": status}
             if log:
                 payload["log"] = log
             try:
@@ -146,6 +150,7 @@ class NexusClient:
                 cb(data)
 
     def _on_error(self, ws, error):
+        self._last_ws_error = str(error)
         logger.error(f"Nexus WS error: {error}")
 
     def _on_open(self, ws):
