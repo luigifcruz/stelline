@@ -23,7 +23,6 @@ def FilesystemBit(
     cfg = app.kwargs(config)
     mode = cfg.get("mode")
     file_path = cfg.get("file_path") or "./file.bin"
-
     logger.info("Filesystem Configuration:")
     logger.info(f"  Mode: {mode}")
     logger.info(f"  File Path: {file_path}")
@@ -60,12 +59,24 @@ def FilesystemBit(
             file_path=file_path,
         )
     elif mode == "uvh5_writer_rdma":
+        dsp_channelization_rate = cfg.get("dsp_channelization_rate")
+        dsp_integration_rate = cfg.get("dsp_integration_rate")
+        dsp_frequency_integration_rate = cfg.get("dsp_frequency_integration_rate")
+
+        logger.info("  Mode Configuration:")
+        logger.info(f"    DSP Channelization Rate: {dsp_channelization_rate}")
+        logger.info(f"    DSP Integration Rate: {dsp_integration_rate}")
+        logger.info(f"    DSP Frequency Integration Rate: {dsp_frequency_integration_rate}")
+
         logger.info("Creating UVH5 Writer RDMA operator.")
         writer_name = f"filesystem-uvh5-writer-rdma-{id}"
         writer_op = Uvh5WriterRdmaOp(
             fragment=app,
             name=writer_name,
             file_path=file_path,
+            dsp_channelization_rate=dsp_channelization_rate,
+            dsp_integration_rate=dsp_integration_rate,
+            dsp_frequency_integration_rate=dsp_frequency_integration_rate,
         )
     else:
         raise ValueError(f"Unsupported filesystem mode: {mode}")

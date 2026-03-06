@@ -84,8 +84,16 @@ public:
     PyUvh5WriterRdmaOp(Fragment* fragment,
                        const py::args& args,
                        const std::string& file_path,
+                       const uint64_t dsp_channelization_rate,
+                       const uint64_t dsp_integration_rate,
+                       const uint64_t dsp_frequency_integration_rate,
                        const std::string& name = "uvh5_writer_rdma")
-        : Uvh5WriterRdmaOp(ArgList{Arg("file_path", file_path)}) {
+        : Uvh5WriterRdmaOp(ArgList{
+            Arg("file_path", file_path),
+            Arg("dsp_channelization_rate", dsp_channelization_rate),
+            Arg("dsp_integration_rate", dsp_integration_rate),
+            Arg("dsp_frequency_integration_rate", dsp_frequency_integration_rate)
+        }) {
         name_ = name;
         fragment_ = fragment;
         spec_ = std::make_shared<OperatorSpec>(fragment);
@@ -148,9 +156,12 @@ PYBIND11_MODULE(_filesystem_ops, m) {
 
 #ifdef STELLINE_LOADER_UVH5
     py::class_<Uvh5WriterRdmaOp, PyUvh5WriterRdmaOp, Operator, std::shared_ptr<Uvh5WriterRdmaOp>>(m, "Uvh5WriterRdmaOp")
-        .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
+        .def(py::init<Fragment*, const py::args&, const std::string&, const uint64_t, const uint64_t, const uint64_t, const std::string&>(),
              py::arg("fragment"),
              py::arg("file_path"),
+             py::arg("dsp_channelization_rate"),
+             py::arg("dsp_integration_rate"),
+             py::arg("dsp_frequency_integration_rate"),
              py::arg("name") = "uvh5_writer_rdma")
         .def("tick", &Uvh5WriterRdmaOp::tick)
         .def("format_metrics", &Uvh5WriterRdmaOp::formatMetrics)

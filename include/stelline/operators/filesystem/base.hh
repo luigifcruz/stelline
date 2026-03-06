@@ -131,6 +131,9 @@ class STELLINE_API Uvh5WriterRdmaOp : public Operator,
     Impl* pimpl = nullptr;
 
     Parameter<std::string> filePath_;
+    Parameter<uint64_t> dspChannelizationRate_;
+    Parameter<uint64_t> dspIntegrationRate_;
+    Parameter<uint64_t> dspFrequencyIntegrationRate_;
 };
 #endif  // STELLINE_LOADER_UVH5
 
