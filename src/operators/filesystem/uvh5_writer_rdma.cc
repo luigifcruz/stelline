@@ -43,37 +43,36 @@ namespace stelline::operators::filesystem {
   int test_5 = cal2mjd(2026, 2, 16);
   printf("2026-02-16: %d MJD (61087)\n", test_5);
 */
-int cal2mjd(int iy, int im, int id) 
-{
-  int leap;
+int cal2mjd(int iy, int im, int id) {
+    int leap;
 
-  /* month lengths in days for normal and leap years */
-  static int mtab[2][13] = {
-    {0,31,28,31,30,31,30,31,31,30,31,30,31},
-    {0,31,29,31,30,31,30,31,31,30,31,30,31}
-  };
+    /* month lengths in days for normal and leap years */
+    static int mtab[2][13] = {
+        {0,31,28,31,30,31,30,31,31,30,31,30,31},
+        {0,31,29,31,30,31,30,31,31,30,31,30,31}
+    };
 
-  /*validate year*/
-  if (iy<-4699) {
-    HOLOSCAN_LOG_ERROR("Invalid year passed to cal2mjd.");
-    return 0;
-  } else {
-    /* validate month */
-    if (im<1 || im>12) {
-      HOLOSCAN_LOG_ERROR("Invalid month passed to cal2mjd.");
-      return 0;
-    } else {
-      /* allow for leap year */
-      leap = (iy%4 == 0 && iy%100 != 00) || iy%400 == 0;
-      /* validate day */
-      if (id<1 || id>mtab[leap][im]) {
-    	HOLOSCAN_LOG_ERROR("Invalid day passed to cal2mjd.");
+    /*validate year*/
+    if (iy < -4699) {
+        HOLOSCAN_LOG_ERROR("Invalid year passed to cal2mjd.");
         return 0;
-      }
+    } else {
+        /* validate month */
+        if (im < 1 || im > 12) {
+            HOLOSCAN_LOG_ERROR("Invalid month passed to cal2mjd.");
+            return 0;
+        } else {
+            /* allow for leap year */
+            leap = (iy % 4 == 0 && iy % 100 != 0) || iy % 400 == 0;
+            /* validate day */
+            if (id < 1 || id > mtab[leap][im]) {
+                HOLOSCAN_LOG_ERROR("Invalid day passed to cal2mjd.");
+                return 0;
+            }
+        }
     }
-  }
 
-  return (1461*(iy-(12-im)/10+4712))/4 + (5+306*((im+9)%12))/10 - (3*((iy-(12-im)/10+4900)/100))/4 + id - 2399904;
+    return (1461 * (iy - (12 - im) / 10 + 4712)) / 4 + (5 + 306 * ((im + 9) % 12)) / 10 - (3 * ((iy - (12 - im) / 10 + 4900) / 100)) / 4 + id - 2399904;
 }
 
 struct Uvh5WriterRdmaOp::Impl {
@@ -267,8 +266,7 @@ void Uvh5WriterRdmaOp::start() {
 
     md.valid = true;
 
-    HOLOSCAN_LOG_INFO("UVH5 Writer: manifest loaded ({} antennas, telescope='{}')",
-                      nantenna, md.telescope_name);
+    HOLOSCAN_LOG_INFO("UVH5 Writer: manifest loaded ({} antennas, telescope='{}')", nantenna, md.telescope_name);
 
     // Initialize UVH5.
 
@@ -374,8 +372,8 @@ void Uvh5WriterRdmaOp::start() {
 		uvh5_header->freq_array[i] = (instance_subband_lower + (i+0.5)*chan_bw) * 1e6;
 	}
 
-    
-    const auto& timestamp = meta->get<uint64_t>("timestamp");
+
+    const auto& timestamp = 0;//meta->get<uint64_t>("timestamp");
 
     double realtime_secs = 0.0;
     // Calc real-time seconds since SYNCTIME for pktidx, taken to be a multiple of PKTNTIME:
@@ -386,7 +384,7 @@ void Uvh5WriterRdmaOp::start() {
     if(chan_bw != 0.0) {
         realtime_secs = timestamp / (1e6 * fabs(chan_bw));
     }
-    
+
     struct timespec ts;
     ts.tv_sec = (time_t)(md.packet_timestamp_offset + rint(realtime_secs));
     ts.tv_nsec = (long)((realtime_secs - rint(realtime_secs)) * 1e9);
@@ -423,6 +421,15 @@ void Uvh5WriterRdmaOp::start() {
     // Create HDF5 file.
 
     UVH5open_with_fileaccess(pimpl->filePath.data(), &pimpl->uvh5_file, UVH5TcreateCF32(), pimpl->faplId);
+
+    if (H5Iis_valid(pimpl->uvh5_file.file_id) <= 0) {
+        HOLOSCAN_LOG_ERROR("UVH5 open failed (file='{}'): invalid HDF5 file handle.", pimpl->filePath);
+        throw std::runtime_error(fmt::format(
+            "UVH5 open failed for '{}': invalid HDF5 file handle.",
+            pimpl->filePath
+        ));
+    }
+
 	UVH5write_keyword_bool(&pimpl->uvh5_file, "keyword_bool", true);
 	UVH5write_keyword_double(&pimpl->uvh5_file, "keyword_double", 3.14159265);
 	UVH5write_keyword_int(&pimpl->uvh5_file, "keyword_int", 42);
