@@ -30,16 +30,17 @@ stelline:
 # Nodes
 
 ata_standard_rx:
+    dtype: ci8
     mode: ata
     gpu_device_id: 0
-    interface_address: "0000:c1:00.1"
+    interface_address: "0000:01:00.0"
     master_core: 0
     worker_core: 1
     max_concurrent_bursts: 32
     packets_per_burst: 8192
-    max_concurrent_blocks: 16
+    max_concurrent_blocks: 4
     output_pool_size: 32
-    sorter_depth: 8
+    sorter_depth: 4
     enable_csv_logging: true
     total_block:
         number_of_antennas: 28
@@ -58,6 +59,7 @@ ata_standard_rx:
         number_of_polarizations: 0
 
 blade_correlator:
+    dtype: ci8
     input_shape:
         number_of_antennas: 28
         number_of_channels: 192
@@ -73,13 +75,14 @@ blade_correlator:
     options:
         pre_channelizer_stacker_multiplier: 1
 
-        channelizer_bypass: true
+        channelizer_bypass: false
 
         pre_correlator_stacker_multiplier: 1
 
         correlator_integration_rate: 8192
         correlator_conjugate_antenna_index: 1
-        correlator_use_shared_memory: false
+        correlator_use_shared_memory: true
+        post_correlator_frequency_integration_rate: 8192
 
 file_writer:
     mode: simple_writer

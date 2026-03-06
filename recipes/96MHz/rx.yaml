@@ -27,12 +27,12 @@ stelline:
 ata_standard_rx:
     mode: ata
     gpu_device_id: 0
-    interface_address: "0000:c1:00.1"
+    interface_address: "0000:01:00.0"
     master_core: 0
     worker_core: 1
     max_concurrent_bursts: 32
     packets_per_burst: 8192
-    max_concurrent_blocks: 8
+    max_concurrent_blocks: 4
     output_pool_size: 32
     sorter_depth: 4
     enable_csv_logging: true
