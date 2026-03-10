@@ -21,27 +21,39 @@ RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" \
 RUN cat <<'EOF' >/usr/local/bin/dev-entrypoint.sh
 #!/bin/sh
 set -eu
-
-case "${STELLINE_DEV_INTERFACE:-jupyter}" in
+INTERFACE="${STELLINE_DEV_INTERFACE:-jupyter}"
+PORT="${STELLINE_DEV_PORT:-8888}"
+ROOT="${STELLINE_DEV_ROOT:-/home/sdk}"
+if [ -n "${NEXUS_INSTANCE_ID:-}" ]; then
+  BASE_URL="/api/v1/proxy/${NEXUS_INSTANCE_ID}/${INTERFACE}"
+  case "$INTERFACE" in
+    jupyter) BASE_URL="${BASE_URL}/" ;;
+  esac
+elif [ -n "${STELLINE_DEV_BASE_URL:-}" ]; then
+  BASE_URL="${STELLINE_DEV_BASE_URL}"
+else
+  BASE_URL="/"
+fi
+case "$INTERFACE" in
   jupyter)
     exec jupyter lab \
       --ServerApp.ip=0.0.0.0 \
-      --ServerApp.port="${STELLINE_DEV_PORT:-8888}" \
+      --ServerApp.port="$PORT" \
       --ServerApp.open_browser=False \
-      --ServerApp.base_url="${STELLINE_DEV_BASE_URL:-/}" \
-      --ServerApp.root_dir="${STELLINE_DEV_ROOT:-/home/sdk}" \
+      --ServerApp.base_url="$BASE_URL" \
+      --ServerApp.root_dir="$ROOT" \
       --ServerApp.token="${JUPYTER_TOKEN:-}" \
       --allow-root
     ;;
   vscode)
     exec code-server \
-      --bind-addr "0.0.0.0:${STELLINE_DEV_PORT:-8888}" \
-      --base-path "${STELLINE_DEV_BASE_URL:-/}" \
+      --bind-addr "0.0.0.0:${PORT}" \
+      --base-path "$BASE_URL" \
       --auth none \
-      "${STELLINE_DEV_ROOT:-/home/sdk}"
+      "$ROOT"
     ;;
   *)
-    echo "Unsupported STELLINE_DEV_INTERFACE: ${STELLINE_DEV_INTERFACE:-}. Use 'jupyter' or 'vscode'." >&2
+    echo "Unsupported STELLINE_DEV_INTERFACE: $INTERFACE. Use 'jupyter' or 'vscode'." >&2
     exit 1
     ;;
 esac
