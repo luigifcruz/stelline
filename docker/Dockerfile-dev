@@ -13,10 +13,9 @@ RUN apt update && \
 RUN curl -fsSL https://code-server.dev/install.sh | sh
 
 RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" \
-                                           "notebook>=7,<8" \
-                                           "jupyter-server>=2,<3" \
-                                           "jupyterlab-nvdashboard" \
-                                           "rich"
+                                          "notebook>=7,<8" \
+                                          "jupyter-server>=2,<3" \
+                                          "rich"
 
 RUN cat <<'EOF' >/usr/local/bin/dev-entrypoint.sh
 #!/bin/sh
