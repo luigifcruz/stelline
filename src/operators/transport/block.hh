@@ -25,7 +25,13 @@ struct Block {
             HOLOSCAN_LOG_ERROR("[TRANSPORT] Failed to allocate memory for data block.");
         });
 
-        STELLINE_CUDA_CHECK_THROW(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), [&]{
+        int lowPriority = 0;
+        int highPriority = 0;
+        STELLINE_CUDA_CHECK_THROW(cudaDeviceGetStreamPriorityRange(&lowPriority, &highPriority), [&]{
+            HOLOSCAN_LOG_ERROR("[TRANSPORT] Failed to query CUDA stream priority range.");
+        });
+
+        STELLINE_CUDA_CHECK_THROW(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, highPriority), [&]{
             HOLOSCAN_LOG_ERROR("[TRANSPORT] Failed to create stream for data block.");
         });
     }
