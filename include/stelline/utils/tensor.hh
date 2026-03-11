@@ -1,6 +1,7 @@
 #ifndef STELLINE_UTILS_TENSOR_HH
 #define STELLINE_UTILS_TENSOR_HH
 
+#include <cstdint>
 #include <string>
 
 #include <holoscan/holoscan.hpp>
@@ -9,6 +10,19 @@
 #include <stelline/yaml/types/block_shape.hh>
 
 namespace stelline {
+
+inline int64_t TensorDataSizeBytes(const holoscan::Tensor& tensor) {
+    int64_t element_bytes = tensor.dtype().bits / 8;
+
+    if (tensor.dtype().lanes > 0) {
+        element_bytes *= tensor.dtype().lanes;
+    }
+    if (tensor.dtype().code == 5) {
+        element_bytes *= 2;
+    }
+
+    return tensor.size() * element_bytes;
+}
 
 template<typename T>
 std::shared_ptr<holoscan::Tensor> MakeBlockTensor(const BlockShape& shape) {

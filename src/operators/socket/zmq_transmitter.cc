@@ -1,5 +1,6 @@
 #include <stelline/types.hh>
 #include <stelline/operators/socket/base.hh>
+#include <stelline/utils/tensor.hh>
 
 #include <zmq.hpp>
 
@@ -96,7 +97,7 @@ void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionCon
     }
 
     const auto& tensor = result.value();
-    const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
+    const auto tensorBytes = TensorDataSizeBytes(*tensor);
 
     // Allocate host bounce buffer.
 

@@ -6,6 +6,7 @@
 
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
+#include <stelline/utils/tensor.hh>
 #include <fmt/format.h>
 
 #include "utils/helpers.hh"
@@ -169,7 +170,7 @@ void Fbh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     }
 
     const auto& tensor = result.value();
-    const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
+    const auto tensorBytes = TensorDataSizeBytes(*tensor);
 
     // Allocate permuted tensor.
 
