@@ -8,6 +8,7 @@
 
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
+#include <stelline/utils/tensor.hh>
 #include <fmt/format.h>
 
 #include <time.h>
@@ -109,6 +110,7 @@ struct Uvh5WriterRdmaOp::Impl {
 
         // Timestamp offset (static - first antenna as representative).
         uint64_t packet_timestamp_offset;
+        double sample_timespan; // seconds
 
         // IERS (dynamic).
         double iers_pm_x_arcsec;
@@ -121,12 +123,15 @@ struct Uvh5WriterRdmaOp::Impl {
     // State.
 
     std::string filePath;
+    uint64_t dspChannelizationRate;
+    uint64_t dspIntegrationRate;
 
     // UVH5 file state.
 
     hid_t faplId;
     UVH5_file_t uvh5_file;
-    float tau; // the timespan of each correlation
+    double integration_timespan; // (s) the timespan of each correlation
+    double frequency_bandwidth; // (MHz) the bandwidth of each frequency channel in the correlation
     int64_t bytesWritten;
     uint64_t chunkCounter;
     uint64_t rank;
@@ -157,11 +162,14 @@ void Uvh5WriterRdmaOp::setup(OperatorSpec& spec) {
                    holoscan::Arg("capacity", 1024UL));
 
     spec.param(filePath_, "file_path");
+    spec.param(dspChannelizationRate_, "dsp_channelization_rate");
+    spec.param(dspIntegrationRate_, "dsp_integration_rate");
 }
 
 void Uvh5WriterRdmaOp::start() {
     pimpl->filePath = filePath_.get();
-    const auto& meta = metadata();
+    pimpl->dspChannelizationRate = dspChannelizationRate_.get();
+    pimpl->dspIntegrationRate = dspIntegrationRate_.get();
 
     // Validate and populate manifest data.
 
@@ -212,6 +220,13 @@ void Uvh5WriterRdmaOp::start() {
     md.packet_timestamp_offset = 0;
     manifest()->fetch(fmt::format("observatory.antenna.{}.fengine.synctime", first_ant),
                       md.packet_timestamp_offset);
+    md.sample_timespan = 1e-6;
+    manifest()->fetch(fmt::format("observatory.antenna.{}.fengine.sample_period", first_ant),
+                      md.sample_timespan);
+    pimpl->integration_timespan = md.sample_timespan * pimpl->dspIntegrationRate;
+    HOLOSCAN_LOG_INFO("UVH5 Writer: manifest loaded sample_timespan: {}", md.sample_timespan);
+    HOLOSCAN_LOG_INFO("UVH5 Writer: yaml loaded integration factors: {}", pimpl->dspIntegrationRate);
+    HOLOSCAN_LOG_INFO("UVH5 Writer: integration timespan {}", pimpl->integration_timespan);
 
     // IERS.
     manifest()->fetch("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
@@ -276,7 +291,7 @@ void Uvh5WriterRdmaOp::start() {
 
 	// set header scalar data
 	uvh5_header->Ntimes = 0; // initially
-	uvh5_header->Nfreqs = md.instance_nof_channels;
+	uvh5_header->Nfreqs = md.instance_nof_channels * pimpl->dspChannelizationRate;
 	uvh5_header->Nspws = 1;
 	uvh5_header->Nblts = uvh5_header->Nbls * uvh5_header->Ntimes;
 
@@ -365,50 +380,12 @@ void Uvh5WriterRdmaOp::start() {
 
 	uvh5_header->spw_array[0] = 1;
 	double instance_subband_lower = md.instance_bandcenter - (md.instance_bandwidth/2);
-	double chan_bw = md.instance_bandwidth / md.instance_nof_channels;
-	uvh5_header->channel_width[0] = chan_bw * 1e6;
+	pimpl->frequency_bandwidth = md.instance_bandwidth / md.instance_nof_channels;
+	pimpl->frequency_bandwidth /= pimpl->dspChannelizationRate;
+	uvh5_header->channel_width[0] = pimpl->frequency_bandwidth * 1e6;
 	for(size_t i = 0; i < uvh5_header->Nfreqs; i++) {
 		uvh5_header->channel_width[i] = uvh5_header->channel_width[0];
-		uvh5_header->freq_array[i] = (instance_subband_lower + (i+0.5)*chan_bw) * 1e6;
-	}
-
-
-    const auto& timestamp = 0;//meta->get<uint64_t>("timestamp");
-
-    double realtime_secs = 0.0;
-    // Calc real-time seconds since SYNCTIME for pktidx, taken to be a multiple of PKTNTIME:
-    //
-    //                          pktidx
-    //     realtime_secs = -------------------
-    //                        1e6 * chan_bw
-    if(chan_bw != 0.0) {
-        realtime_secs = timestamp / (1e6 * fabs(chan_bw));
-    }
-
-    struct timespec ts;
-    ts.tv_sec = (time_t)(md.packet_timestamp_offset + rint(realtime_secs));
-    ts.tv_nsec = (long)((realtime_secs - rint(realtime_secs)) * 1e9);
-
-    struct tm gmt;
-    if (gmtime_r(&ts.tv_sec, &gmt) == NULL) {
-        HOLOSCAN_LOG_ERROR("Error calling gmtime_r.");
-        return;
-    }
-
-    // Gregorian calendar to MJD
-    int stt_imjd = cal2mjd(gmt.tm_year+1900, gmt.tm_mon+1, gmt.tm_mday);
-    int stt_smjd = gmt.tm_hour*3600 + gmt.tm_min*60+ gmt.tm_sec;
-    double stt_offs = ts.tv_nsec*1e-9;
-
-	pimpl->tau = 1.0; // TODO infer from sample_timespan*pipeline_integration_rate
-    uvh5_header->time_array[0] = 2400000.5; // JD float offset
-    uvh5_header->time_array[0] += (double) stt_imjd;
-    uvh5_header->time_array[0] += ((double) stt_smjd)/86400.0;
-    uvh5_header->time_array[0] += (pimpl->tau/2) / RADIOINTERFEROMETERY_DAYSEC; // midpoint of integration
-	for (size_t i = 0; i < uvh5_header->Nbls; i++)
-	{
-		uvh5_header->time_array[i] = uvh5_header->time_array[0];
-		uvh5_header->integration_time[i] = pimpl->tau;
+		uvh5_header->freq_array[i] = (instance_subband_lower + (i+0.5)*pimpl->frequency_bandwidth) * 1e6;
 	}
 
     // Set up HDF5 library.
@@ -430,11 +407,6 @@ void Uvh5WriterRdmaOp::start() {
         ));
     }
 
-	UVH5write_keyword_bool(&pimpl->uvh5_file, "keyword_bool", true);
-	UVH5write_keyword_double(&pimpl->uvh5_file, "keyword_double", 3.14159265);
-	UVH5write_keyword_int(&pimpl->uvh5_file, "keyword_int", 42);
-	UVH5write_keyword_string(&pimpl->uvh5_file, "keyword_string", "Testing");
-
     // Manage UVF5 data pointers
     free(pimpl->uvh5_file.visdata);
 
@@ -455,13 +427,15 @@ void Uvh5WriterRdmaOp::stop() {
 }
 
 void Uvh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
+    const auto& meta = metadata();
+
     auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
     if (!result) {
         return;
     }
 
     const auto& tensor = result.value();
-    const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
+    const auto tensorBytes = TensorDataSizeBytes(*tensor);
 
     // Allocate permuted tensor.
 
@@ -496,7 +470,44 @@ void Uvh5WriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionCon
     double ra_rad = md.pointing_ra;
     double dec_rad = md.pointing_dec;
 
-    uvh5_header->time_array[0] += + pimpl->tau/RADIOINTERFEROMETERY_DAYSEC;
+    // Calculate time point of correlation
+    const auto& timestamp = meta->get<uint64_t>("timestamp");
+    double realtime_secs = 0.0;
+    double chan_bw = md.instance_bandwidth / md.instance_nof_channels;
+    // Calc real-time seconds since SYNCTIME for pktidx, taken to be a multiple of PKTNTIME:
+    //
+    //                          pktidx
+    //     realtime_secs = -------------------
+    //                        1e6 * chan_bw
+    if (chan_bw != 0.0) {
+        realtime_secs = timestamp / (1e6 * fabs(chan_bw));
+    }
+
+    struct timespec ts;
+    ts.tv_sec = (time_t)(md.packet_timestamp_offset + rint(realtime_secs));
+    ts.tv_nsec = (long)((realtime_secs - rint(realtime_secs)) * 1e9);
+
+    struct tm gmt;
+    if (gmtime_r(&ts.tv_sec, &gmt) == NULL) {
+        HOLOSCAN_LOG_ERROR("Error calling gmtime_r.");
+        return;
+    }
+
+    // Gregorian calendar to MJD
+    int stt_imjd = cal2mjd(gmt.tm_year+1900, gmt.tm_mon+1, gmt.tm_mday);
+    int stt_smjd = gmt.tm_hour*3600 + gmt.tm_min*60+ gmt.tm_sec;
+    double stt_offs = ts.tv_nsec*1e-9;
+
+    uvh5_header->time_array[0] = 2400000.5; // JD float offset
+    uvh5_header->time_array[0] += (double) stt_imjd;
+    uvh5_header->time_array[0] += ((double) stt_smjd) / RADIOINTERFEROMETERY_DAYSEC;
+    uvh5_header->time_array[0] += (pimpl->integration_timespan/2) / RADIOINTERFEROMETERY_DAYSEC; // midpoint of integration
+	for (size_t i = 0; i < uvh5_header->Nbls; i++)
+	{
+		uvh5_header->time_array[i] = uvh5_header->time_array[0];
+		uvh5_header->integration_time[i] = pimpl->integration_timespan;
+	}
+
     double pos_angle = 0.0;
     int rv;
     if ((rv = calc_itrs_icrs_frame_pos_angle_with_pm_and_ut1_utc(
