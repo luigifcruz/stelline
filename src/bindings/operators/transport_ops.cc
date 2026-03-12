@@ -129,8 +129,8 @@ public:
             const auto total_num_bufs = static_cast<size_t>(packets_per_burst * max_concurrent_bursts);
 
             cfg.log_level_ =  holoscan::advanced_network::LogLevel::TRACE;
-            cfg.tx_meta_buffers_ = DEFAULT_TX_META_BUFFERS;
-            cfg.rx_meta_buffers_ = DEFAULT_RX_META_BUFFERS;
+            cfg.tx_meta_buffers_ = DEFAULT_TX_META_BUFFERS*8;
+            cfg.rx_meta_buffers_ = DEFAULT_RX_META_BUFFERS*8;
 
             cfg.common_.version = 1;
             cfg.common_.master_core_ = master_core;
