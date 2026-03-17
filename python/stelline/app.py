@@ -39,6 +39,7 @@ def _detect_system_info() -> None:
     discrete = True
     try:
         import cuda.cudart as cudart
+
         err, count = cudart.cudaGetDeviceCount()
         if err == cudart.cudaError_t.cudaSuccess and count > 0:
             err, props = cudart.cudaGetDeviceProperties(0)
@@ -51,9 +52,7 @@ def _detect_system_info() -> None:
 
     SystemInfo.instance().configure(name, unified, discrete)
 
-    logger.info(f"System: {name}, "
-                f"Unified Memory: {unified}, "
-                f"Discrete GPU: {discrete}")
+    logger.info(f"System: {name}, Unified Memory: {unified}, Discrete GPU: {discrete}")
 
 
 class App(Application):
@@ -172,9 +171,9 @@ class App(Application):
 
         # Wire manifest and metrics providers to operators.
         for op in self._operators:
-            if hasattr(op, 'set_manifest_provider') and self._manifest_provider:
+            if hasattr(op, "set_manifest_provider") and self._manifest_provider:
                 op.set_manifest_provider(self._manifest_provider)
-            if hasattr(op, 'set_metrics_provider'):
+            if hasattr(op, "set_metrics_provider"):
                 provider = MetricsProvider()
                 self._metrics_providers[id(op)] = provider
                 op.set_metrics_provider(provider)
@@ -220,7 +219,9 @@ class App(Application):
                     parts.append(Rule(style="dim"))
                 parts.append(Text(f"ERROR: {exc}", style="bold red"))
         if parts:
-            console.print(Panel(Group(*parts), title=f"Metrics {timestamp}", border_style="cyan"))
+            console.print(
+                Panel(Group(*parts), title=f"Metrics {timestamp}", border_style="cyan")
+            )
 
     def _send_metrics(self):
         if not self._nexus.available:
