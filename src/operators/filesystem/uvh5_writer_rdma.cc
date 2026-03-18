@@ -216,23 +216,6 @@ void Uvh5WriterRdmaOp::start() {
     manifest()->fetch(fmt::format("observatory.antenna.{}.pointing.source_name", first_ant),
                       md.pointing_source_name);
 
-    // Pointing (from first observation antenna).
-    md.packet_timestamp_offset = 0;
-    manifest()->fetch(fmt::format("observatory.antenna.{}.fengine.synctime", first_ant),
-                      md.packet_timestamp_offset);
-    md.sample_timespan = 1e-6;
-    manifest()->fetch(fmt::format("observatory.antenna.{}.fengine.sample_period", first_ant),
-                      md.sample_timespan);
-    pimpl->integration_timespan = md.sample_timespan * pimpl->dspIntegrationRate;
-    HOLOSCAN_LOG_INFO("UVH5 Writer: manifest loaded sample_timespan: {}", md.sample_timespan);
-    HOLOSCAN_LOG_INFO("UVH5 Writer: yaml loaded integration factors: {}", pimpl->dspIntegrationRate);
-    HOLOSCAN_LOG_INFO("UVH5 Writer: integration timespan {}", pimpl->integration_timespan);
-
-    // IERS.
-    manifest()->fetch("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
-    manifest()->fetch("observation.iers.pm_y_arcsec", md.iers_pm_y_arcsec);
-    manifest()->fetch("observation.iers.ut1_utc", md.iers_ut1_utc);
-
     // Observation frequency band
     manifest()->fetch("instance.bands", md.instance_bands);
     std::string instance_bands_tuningkey = "'tuning': '";
@@ -277,7 +260,25 @@ void Uvh5WriterRdmaOp::start() {
     }
     else {
         HOLOSCAN_LOG_ERROR("UVH5 Writer: could not parse the 'instance.bands' string for metadata: '{}'", md.instance_bands);
+        return;
     }
+
+    // Timing (from first observation antenna).
+    md.packet_timestamp_offset = 0;
+    manifest()->fetch(fmt::format("observatory.antenna.{}.tunings.{}.fengine.synctime", first_ant, md.instance_tuning),
+                      md.packet_timestamp_offset);
+    md.sample_timespan = 1e-6;
+    manifest()->fetch(fmt::format("observatory.antenna.{}.tunings.{}.fengine.sample_period", first_ant, md.instance_tuning),
+                      md.sample_timespan);
+    pimpl->integration_timespan = md.sample_timespan * pimpl->dspIntegrationRate;
+    HOLOSCAN_LOG_INFO("UVH5 Writer: manifest loaded sample_timespan: {}", md.sample_timespan);
+    HOLOSCAN_LOG_INFO("UVH5 Writer: yaml loaded integration factors: {}", pimpl->dspIntegrationRate);
+    HOLOSCAN_LOG_INFO("UVH5 Writer: integration timespan {}", pimpl->integration_timespan);
+
+    // IERS.
+    manifest()->fetch("observation.iers.pm_x_arcsec", md.iers_pm_x_arcsec);
+    manifest()->fetch("observation.iers.pm_y_arcsec", md.iers_pm_y_arcsec);
+    manifest()->fetch("observation.iers.ut1_utc", md.iers_ut1_utc);
 
     md.valid = true;
 
