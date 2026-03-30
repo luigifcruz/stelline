@@ -1,3 +1,3 @@
-from stelline._types import BlockShape
+from stelline._types import BlockShape, SystemInfo
 
-__all__ = ["BlockShape"]
+__all__ = ["BlockShape", "SystemInfo"]

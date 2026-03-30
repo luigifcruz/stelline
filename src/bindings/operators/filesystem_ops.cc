@@ -83,15 +83,15 @@ public:
 
     PyUvh5WriterRdmaOp(Fragment* fragment,
                        const py::args& args,
-                       const std::string& output_file_path,
-                       const std::string& telinfo_file_path,
-                       const std::string& obsantinfo_file_path,
-                       const std::string& iers_file_path,
+                       const std::string& file_path,
+                       const uint64_t dsp_channelization_rate,
+                       const uint64_t dsp_integration_rate,
                        const std::string& name = "uvh5_writer_rdma")
-        : Uvh5WriterRdmaOp(ArgList{Arg("output_file_path", output_file_path),
-                                   Arg("telinfo_file_path", telinfo_file_path),
-                                   Arg("obsantinfo_file_path", obsantinfo_file_path),
-                                   Arg("iers_file_path", iers_file_path)}) {
+        : Uvh5WriterRdmaOp(ArgList{
+            Arg("file_path", file_path),
+            Arg("dsp_channelization_rate", dsp_channelization_rate),
+            Arg("dsp_integration_rate", dsp_integration_rate)
+        }) {
         name_ = name;
         fragment_ = fragment;
         spec_ = std::make_shared<OperatorSpec>(fragment);
@@ -107,24 +107,36 @@ PYBIND11_MODULE(_filesystem_ops, m) {
         .def(py::init<Fragment*, const py::args&, const std::string&>(),
              py::arg("fragment"),
              py::arg("name") = "dummy_writer")
-        .def("collect_metrics_map", &DummyWriterOp::collectMetricsMap)
-        .def("collect_metrics_string", &DummyWriterOp::collectMetricsString);
+        .def("tick", &DummyWriterOp::tick)
+        .def("format_metrics", &DummyWriterOp::formatMetrics)
+        .def("set_manifest_provider", &DummyWriterOp::setManifestProvider)
+        .def("set_metrics_provider", &DummyWriterOp::setMetricsProvider)
+        .def_property_readonly("manifest", &DummyWriterOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &DummyWriterOp::metrics, py::return_value_policy::reference);
 
     py::class_<SimpleWriterOp, PySimpleWriterOp, Operator, std::shared_ptr<SimpleWriterOp>>(m, "SimpleWriterOp")
         .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
              py::arg("fragment"),
              py::arg("file_path"),
              py::arg("name") = "simple_writer")
-        .def("collect_metrics_map", &SimpleWriterOp::collectMetricsMap)
-        .def("collect_metrics_string", &SimpleWriterOp::collectMetricsString);
+        .def("tick", &SimpleWriterOp::tick)
+        .def("format_metrics", &SimpleWriterOp::formatMetrics)
+        .def("set_manifest_provider", &SimpleWriterOp::setManifestProvider)
+        .def("set_metrics_provider", &SimpleWriterOp::setMetricsProvider)
+        .def_property_readonly("manifest", &SimpleWriterOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &SimpleWriterOp::metrics, py::return_value_policy::reference);
 
     py::class_<SimpleWriterRdmaOp, PySimpleWriterRdmaOp, Operator, std::shared_ptr<SimpleWriterRdmaOp>>(m, "SimpleWriterRdmaOp")
         .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&>(),
              py::arg("fragment"),
              py::arg("file_path"),
              py::arg("name") = "simple_writer_rdma")
-        .def("collect_metrics_map", &SimpleWriterRdmaOp::collectMetricsMap)
-        .def("collect_metrics_string", &SimpleWriterRdmaOp::collectMetricsString);
+        .def("tick", &SimpleWriterRdmaOp::tick)
+        .def("format_metrics", &SimpleWriterRdmaOp::formatMetrics)
+        .def("set_manifest_provider", &SimpleWriterRdmaOp::setManifestProvider)
+        .def("set_metrics_provider", &SimpleWriterRdmaOp::setMetricsProvider)
+        .def_property_readonly("manifest", &SimpleWriterRdmaOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &SimpleWriterRdmaOp::metrics, py::return_value_policy::reference);
 
 #ifdef STELLINE_LOADER_FBH5
     py::class_<Fbh5WriterRdmaOp, PyFbh5WriterRdmaOp, Operator, std::shared_ptr<Fbh5WriterRdmaOp>>(m, "Fbh5WriterRdmaOp")
@@ -132,21 +144,27 @@ PYBIND11_MODULE(_filesystem_ops, m) {
              py::arg("fragment"),
              py::arg("file_path"),
              py::arg("name") = "fbh5_writer_rdma")
-        .def("collect_metrics_map", &Fbh5WriterRdmaOp::collectMetricsMap)
-        .def("collect_metrics_string", &Fbh5WriterRdmaOp::collectMetricsString);
+        .def("tick", &Fbh5WriterRdmaOp::tick)
+        .def("format_metrics", &Fbh5WriterRdmaOp::formatMetrics)
+        .def("set_manifest_provider", &Fbh5WriterRdmaOp::setManifestProvider)
+        .def("set_metrics_provider", &Fbh5WriterRdmaOp::setMetricsProvider)
+        .def_property_readonly("manifest", &Fbh5WriterRdmaOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &Fbh5WriterRdmaOp::metrics, py::return_value_policy::reference);
 #endif
 
 #ifdef STELLINE_LOADER_UVH5
     py::class_<Uvh5WriterRdmaOp, PyUvh5WriterRdmaOp, Operator, std::shared_ptr<Uvh5WriterRdmaOp>>(m, "Uvh5WriterRdmaOp")
-        .def(py::init<Fragment*, const py::args&, const std::string&, const std::string&,
-                      const std::string&, const std::string&, const std::string&>(),
+        .def(py::init<Fragment*, const py::args&, const std::string&, const uint64_t, const uint64_t, const std::string&>(),
              py::arg("fragment"),
-             py::arg("output_file_path"),
-             py::arg("telinfo_file_path"),
-             py::arg("obsantinfo_file_path"),
-             py::arg("iers_file_path"),
+             py::arg("file_path"),
+             py::arg("dsp_channelization_rate"),
+             py::arg("dsp_integration_rate"),
              py::arg("name") = "uvh5_writer_rdma")
-        .def("collect_metrics_map", &Uvh5WriterRdmaOp::collectMetricsMap)
-        .def("collect_metrics_string", &Uvh5WriterRdmaOp::collectMetricsString);
+        .def("tick", &Uvh5WriterRdmaOp::tick)
+        .def("format_metrics", &Uvh5WriterRdmaOp::formatMetrics)
+        .def("set_manifest_provider", &Uvh5WriterRdmaOp::setManifestProvider)
+        .def("set_metrics_provider", &Uvh5WriterRdmaOp::setMetricsProvider)
+        .def_property_readonly("manifest", &Uvh5WriterRdmaOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &Uvh5WriterRdmaOp::metrics, py::return_value_policy::reference);
 #endif
 }

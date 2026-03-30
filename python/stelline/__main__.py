@@ -8,6 +8,8 @@ from stelline.scripts import (
     report_parser,
     run_command,
     run_parser,
+    topo_command,
+    topo_parser,
 )
 
 
@@ -24,6 +26,7 @@ def main():
     run_parser(subparsers)
     rap_parser(subparsers)
     report_parser(subparsers)
+    topo_parser(subparsers)
 
     args = parser.parse_args()
 
@@ -33,6 +36,8 @@ def main():
         rap_command(args)
     elif args.command == "report":
         report_command(args)
+    elif args.command == "topo":
+        topo_command(args)
     else:
         parser.print_help()
 

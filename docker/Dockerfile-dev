@@ -7,24 +7,64 @@ WORKDIR /home/sdk
 RUN apt update && \
     apt install --no-install-recommends -y \
         iproute2 htop btop nvtop nload pciutils \
+        curl \
         && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://code-server.dev/install.sh | sh
 
 RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" \
                                           "notebook>=7,<8" \
                                           "jupyter-server>=2,<3" \
-                                          "jupyterlab-nvdashboard"
+                                          "rich"
+
+RUN cat <<'EOF' >/usr/local/bin/dev-entrypoint.sh
+#!/bin/sh
+set -eu
+INTERFACE="${STELLINE_DEV_INTERFACE:-jupyter}"
+PORT="${STELLINE_DEV_PORT:-8888}"
+ROOT="${STELLINE_DEV_ROOT:-/home/sdk}"
+if [ -n "${NEXUS_INSTANCE_ID:-}" ]; then
+  BASE_URL="/api/v1/proxy/${NEXUS_INSTANCE_ID}/${INTERFACE}"
+  case "$INTERFACE" in
+    jupyter) BASE_URL="${BASE_URL}/" ;;
+  esac
+elif [ -n "${STELLINE_DEV_BASE_URL:-}" ]; then
+  BASE_URL="${STELLINE_DEV_BASE_URL}"
+else
+  BASE_URL="/"
+fi
+case "$INTERFACE" in
+  jupyter)
+    exec jupyter lab \
+      --ServerApp.ip=0.0.0.0 \
+      --ServerApp.port="$PORT" \
+      --ServerApp.open_browser=False \
+      --ServerApp.base_url="$BASE_URL" \
+      --ServerApp.root_dir="$ROOT" \
+      --ServerApp.token="${JUPYTER_TOKEN:-}" \
+      --allow-root
+    ;;
+  vscode)
+    exec code-server \
+      --bind-addr "0.0.0.0:${PORT}" \
+      --base-path "$BASE_URL" \
+      --auth none \
+      "$ROOT"
+    ;;
+  *)
+    echo "Unsupported STELLINE_DEV_INTERFACE: $INTERFACE. Use 'jupyter' or 'vscode'." >&2
+    exit 1
+    ;;
+esac
+EOF
+
+RUN chmod +x /usr/local/bin/dev-entrypoint.sh
 
 EXPOSE 8888
 
-ENV JUPYTER_PORT=8888
-ENV JUPYTER_BASE_URL=/
-ENV JUPYTER_NOTEBOOK_DIR=/home/sdk
+ENV STELLINE_DEV_INTERFACE=jupyter
+ENV STELLINE_DEV_PORT=8888
+ENV STELLINE_DEV_BASE_URL=/
+ENV STELLINE_DEV_ROOT=/home/sdk
 
-CMD jupyter lab \
-  --ServerApp.ip=0.0.0.0 \
-  --ServerApp.port=${JUPYTER_PORT} \
-  --ServerApp.open_browser=False \
-  --ServerApp.base_url="${JUPYTER_BASE_URL}" \
-  --ServerApp.root_dir="${JUPYTER_NOTEBOOK_DIR}" \
-  --ServerApp.token="${JUPYTER_TOKEN}" \
-  --allow-root
+CMD ["/usr/local/bin/dev-entrypoint.sh"]

@@ -1,6 +1,7 @@
 #include <stelline/types.hh>
 #include <stelline/operators/transport/base.hh>
 #include <stelline/utils/juggler.hh>
+#include <stelline/utils/tensor.hh>
 
 #include <matx.h>
 
@@ -21,12 +22,9 @@ struct DummyReceiverOp::Impl {
 
     uint64_t timestamp;
 
-    // State.
-
-    std::shared_ptr<holoscan::Tensor> tensor;
-
     // Memory pools.
 
+    Juggler<holoscan::Tensor> outputPool;
 
     // Release helpers.
 
@@ -58,7 +56,7 @@ DummyReceiverOp::~DummyReceiverOp() {
 }
 
 void DummyReceiverOp::setup(OperatorSpec& spec) {
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -79,14 +77,11 @@ void DummyReceiverOp::start() {
 
     pimpl->timestamp = 0;
 
-    // Allocate tensor.
+    // Allocate output tensor pool.
 
-    pimpl->tensor = std::make_shared<holoscan::Tensor>(matx::make_tensor<cuda::std::complex<float>>({
-        static_cast<int64_t>(pimpl->totalBlock.numberOfAntennas),
-        static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
-        static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
-        static_cast<int64_t>(pimpl->totalBlock.numberOfPolarizations)
-    }, matx::MATX_DEVICE_MEMORY).ToDlPack());
+    pimpl->outputPool.resize(2, [&]{
+        return MakeBlockTensor<cuda::std::complex<float>>(pimpl->totalBlock);
+    });
 }
 
 void DummyReceiverOp::stop() {}
@@ -94,9 +89,16 @@ void DummyReceiverOp::stop() {}
 void DummyReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
     HOLOSCAN_LOG_INFO("Faking block {}.", pimpl->timestamp);
 
+    // Get tensor from pool.
+    auto tensor = pimpl->outputPool.get();
+    if (!tensor) {
+        HOLOSCAN_LOG_ERROR("Failed to get tensor from output pool.");
+        throw std::runtime_error("Output pool exhausted.");
+    }
+
     const auto& meta = metadata();
     meta->set("timestamp", pimpl->timestamp);
-    output.emit(pimpl->tensor, "dsp_block_out");
+    output.emit(tensor, "out");
     pimpl->timestamp += 1;
 
     // Check for execution errors.

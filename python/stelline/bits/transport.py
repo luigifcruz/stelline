@@ -41,9 +41,14 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
     cfg = app.kwargs(config)
     mode = cfg.get("mode")
     total_block = cfg.get("total_block")
+    dtype = cfg.get("dtype", "cf32")
+
+    if dtype not in ("cf32", "ci8"):
+        raise ValueError(f"Unsupported dtype: {dtype}. Must be 'cf32' or 'ci8'.")
 
     logger.info("Transport Configuration:")
     logger.info(f"  Mode: {mode}")
+    logger.info(f"  Data Type: {dtype}")
 
     total_block_shape = BlockShape(
         total_block["number_of_antennas"],
@@ -64,7 +69,21 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         gpu_device_id = cfg.get("gpu_device_id")
         interface_address = cfg.get("interface_address")
         master_core = cfg.get("master_core")
-        worker_core = cfg.get("worker_core")
+        worker_cores = cfg.get("worker_cores")
+        if worker_cores is None:
+            worker_core = cfg.get("worker_core")
+            if worker_core is None:
+                raise ValueError(
+                    "ATA transport requires 'worker_core' or 'worker_cores'."
+                )
+            worker_cores = (
+                worker_core if isinstance(worker_core, list) else [worker_core]
+            )
+        elif not isinstance(worker_cores, list):
+            worker_cores = [worker_cores]
+
+        if not worker_cores:
+            raise ValueError("ATA transport requires at least one worker core.")
         max_concurrent_bursts = cfg.get("max_concurrent_bursts")
         packets_per_burst = cfg.get("packets_per_burst")
 
@@ -74,15 +93,24 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         packet_header_size = 16
         packet_data_size = 6144
 
-        # UDP configuration
-        udp_src_port = 50100
-        udp_dst_port = 50000
+        subscriptions = cfg.get("subscriptions")
+        if not subscriptions:
+            raise ValueError("ATA transport requires non-empty 'subscriptions'.")
+        for index, subscription in enumerate(subscriptions):
+            if not isinstance(subscription, dict):
+                raise ValueError(
+                    f"ATA transport subscription {index} must be a mapping."
+                )
+            if "source" not in subscription or "destination" not in subscription:
+                raise ValueError(
+                    f"ATA transport subscription {index} requires 'source' and 'destination'."
+                )
 
         logger.info(f"  Network:")
         logger.info(f"    GPU Device ID: {gpu_device_id}")
         logger.info(f"    Interface Address: {interface_address}")
         logger.info(f"    Master Core: {master_core}")
-        logger.info(f"    Worker Core: {worker_core}")
+        logger.info(f"    Worker Cores: {worker_cores}")
         logger.info(f"    Packet Parser Type: {packet_parser_type}")
         logger.info(f"    Packet Header Offset: {packet_header_offset}")
         logger.info(f"    Packet Header Size: {packet_header_size}")
@@ -95,11 +123,13 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         logger.info(f"    Output Pool Size: {output_pool_size}")
         logger.info(f"    Enable CSV Logging: {enable_csv_logging}")
         logger.info(f"    Sorter Depth: {sorter_depth}")
+        logger.info(f"    Data Type: {dtype}")
 
         logger.info(f"  Block Configuration:")
         logger.info(f"    Total Block: {total_block}")
         logger.info(f"    Partial Block: {partial_block}")
         logger.info(f"    Offset Block: {offset_block}")
+        logger.info(f"  Subscriptions: {subscriptions}")
 
         partial_block_shape = BlockShape(
             partial_block["number_of_antennas"],
@@ -122,7 +152,7 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
             gpu_device_id=gpu_device_id,
             interface_address=interface_address,
             master_core=master_core,
-            worker_core=worker_core,
+            worker_cores=worker_cores,
             packet_parser_type=packet_parser_type,
             packet_header_offset=packet_header_offset,
             packet_header_size=packet_header_size,
@@ -130,13 +160,13 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
             packets_per_burst=packets_per_burst,
             max_concurrent_bursts=max_concurrent_bursts,
             max_concurrent_blocks=max_concurrent_blocks,
-            udp_src_port=udp_src_port,
-            udp_dst_port=udp_dst_port,
+            subscriptions=subscriptions,
             total_block=total_block_shape,
             partial_block=partial_block_shape,
             offset_block=offset_block_shape,
             output_pool_size=output_pool_size,
             enable_csv_logging=enable_csv_logging,
+            dtype=dtype,
             name=ata_receiver_name,
         )
 
@@ -145,7 +175,7 @@ def TransportBit(app: Application, pool: Any, id: int, config: str) -> Tuple[Any
         sorter_op = SorterOp(fragment=app, name=sorter_name, depth=sorter_depth)
 
         # Connect operators
-        app.add_flow(ata_receiver_op, sorter_op, {("dsp_block_out", "dsp_block_in")})
+        app.add_flow(ata_receiver_op, sorter_op, {("out", "in")})
 
         return (ata_receiver_op, sorter_op)
 

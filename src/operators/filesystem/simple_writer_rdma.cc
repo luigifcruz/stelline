@@ -5,6 +5,7 @@
 
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
+#include <stelline/utils/tensor.hh>
 #include <fmt/format.h>
 
 #include "utils/helpers.hh"
@@ -113,8 +114,13 @@ void SimpleWriterRdmaOp::stop() {
 }
 
 void SimpleWriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
-    const auto& tensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
-    const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
+    auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+    if (!result) {
+        return;
+    }
+
+    const auto& tensor = result.value();
+    const auto tensorBytes = TensorDataSizeBytes(*tensor);
 
     // Allocate permuted tensor.
 
@@ -150,9 +156,9 @@ void SimpleWriterRdmaOp::compute(InputContext& input, OutputContext&, ExecutionC
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::StoreInterface::MetricsMap SimpleWriterRdmaOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void SimpleWriterRdmaOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
@@ -163,21 +169,15 @@ stelline::StoreInterface::MetricsMap SimpleWriterRdmaOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
-    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
-    metrics["total_data_written_mb"] = fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0));
-    return metrics;
+    metrics()->record("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->record("total_data_written_mb", fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0)));
 }
 
-std::string SimpleWriterRdmaOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string SimpleWriterRdmaOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Current Bandwidth: {} MB/s\n"
                        "  Total Data Written: {} MB",
-                       metrics.at("current_bandwidth_mb_s"),
-                       metrics.at("total_data_written_mb"));
+                       metrics.at("current_bandwidth_mb_s").value,
+                       metrics.at("total_data_written_mb").value);
 }
 
 }  // namespace stelline::operators::filesystem

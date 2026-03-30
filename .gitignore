@@ -8,6 +8,7 @@ __pycache__
 .idea
 builddir
 imgui.ini
+workspace
 
 *.zip
 

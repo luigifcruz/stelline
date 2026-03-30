@@ -1,5 +1,6 @@
 #include <stelline/types.hh>
 #include <stelline/operators/socket/base.hh>
+#include <stelline/utils/tensor.hh>
 
 #include <zmq.hpp>
 
@@ -90,8 +91,13 @@ void ZmqTransmitterOp::stop() {
 }
 
 void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
-    const auto& tensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
-    const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
+    auto result = input.receive<std::shared_ptr<holoscan::Tensor>>("in");
+    if (!result) {
+        return;
+    }
+
+    const auto& tensor = result.value();
+    const auto tensorBytes = TensorDataSizeBytes(*tensor);
 
     // Allocate host bounce buffer.
 
@@ -119,9 +125,9 @@ void ZmqTransmitterOp::compute(InputContext& input, OutputContext&, ExecutionCon
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::StoreInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void ZmqTransmitterOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
@@ -132,21 +138,15 @@ stelline::StoreInterface::MetricsMap ZmqTransmitterOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
-    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
-    metrics["total_bytes_written"] = fmt::format("{}", pimpl->bytesWritten);
-    return metrics;
+    metrics()->record("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->record("total_bytes_written", fmt::format("{}", pimpl->bytesWritten));
 }
 
-std::string ZmqTransmitterOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string ZmqTransmitterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Input Bandwidth: {} MB/s\n"
                        "  Total Bytes Written: {}",
-                       metrics.at("current_bandwidth_mb_s"),
-                       metrics.at("total_bytes_written"));
+                       metrics.at("current_bandwidth_mb_s").value,
+                       metrics.at("total_bytes_written").value);
 }
 
 }  // namespace stelline::operators::socket

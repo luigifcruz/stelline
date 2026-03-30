@@ -12,8 +12,8 @@ namespace stelline::operators::filesystem {
 struct DummyWriterOp::Impl {
     // State.
 
-    std::chrono::time_point<std::chrono::system_clock> lastTime;
-    std::chrono::milliseconds duration;
+    std::chrono::time_point<std::chrono::steady_clock> lastTime;
+    std::chrono::time_point<std::chrono::steady_clock> startTime;
     uint64_t numIterations;
 
     // Metrics.
@@ -41,7 +41,7 @@ void DummyWriterOp::setup(OperatorSpec& spec) {
 
 void DummyWriterOp::start() {
     pimpl->numIterations = 0;
-    pimpl->duration = std::chrono::milliseconds(0);
+    pimpl->startTime = std::chrono::steady_clock::now();
     pimpl->lastTime = {};
     pimpl->latestTimestamp = 0;
 }
@@ -59,46 +59,32 @@ void DummyWriterOp::compute(InputContext& input, OutputContext&, ExecutionContex
     const auto& meta = metadata();
     pimpl->latestTimestamp = meta->get<uint64_t>("timestamp");
 
-    // Measure time between messages.
+    // Increment iteration counter.
 
-    if (pimpl->lastTime.time_since_epoch().count() != 0) {
-        auto now = std::chrono::system_clock::now();
-        pimpl->duration += std::chrono::duration_cast<std::chrono::milliseconds>(now - pimpl->lastTime);
-    }
-
-    // Print statistics.
-
-    if (pimpl->numIterations++ % 100 == 0) {
-        pimpl->duration = std::chrono::milliseconds(0);
-    }
-
-    // Reset timer.
-
-    pimpl->lastTime = std::chrono::system_clock::now();
+    pimpl->numIterations++;
 }
 
-stelline::StoreInterface::MetricsMap DummyWriterOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void DummyWriterOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
-    stelline::StoreInterface::MetricsMap metrics;
-    metrics["iterations"] = fmt::format("{}", pimpl->numIterations);
-    metrics["average_duration_ms"] = fmt::format("{}", pimpl->duration.count() / 100);
-    metrics["latest_timestamp"] = fmt::format("{}", pimpl->latestTimestamp);
-    return metrics;
+
+    auto elapsed = std::chrono::steady_clock::now() - pimpl->startTime;
+    auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+    double avgMs = (pimpl->numIterations > 0) ? static_cast<double>(elapsedMs) / pimpl->numIterations : 0.0;
+
+    metrics()->record("iterations", fmt::format("{}", pimpl->numIterations));
+    metrics()->record("average_duration_ms", fmt::format("{:.2f}", avgMs));
+    metrics()->record("latest_timestamp", fmt::format("{}", pimpl->latestTimestamp));
 }
 
-std::string DummyWriterOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string DummyWriterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Iterations      : {}\n"
                        "  Average Duration: {} ms\n"
                        "  Latest Timestamp: {}",
-                       metrics.at("iterations"),
-                       metrics.at("average_duration_ms"),
-                       metrics.at("latest_timestamp"));
+                       metrics.at("iterations").value,
+                       metrics.at("average_duration_ms").value,
+                       metrics.at("latest_timestamp").value);
 }
 
 }  // namespace stelline::operators::io

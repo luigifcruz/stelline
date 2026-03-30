@@ -1,6 +1,8 @@
 #ifndef STELLINE_OPERATORS_TRANSPORT_BLOCK_HH
 #define STELLINE_OPERATORS_TRANSPORT_BLOCK_HH
 
+#include <string>
+
 #include <advanced_network/common.h>
 
 #include <stelline/yaml/types/block_shape.hh>
@@ -23,7 +25,13 @@ struct Block {
             HOLOSCAN_LOG_ERROR("[TRANSPORT] Failed to allocate memory for data block.");
         });
 
-        STELLINE_CUDA_CHECK_THROW(cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking), [&]{
+        int lowPriority = 0;
+        int highPriority = 0;
+        STELLINE_CUDA_CHECK_THROW(cudaDeviceGetStreamPriorityRange(&lowPriority, &highPriority), [&]{
+            HOLOSCAN_LOG_ERROR("[TRANSPORT] Failed to query CUDA stream priority range.");
+        });
+
+        STELLINE_CUDA_CHECK_THROW(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, highPriority), [&]{
             HOLOSCAN_LOG_ERROR("[TRANSPORT] Failed to create stream for data block.");
         });
     }
@@ -77,11 +85,12 @@ struct Block {
     inline void compute(std::shared_ptr<holoscan::Tensor>& outputTensor,
                         const BlockShape& total,
                         const BlockShape& partial,
-                        const BlockShape& slots) {
+                        const BlockShape& slots,
+                        const std::string& dtype) {
         _outputTensor = outputTensor;
         STELLINE_CUDA_CHECK_THROW(LaunchKernel(_outputTensor->data(), gpuData, packetsPerBlock,
                                                total, partial, slots,
-                                               stream), [&]{
+                                               dtype, stream), [&]{
             HOLOSCAN_LOG_ERROR("[TRANSPORT] Failed to launch kernel for data block.");
         });
     }

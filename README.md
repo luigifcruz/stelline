@@ -42,7 +42,7 @@ $ sudo docker run -it --rm -u root \
     -v /dev/bus/usb:/dev/bus/usb \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v /mnt/huge:/mnt/huge \
-    -v .:/workspace/stelline \
+    -v .:/home/sdk \
     -v $nvidia_icd_json:$nvidia_icd_json:ro \
     -e NVIDIA_DRIVER_CAPABILITIES=graphics,video,compute,utility,display \
     -e DISPLAY=$DISPLAY \

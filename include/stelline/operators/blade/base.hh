@@ -7,7 +7,7 @@
 
 #include <stelline/yaml/types/block_shape.hh>
 #include <stelline/yaml/types/map.hh>
-#include <stelline/store.hh>
+#include <stelline/context.hh>
 
 namespace stelline::operators::blade {
 
@@ -17,7 +17,9 @@ using holoscan::OperatorSpec;
 using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
-class STELLINE_API CorrelatorOp : public Operator, public stelline::StoreInterface {
+
+class STELLINE_API CorrelatorOp : public Operator,
+                                  public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(CorrelatorOp)
 
@@ -29,20 +31,22 @@ class STELLINE_API CorrelatorOp : public Operator, public stelline::StoreInterfa
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;
     Parameter<BlockShape> outputShape_;
     Parameter<Map> options_;
+    Parameter<std::string> dtype_;
 };
 
-class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API FrbnnOp : public Operator,
+                             public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(FrbnnOp)
 
@@ -54,12 +58,12 @@ class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;
@@ -67,7 +71,8 @@ class STELLINE_API FrbnnOp : public Operator, public stelline::StoreInterface {
     Parameter<Map> options_;
 };
 
-class STELLINE_API BeamformerOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API BeamformerOp : public Operator,
+                                  public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(BeamformerOp)
 
@@ -79,12 +84,12 @@ class STELLINE_API BeamformerOp : public Operator, public stelline::StoreInterfa
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> numberOfBuffers_;
     Parameter<BlockShape> inputShape_;

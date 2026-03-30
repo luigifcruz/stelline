@@ -43,13 +43,13 @@ stelline:
 
 ata_standard_rx:
     mode: ata
-    rdma_gpu: 0
-    rdma_nic: 01:00.0
-    rdma_master_core: 0
-    rdma_worker_cores: [1]
-    rdma_max_bursts: 64
-    rdma_burst_size: 8192
-    concurrent_blocks: 32
+    gpu_device_id: 0
+    interface_address: "0000:c1:00.1"
+    master_core: 0
+    worker_core: 1
+    max_concurrent_bursts: 64
+    packets_per_burst: 8192
+    max_concurrent_blocks: 32
     output_pool_size: 128
     sorter_depth: 8
     enable_csv_logging: true

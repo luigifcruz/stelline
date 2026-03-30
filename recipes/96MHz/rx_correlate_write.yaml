@@ -30,17 +30,35 @@ stelline:
 # Nodes
 
 ata_standard_rx:
+    dtype: ci8
     mode: ata
-    rdma_gpu: 0
-    rdma_nic: 01:00.0
-    rdma_master_core: 0
-    rdma_worker_cores: [1]
-    rdma_max_bursts: 32
-    rdma_burst_size: 8192
-    concurrent_blocks: 8
-    output_pool_size: 32
-    sorter_depth: 8
+    gpu_device_id: 0
+    interface_address: "0000:01:00.0"
+    master_core: 0
+    worker_core: 1
+    max_concurrent_bursts: 128
+    packets_per_burst: 4096
+    max_concurrent_blocks: 8
+    output_pool_size: 4
+    sorter_depth: 4
     enable_csv_logging: true
+    subscriptions:
+      - source: 10.11.1.206:10000
+        destination: 239.1.2.1:50000
+      - source: 10.11.1.207:10000
+        destination: 239.1.2.1:50000
+      - source: 10.11.1.208:10000
+        destination: 239.1.2.1:50000
+      - source: 10.11.1.209:10000
+        destination: 239.1.2.1:50000
+      - source: 10.11.1.236:10000
+        destination: 239.1.2.1:50000
+      - source: 10.11.1.237:10000
+        destination: 239.1.2.1:50000
+      - source: 10.11.1.238:10000
+        destination: 239.1.2.1:50000
+      - source: 10.11.1.239:10000
+        destination: 239.1.2.1:50000
     total_block:
         number_of_antennas: 28
         number_of_channels: 192
@@ -53,11 +71,12 @@ ata_standard_rx:
         number_of_polarizations: 2
     offset_block:
         number_of_antennas: 0
-        number_of_channels: 1120
+        number_of_channels: 352
         number_of_samples: 0
         number_of_polarizations: 0
 
 blade_correlator:
+    dtype: ci8
     input_shape:
         number_of_antennas: 28
         number_of_channels: 192
@@ -77,9 +96,10 @@ blade_correlator:
 
         pre_correlator_stacker_multiplier: 1
 
-        correlator_integration_rate: 8192
+        correlator_integration_rate: 1024
         correlator_conjugate_antenna_index: 1
-        correlator_use_shared_memory: false
+        correlator_use_shared_memory: true
+        post_correlator_frequency_integration_rate: 1
 
 file_writer:
     mode: simple_writer

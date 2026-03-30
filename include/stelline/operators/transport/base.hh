@@ -6,7 +6,7 @@
 #include <stelline/common.hh>
 
 #include <stelline/yaml/types/block_shape.hh>
-#include <stelline/store.hh>
+#include <stelline/context.hh>
 
 namespace stelline::operators::transport {
 
@@ -17,7 +17,8 @@ using holoscan::InputContext;
 using holoscan::OutputContext;
 using holoscan::ExecutionContext;
 
-class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API AtaReceiverOp : public Operator,
+                                   public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(AtaReceiverOp)
 
@@ -29,12 +30,12 @@ class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterf
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<BlockShape> totalBlock_;
     Parameter<BlockShape> partialBlock_;
@@ -44,6 +45,7 @@ class STELLINE_API AtaReceiverOp : public Operator, public stelline::StoreInterf
     Parameter<uint64_t> packetHeaderOffset_;
     Parameter<uint64_t> outputPoolSize_;
     Parameter<bool> enableCsvLogging_;
+    Parameter<std::string> dtype_;
 };
 
 class STELLINE_API DummyReceiverOp : public Operator {
@@ -60,12 +62,13 @@ class STELLINE_API DummyReceiverOp : public Operator {
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<BlockShape> totalBlock_;
 };
 
-class STELLINE_API SorterOp : public Operator, public stelline::StoreInterface {
+class STELLINE_API SorterOp : public Operator,
+                              public stelline::Context {
  public:
     HOLOSCAN_OPERATOR_FORWARD_ARGS(SorterOp)
 
@@ -77,12 +80,12 @@ class STELLINE_API SorterOp : public Operator, public stelline::StoreInterface {
     void stop() override;
     void compute(InputContext& input, OutputContext& output, ExecutionContext& context) override;
 
-    StoreInterface::MetricsMap collectMetricsMap() override;
-    std::string collectMetricsString() override;
+    void tick() override;
+    std::string formatMetrics(const MetricsProvider::MetricsMap& metrics) override;
 
  private:
     struct Impl;
-    Impl* pimpl;
+    Impl* pimpl = nullptr;
 
     Parameter<uint64_t> depth_;
 };

@@ -5,6 +5,7 @@
 
 #include <stelline/types.hh>
 #include <stelline/operators/filesystem/base.hh>
+#include <stelline/utils/tensor.hh>
 #include <fmt/format.h>
 
 #include "utils/helpers.hh"
@@ -91,7 +92,7 @@ void SimpleWriterOp::stop() {
 
 void SimpleWriterOp::compute(InputContext& input, OutputContext&, ExecutionContext&) {
     const auto& tensor = input.receive<std::shared_ptr<holoscan::Tensor>>("in").value();
-    const auto& tensorBytes = tensor->size() * (tensor->dtype().bits / 8);
+    const auto tensorBytes = TensorDataSizeBytes(*tensor);
 
     // Allocate permuted tensor.
 
@@ -134,9 +135,9 @@ void SimpleWriterOp::compute(InputContext& input, OutputContext&, ExecutionConte
     pimpl->bytesSinceLastMeasurement += tensorBytes;
 }
 
-stelline::StoreInterface::MetricsMap SimpleWriterOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void SimpleWriterOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     auto now = std::chrono::steady_clock::now();
     auto elapsedSeconds = std::chrono::duration<double>(now - pimpl->lastMeasurementTime).count();
@@ -147,21 +148,15 @@ stelline::StoreInterface::MetricsMap SimpleWriterOp::collectMetricsMap() {
         pimpl->lastMeasurementTime = now;
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
-    metrics["current_bandwidth_mb_s"] = fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load());
-    metrics["total_data_written_mb"] = fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0));
-    return metrics;
+    metrics()->record("current_bandwidth_mb_s", fmt::format("{:.2f}", pimpl->currentBandwidthMBps.load()));
+    metrics()->record("total_data_written_mb", fmt::format("{:.0f}", static_cast<double>(pimpl->bytesWritten) / (1024.0 * 1024.0)));
 }
 
-std::string SimpleWriterOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string SimpleWriterOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Current Bandwidth: {} MB/s\n"
                        "  Total Data Written: {} MB",
-                       metrics.at("current_bandwidth_mb_s"),
-                       metrics.at("total_data_written_mb"));
+                       metrics.at("current_bandwidth_mb_s").value,
+                       metrics.at("total_data_written_mb").value);
 }
 
 }  // namespace stelline::operators::filesystem

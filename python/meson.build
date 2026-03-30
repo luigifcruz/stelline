@@ -36,6 +36,18 @@ py.extension_module(
 )
 
 py.extension_module(
+    '_manifest',
+    sources: '../src/bindings/manifest.cc',
+    include_directories: inc_lst,
+    dependencies: [pybind11_dep, py.dependency()] + dep_lst,
+    link_with: lib_stelline,
+    install: true,
+    install_dir: py_install_path / 'stelline',
+    install_rpath: extension_rpath,
+    gnu_symbol_visibility: 'hidden'
+)
+
+py.extension_module(
     '_blade_ops',
     sources: '../src/bindings/operators/blade_ops.cc',
     include_directories: inc_lst,

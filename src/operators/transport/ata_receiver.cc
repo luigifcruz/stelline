@@ -1,6 +1,7 @@
 #include <stelline/types.hh>
 #include <stelline/operators/transport/base.hh>
 #include <stelline/utils/juggler.hh>
+#include <stelline/utils/tensor.hh>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 #include <vector>
@@ -75,6 +76,14 @@ struct AtaReceiverOp::Impl {
     void releaseReceivedBlocks();
     void releaseComputedBlocks(const std::shared_ptr<MetadataDictionary>& meta, OutputContext& output);
 
+    // Traffic control.
+
+    bool trafficAllowed;
+
+    // Data type.
+
+    std::string dtype;
+
     // Burst collector.
 
     std::thread burstCollectorThread;
@@ -101,7 +110,7 @@ AtaReceiverOp::~AtaReceiverOp() {
 }
 
 void AtaReceiverOp::setup(OperatorSpec& spec) {
-    spec.output<std::shared_ptr<holoscan::Tensor>>("dsp_block_out")
+    spec.output<std::shared_ptr<holoscan::Tensor>>("out")
         .connector(IOSpec::ConnectorType::kDoubleBuffer,
                    holoscan::Arg("capacity", 1024UL));
 
@@ -113,6 +122,7 @@ void AtaReceiverOp::setup(OperatorSpec& spec) {
     spec.param(offsetBlock_, "offset_block");
     spec.param(outputPoolSize_, "output_pool_size");
     spec.param(enableCsvLogging_, "enable_csv_logging");
+    spec.param(dtype_, "dtype");
 }
 
 void AtaReceiverOp::start() {
@@ -126,8 +136,7 @@ void AtaReceiverOp::start() {
     pimpl->maxConcurrentBlocks = maxConcurrentBlocks_.get();
     pimpl->outputPoolSize = outputPoolSize_.get();
     pimpl->enableCsvLogging = enableCsvLogging_.get();
-
-    // Validate configuration.
+    pimpl->dtype = dtype_.get();
 
     assert((pimpl->offsetBlock.numberOfAntennas % pimpl->partialBlock.numberOfAntennas) == 0);
     assert(pimpl->offsetBlock.numberOfSamples == 0);
@@ -189,16 +198,15 @@ void AtaReceiverOp::start() {
         pimpl->burstCollectorLoop();
     });
 
+    // Drop all traffic.
+
+    drop_all_traffic(0);
+    pimpl->trafficAllowed = false;
+
     // Allocate block tensor pool.
 
     pimpl->blockTensorPool.resize(pimpl->outputPoolSize, [&]{
-        auto tensor = matx::make_tensor<cuda::std::complex<float>>({
-            static_cast<int64_t>(pimpl->totalBlock.numberOfAntennas),
-            static_cast<int64_t>(pimpl->totalBlock.numberOfChannels),
-            static_cast<int64_t>(pimpl->totalBlock.numberOfSamples),
-            static_cast<int64_t>(pimpl->totalBlock.numberOfPolarizations)
-        }, matx::MATX_DEVICE_MEMORY);
-        return std::make_shared<holoscan::Tensor>(tensor.ToDlPack());
+        return MakeBlockTensor(pimpl->totalBlock, pimpl->dtype);
     });
 }
 
@@ -220,6 +228,14 @@ void AtaReceiverOp::stop() {
 }
 
 void AtaReceiverOp::compute(InputContext& input, OutputContext& output, ExecutionContext&) {
+    // Allow traffic.
+
+    if (!pimpl->trafficAllowed) {
+        flush_port_queue(0, 0);
+        allow_all_traffic(0);
+        pimpl->trafficAllowed = true;
+    }
+
     BurstParams* burstPtr;
     if (get_rx_burst(&burstPtr) != Status::SUCCESS) {
         return;
@@ -344,7 +360,7 @@ void AtaReceiverOp::Impl::releaseReceivedBlocks() {
                 HOLOSCAN_LOG_ERROR("Failed to allocate tensor from pool.");
                 throw std::runtime_error("Failed to allocate tensor from pool.");
             }
-            block->compute(tensor, totalBlock, partialBlock, slots);
+            block->compute(tensor, totalBlock, partialBlock, slots, dtype);
             computeQueue.push(block);
             receivedBlocks += 1;
         } else if (isStale) {
@@ -370,7 +386,7 @@ void AtaReceiverOp::Impl::releaseComputedBlocks(const std::shared_ptr<MetadataDi
 
         if (!block->isProcessing()) {
             meta->set("timestamp", block->timestamp());
-            output.emit(block->outputTensor(), "dsp_block_out");
+            output.emit(block->outputTensor(), "out");
             block->destroy();
             idleQueue.push(block);
             computedBlocks += 1;
@@ -429,9 +445,9 @@ void AtaReceiverOp::Impl::burstCollectorLoop() {
     }
 }
 
-stelline::StoreInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
-    if (!pimpl) {
-        return {};
+void AtaReceiverOp::tick() {
+    if (!pimpl || !metrics()) {
+        return;
     }
     std::vector<uint64_t> blockTimes;
     blockTimes.reserve(pimpl->blockMap.size());
@@ -439,38 +455,31 @@ stelline::StoreInterface::MetricsMap AtaReceiverOp::collectMetricsMap() {
         blockTimes.push_back(time);
     }
 
-    stelline::StoreInterface::MetricsMap metrics;
-    metrics["blocks_received"] = fmt::format("{}", pimpl->receivedBlocks);
-    metrics["blocks_computed"] = fmt::format("{}", pimpl->computedBlocks);
-    metrics["blocks_lost"] = fmt::format("{}", pimpl->lostBlocks);
-    metrics["packets_evicted"] = fmt::format("{}", pimpl->evictedPackets);
-    metrics["packets_received"] = fmt::format("{}", pimpl->receivedPackets);
-    metrics["packets_lost"] = fmt::format("{}", pimpl->lostPackets);
-    metrics["idle_queue"] = fmt::format("{}", pimpl->idleQueue.size());
-    metrics["receive_queue"] = fmt::format("{}", pimpl->receiveQueue.size());
-    metrics["compute_queue"] = fmt::format("{}", pimpl->computeQueue.size());
-    metrics["bursts_in_flight"] = fmt::format("{}", pimpl->bursts.size());
-    metrics["avg_burst_release_time_us"] = fmt::format("{}", pimpl->avgBurstReleaseTime.count());
-    metrics["mem_pool_available"] = fmt::format("{}", pimpl->blockTensorPool.available());
-    metrics["mem_pool_referenced"] = fmt::format("{}", pimpl->blockTensorPool.referenced());
-    metrics["block_map_latest_time_index"] = fmt::format("{}", pimpl->latestBlockTimeIndex);
-    metrics["block_map_usage"] = fmt::format("{}/{}", pimpl->blockMap.size(), pimpl->maxConcurrentBlocks);
-    metrics["block_map_times"] = fmt::format("[{}]", fmt::join(blockTimes, ","));
-    metrics["payload_sizes"] = fmt::format("[{}]", fmt::join(pimpl->payloadSizes, ","));
-    metrics["all_antennas"] = fmt::format("[{}]", fmt::join(pimpl->allAntennas, ","));
-    metrics["filtered_antennas"] = fmt::format("[{}]", fmt::join(pimpl->filteredAntennas, ","));
-    metrics["all_channels"] = fmt::format("[{}]", fmt::join(pimpl->allChannels, ","));
-    metrics["filtered_channels"] = fmt::format("[{}]", fmt::join(pimpl->filteredChannels, ","));
-    metrics["latest_timestamp"] = fmt::format("{}", pimpl->latestTimestamp);
-
-    return metrics;
+    metrics()->record("blocks_received", fmt::format("{}", pimpl->receivedBlocks), "number", true);
+    metrics()->record("blocks_computed", fmt::format("{}", pimpl->computedBlocks), "number", true);
+    metrics()->record("blocks_lost", fmt::format("{}", pimpl->lostBlocks), "number", true);
+    metrics()->record("packets_evicted", fmt::format("{}", pimpl->evictedPackets));
+    metrics()->record("packets_received", fmt::format("{}", pimpl->receivedPackets), "number");
+    metrics()->record("packets_lost", fmt::format("{}", pimpl->lostPackets), "number");
+    metrics()->record("idle_queue", fmt::format("{}", pimpl->idleQueue.size()));
+    metrics()->record("receive_queue", fmt::format("{}", pimpl->receiveQueue.size()));
+    metrics()->record("compute_queue", fmt::format("{}", pimpl->computeQueue.size()));
+    metrics()->record("bursts_in_flight", fmt::format("{}", pimpl->bursts.size()), "number", true);
+    metrics()->record("avg_burst_release_time_us", fmt::format("{}", pimpl->avgBurstReleaseTime.count()));
+    metrics()->record("mem_pool_available", fmt::format("{}", pimpl->blockTensorPool.available()));
+    metrics()->record("mem_pool_referenced", fmt::format("{}", pimpl->blockTensorPool.referenced()));
+    metrics()->record("block_map_latest_time_index", fmt::format("{}", pimpl->latestBlockTimeIndex));
+    metrics()->record("block_map_usage", fmt::format("{}/{}", pimpl->blockMap.size(), pimpl->maxConcurrentBlocks));
+    metrics()->record("block_map_times", fmt::format("[{}]", fmt::join(blockTimes, ",")));
+    metrics()->record("payload_sizes", fmt::format("[{}]", fmt::join(pimpl->payloadSizes, ",")));
+    metrics()->record("all_antennas", fmt::format("[{}]", fmt::join(pimpl->allAntennas, ",")), "text", true);
+    metrics()->record("filtered_antennas", fmt::format("[{}]", fmt::join(pimpl->filteredAntennas, ",")));
+    metrics()->record("all_channels", fmt::format("[{}]", fmt::join(pimpl->allChannels, ",")), "text", true);
+    metrics()->record("filtered_channels", fmt::format("[{}]", fmt::join(pimpl->filteredChannels, ",")));
+    metrics()->record("latest_timestamp", fmt::format("{}", pimpl->latestTimestamp), "number", true);
 }
 
-std::string AtaReceiverOp::collectMetricsString() {
-    if (!pimpl) {
-        return {};
-    }
-    const auto metrics = collectMetricsMap();
+std::string AtaReceiverOp::formatMetrics(const MetricsProvider::MetricsMap& metrics) {
     return fmt::format("  Blocks    : {} received, {} computed, {} lost\n"
                        "  Packets   : {} evicted, {} received, {} lost\n"
                        "  In-Flight : {} idle, {} receive, {} compute\n"
@@ -483,27 +492,27 @@ std::string AtaReceiverOp::collectMetricsString() {
                        "    Filtered antennas: {}\n"
                        "    All channels     : {}\n"
                        "    Filtered channels: {}",
-                       metrics.at("blocks_received"),
-                       metrics.at("blocks_computed"),
-                       metrics.at("blocks_lost"),
-                       metrics.at("packets_evicted"),
-                       metrics.at("packets_received"),
-                       metrics.at("packets_lost"),
-                       metrics.at("idle_queue"),
-                       metrics.at("receive_queue"),
-                       metrics.at("compute_queue"),
-                       metrics.at("bursts_in_flight"),
-                       metrics.at("avg_burst_release_time_us"),
-                       metrics.at("mem_pool_available"),
-                       metrics.at("mem_pool_referenced"),
-                       metrics.at("block_map_latest_time_index"),
-                       metrics.at("block_map_usage"),
-                       metrics.at("block_map_times"),
-                       metrics.at("payload_sizes"),
-                       metrics.at("all_antennas"),
-                       metrics.at("filtered_antennas"),
-                       metrics.at("all_channels"),
-                       metrics.at("filtered_channels"));
+                       metrics.at("blocks_received").value,
+                       metrics.at("blocks_computed").value,
+                       metrics.at("blocks_lost").value,
+                       metrics.at("packets_evicted").value,
+                       metrics.at("packets_received").value,
+                       metrics.at("packets_lost").value,
+                       metrics.at("idle_queue").value,
+                       metrics.at("receive_queue").value,
+                       metrics.at("compute_queue").value,
+                       metrics.at("bursts_in_flight").value,
+                       metrics.at("avg_burst_release_time_us").value,
+                       metrics.at("mem_pool_available").value,
+                       metrics.at("mem_pool_referenced").value,
+                       metrics.at("block_map_latest_time_index").value,
+                       metrics.at("block_map_usage").value,
+                       metrics.at("block_map_times").value,
+                       metrics.at("payload_sizes").value,
+                       metrics.at("all_antennas").value,
+                       metrics.at("filtered_antennas").value,
+                       metrics.at("all_channels").value,
+                       metrics.at("filtered_channels").value);
 }
 
 }  // namespace stelline::operators::transport

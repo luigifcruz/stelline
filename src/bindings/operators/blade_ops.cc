@@ -23,11 +23,13 @@ public:
                    const stelline::BlockShape& input_shape,
                    const stelline::BlockShape& output_shape,
                    const stelline::Map& options,
+                   const std::string& dtype,
                    const std::string& name = "correlator")
         : CorrelatorOp(ArgList{Arg("number_of_buffers", number_of_buffers),
                                 Arg("input_shape", input_shape),
                                 Arg("output_shape", output_shape),
-                                Arg("options", options)}) {
+                                Arg("options", options),
+                                Arg("dtype", dtype)}) {
         name_ = name;
         fragment_ = fragment;
         spec_ = std::make_shared<OperatorSpec>(fragment);
@@ -84,15 +86,21 @@ PYBIND11_MODULE(_blade_ops, m) {
 
     py::class_<CorrelatorOp, PyCorrelatorOp, Operator, std::shared_ptr<CorrelatorOp>>(m, "CorrelatorOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
-                      const stelline::BlockShape&, const stelline::Map&, const std::string&>(),
+                      const stelline::BlockShape&, const stelline::Map&, const std::string&,
+                      const std::string&>(),
              py::arg("fragment"),
              py::arg("number_of_buffers"),
              py::arg("input_shape"),
              py::arg("output_shape"),
              py::arg("options"),
+             py::arg("dtype"),
              py::arg("name") = "correlator")
-        .def("collect_metrics_map", &CorrelatorOp::collectMetricsMap)
-        .def("collect_metrics_string", &CorrelatorOp::collectMetricsString);
+        .def("tick", &CorrelatorOp::tick)
+        .def("format_metrics", &CorrelatorOp::formatMetrics)
+        .def("set_manifest_provider", &CorrelatorOp::setManifestProvider)
+        .def("set_metrics_provider", &CorrelatorOp::setMetricsProvider)
+        .def_property_readonly("manifest", &CorrelatorOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &CorrelatorOp::metrics, py::return_value_policy::reference);
 
     py::class_<BeamformerOp, PyBeamformerOp, Operator, std::shared_ptr<BeamformerOp>>(m, "BeamformerOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -103,8 +111,12 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("output_shape"),
              py::arg("options"),
              py::arg("name") = "beamformer")
-        .def("collect_metrics_map", &BeamformerOp::collectMetricsMap)
-        .def("collect_metrics_string", &BeamformerOp::collectMetricsString);
+        .def("tick", &BeamformerOp::tick)
+        .def("format_metrics", &BeamformerOp::formatMetrics)
+        .def("set_manifest_provider", &BeamformerOp::setManifestProvider)
+        .def("set_metrics_provider", &BeamformerOp::setMetricsProvider)
+        .def_property_readonly("manifest", &BeamformerOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &BeamformerOp::metrics, py::return_value_policy::reference);
 
     py::class_<FrbnnOp, PyFrbnnOp, Operator, std::shared_ptr<FrbnnOp>>(m, "FrbnnOp")
         .def(py::init<Fragment*, const py::args&, uint64_t, const stelline::BlockShape&,
@@ -115,6 +127,10 @@ PYBIND11_MODULE(_blade_ops, m) {
              py::arg("output_shape"),
              py::arg("options"),
              py::arg("name") = "frbnn")
-        .def("collect_metrics_map", &FrbnnOp::collectMetricsMap)
-        .def("collect_metrics_string", &FrbnnOp::collectMetricsString);
+        .def("tick", &FrbnnOp::tick)
+        .def("format_metrics", &FrbnnOp::formatMetrics)
+        .def("set_manifest_provider", &FrbnnOp::setManifestProvider)
+        .def("set_metrics_provider", &FrbnnOp::setMetricsProvider)
+        .def_property_readonly("manifest", &FrbnnOp::manifest, py::return_value_policy::reference)
+        .def_property_readonly("metrics", &FrbnnOp::metrics, py::return_value_policy::reference);
 }
