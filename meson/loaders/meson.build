@@ -1,12 +1,9 @@
 ldr_lst = {}
 
-subdir('holoscan_core')
-subdir('holoscan_inference')
-subdir('holoscan_ano')
-subdir('hdf5')
-subdir('matx')
+subdir('jetstream')
 subdir('blade')
-subdir('cyberether')
-subdir('zmq')
+subdir('threads')
+subdir('hdf5')
+subdir('holoscan_ano')
 
 summary(ldr_lst, section: 'Loaders', bool_yn: true)

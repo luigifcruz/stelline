@@ -1,0 +1,207 @@
+---
+version: 1.0.0
+
+title: ATA Spectrogram
+summary: Simple lineplot plot for the Allen Telescope Array (ATA).
+graph:
+  ata_receiver:
+    module: ata_receiver
+    device: cuda
+    runtime: native
+    provider: generic
+    outputDataType: CI8
+    config:
+      outputPoolSize: 8
+      packetsPerBurst: 8192
+      dataType: CI8
+      totalBlock: '[28, 192, 8192, 2]'
+      subscriptions: "- 10.11.1.201:10000 -> 239.1.1.1:50000\n- 10.11.1.202:10000 -> 239.1.1.1:50000\n- 10.11.1.203:10000 -> 239.1.1.1:50000\n- 10.11.1.204:10000 -> 239.1.1.1:50000\n- 10.11.1.231:10000 -> 239.1.1.1:50000\n- 10.11.1.232:10000 -> 239.1.1.1:50000\n- 10.11.1.233:10000 -> 239.1.1.1:50000\n- 10.11.1.234:10000 -> 239.1.1.1:50000\n"
+      offsetBlock: '[0, 352, 0, 0]'
+      workerCores: '[1]'
+      masterCore: 0
+      maxConcurrentBursts: 64
+      gpuDeviceId: 0
+      maxConcurrentBlocks: 16
+      partialBlock: '[1, 96, 16, 2]'
+      interfaceAddress: '0000:01:00.0'
+    meta:
+      node:
+        height: 898
+        width: 260
+        y: 40
+        x: 28
+  dummy_writer:
+    module: dummy_writer
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: CI8
+    input:
+      input: '${graph.ata_receiver.output.output}'
+    meta:
+      node:
+        height: 163.66667
+        width: 180
+        y: 55.33333
+        x: 423.92593
+  duplicate_host:
+    module: duplicate
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: CI8
+    config:
+      outputDevice: cpu
+      hostAccessible: true
+    input:
+      buffer: '${graph.ata_receiver.output.output}'
+    meta:
+      node:
+        height: 99.55554
+        width: 120
+        y: 450.4445
+        x: 359.2963
+  slice_pol0:
+    module: slice
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: CI8
+    config:
+      contiguous: false
+      slice: '[0, :, :, 0]'
+    input:
+      buffer: '${graph.duplicate_host.output.buffer}'
+    meta:
+      node:
+        height: 132.55554
+        width: 120
+        y: 410.44443
+        x: 517.2593
+  permutation:
+    module: permutation
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: CI8
+    config:
+      permutation: '[1, 0]'
+    input:
+      buffer: '${graph.slice_pol0.output.buffer}'
+    meta:
+      node:
+        height: 99.33334
+        width: 120
+        y: 371.66666
+        x: 678.7407
+  cast:
+    module: cast
+    device: cpu
+    runtime: native
+    provider: generic
+    inputDataType: CI8
+    outputDataType: CF32
+    config:
+      outputType: CF32
+    input:
+      buffer: '${graph.permutation.output.buffer}'
+    meta:
+      node:
+        height: 100
+        width: 120
+        y: 340
+        x: 836
+  fft:
+    module: fft
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: CF32
+    config:
+      forward: true
+    input:
+      signal: '${graph.cast.output.buffer}'
+    meta:
+      node:
+        height: 99.0741
+        width: 120
+        y: 291.9259
+        x: 993.0371
+  invert:
+    module: invert
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: CF32
+    input:
+      signal: '${graph.fft.output.signal}'
+    meta:
+      node:
+        height: 66.74072
+        width: 103.70367
+        y: 256.25928
+        x: 1146.4445
+  reshape:
+    module: reshape
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: CF32
+    config:
+      contiguous: false
+      shape: '[1572864]'
+    input:
+      buffer: '${graph.invert.output.signal}'
+    meta:
+      node:
+        height: 132.18518
+        width: 120
+        y: 220.81482
+        x: 1287.9629
+  spectrum_engine:
+    module: spectrum_engine
+    device: cpu
+    runtime: native
+    provider: generic
+    inputDataType: CF32
+    outputDataType: F32
+    config:
+      rangeMax: -23.911285
+      rangeMin: -141.99167
+      enableScale: true
+      enableAgc: false
+      axis: 0
+    input:
+      buffer: '${graph.reshape.output.buffer}'
+    meta:
+      node:
+        height: 231.37036
+        width: 120
+        y: 184.62964
+        x: 1443.3702
+  lineplot:
+    module: lineplot
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: F32
+    config:
+      thickness: 1
+      numberOfHorizontalLines: 5
+      numberOfVerticalLines: 11
+      decimation: 5
+      averaging: 26
+    input:
+      signal: '${graph.spectrum_engine.output.buffer}'
+    meta:
+      surface_default:
+        detached: false
+        detachedHeight: 249
+        detachedWidth: 941
+        attachedHeight: 221
+        attachedWidth: 272
+      node:
+        height: 340
+        width: 272.1482
+        y: 154.1852
+        x: 1601.7036

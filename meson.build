@@ -1,7 +1,7 @@
 project(
     'stelline',
     ['cpp', 'cuda'],
-    version: '0.2.0',
+    version: '0.4.0',
     default_options: [
         'cpp_std=c++20',
         'buildtype=release',
@@ -10,46 +10,41 @@ project(
     ]
 )
 
-cuda = meson.get_compiler('cuda')
-is_static = get_option('default_library') == 'static'
-cdn_url = 'https://stelline.cdn.luigi.ltd/0.0.0/'
+cfg_lst = configuration_data()
+cfg_lst.set('version', meson.project_version())
 
-cfg_lst = configuration_data({
-    'version': meson.project_version(),
-    'build_type': get_option('buildtype'),
-})
 src_lst = []
 cuda_lst = []
-dep_lst = [
-    dependency('cuda', version: '>=11', modules: ['cuda', 'culibos', 'cufile']),
-]
+module_test_lst = []
+dep_lst = []
+cuda_dep_lst = []
 inc_lst = [
     include_directories('include'),
 ]
 
 subdir('meson')
 subdir('src')
-subdir('resources')
-subdir('include')
+
+lib_stelline_device = static_library(
+    'stelline_device',
+    sources: cuda_lst,
+    include_directories: inc_lst,
+    cuda_args: [
+        '-Xcompiler=-fPIC',
+        '--expt-relaxed-constexpr',
+    ],
+    build_by_default: cuda_lst.length() > 0,
+)
 
 lib_stelline = library(
     'stelline',
     src_lst,
     include_directories: inc_lst,
     dependencies: dep_lst,
-    link_with: static_library(
-        'stelline_device',
-        sources: cuda_lst,
-        include_directories: inc_lst,
-        cuda_args: [
-            '-Xcompiler=-fPIC',
-            '--expt-relaxed-constexpr',
-            '-arch', 'compute_80',
-            '-diag-suppress', '815'
-        ],
-    ),
+    link_with: lib_stelline_device,
     gnu_symbol_visibility: 'hidden',
-    install: not is_static,
+    link_args: ['-Wl,-Bsymbolic', '-Wl,--no-as-needed'],
+    install: true,
 )
 
 lib_stelline_dep = declare_dependency(
@@ -58,12 +53,8 @@ lib_stelline_dep = declare_dependency(
     link_with: lib_stelline,
 )
 
-if not is_static
-    pkg = import('pkgconfig')
-    pkg.generate(
-        lib_stelline,
-        libraries: dep_lst,
-    )
-endif
-
-subdir('python')
+pkg = import('pkgconfig')
+pkg.generate(
+    lib_stelline,
+    libraries: dep_lst,
+)

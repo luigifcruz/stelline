@@ -1,0 +1,150 @@
+---
+version: 1.0.0
+
+title: ATA Beamformer
+summary: Simple beamformer example for the Allen Telescope Array (ATA).
+graph:
+  ones_tensor:
+    module: ones_tensor
+    device: cuda
+    runtime: native
+    provider: generic
+    outputDataType: CF32
+    config:
+      dataType: CF32
+      shape: '[1, 28, 192, 1, 2]'
+    meta:
+      node:
+        height: 111
+        width: 195
+        y: 419
+        x: 384
+  ata_receiver:
+    module: ata_receiver
+    device: cuda
+    runtime: native
+    provider: generic
+    outputDataType: CF32
+    config:
+      outputPoolSize: 8
+      packetsPerBurst: 8192
+      dataType: CF32
+      totalBlock: '[28, 192, 8192, 2]'
+      subscriptions: "- 10.11.1.201:10000 -> 239.1.1.1:50000\n- 10.11.1.202:10000 -> 239.1.1.1:50000\n- 10.11.1.203:10000 -> 239.1.1.1:50000\n- 10.11.1.204:10000 -> 239.1.1.1:50000\n- 10.11.1.231:10000 -> 239.1.1.1:50000\n- 10.11.1.232:10000 -> 239.1.1.1:50000\n- 10.11.1.233:10000 -> 239.1.1.1:50000\n- 10.11.1.234:10000 -> 239.1.1.1:50000\n"
+      offsetBlock: '[0, 352, 0, 0]'
+      workerCores: '[1]'
+      masterCore: 0
+      maxConcurrentBursts: 64
+      gpuDeviceId: 0
+      maxConcurrentBlocks: 16
+      partialBlock: '[1, 96, 16, 2]'
+      interfaceAddress: '0000:01:00.0'
+    meta:
+      node:
+        height: 898
+        width: 274
+        y: 13
+        x: 36
+  beamformer:
+    module: beamformer
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: CF32
+    config:
+      blockSize: 512
+      enableIncoherentBeamSqrt: false
+      enableIncoherentBeam: false
+    input:
+      buffer: '${graph.ata_receiver.output.output}'
+      phasors: '${graph.ones_tensor.output.buffer}'
+    meta:
+      node:
+        height: 188
+        width: 140
+        y: 345
+        x: 649
+  dummy_writer:
+    module: dummy_writer
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: CF32
+    input:
+      input: '${graph.ata_receiver.output.output}'
+    meta:
+      node:
+        height: 163.66669
+        width: 194
+        y: 28.333313
+        x: 582.9259
+  detector:
+    module: detector
+    device: cuda
+    runtime: native
+    provider: generic
+    inputDataType: CF32
+    outputDataType: F32
+    config:
+      blockSize: 512
+      numberOfOutputPolarizations: 4
+      integrationRate: 1
+    input:
+      buffer: '${graph.beamformer.output.buffer}'
+    meta:
+      node:
+        height: 166
+        width: 140
+        y: 344
+        x: 845
+  permutation_2:
+    module: permutation
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: F32
+    config:
+      permutation: '[2, 0, 1, 3]'
+    input:
+      buffer: '${graph.detector.output.buffer}'
+    meta:
+      node:
+        height: 100
+        width: 140
+        y: 346
+        x: 1035
+  duplicate_1:
+    module: duplicate
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: F32
+    config:
+      outputDevice: cuda
+      hostAccessible: true
+    input:
+      buffer: '${graph.permutation_2.output.buffer}'
+    meta:
+      node:
+        height: 133
+        width: 140
+        y: 341
+        x: 1234
+  fbh5_writer:
+    module: fbh5_writer
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: F32
+    config:
+      recording: true
+      overwrite: false
+      filepath: /mnt/raid1/file.fbh5
+    input:
+      input: '${graph.duplicate_1.output.buffer}'
+    meta:
+      node:
+        height: 263
+        width: 140
+        y: 337
+        x: 1435

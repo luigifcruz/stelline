@@ -4,18 +4,20 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /home/sdk
 
-RUN apt update && \
-    apt install --no-install-recommends -y \
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y \
         iproute2 htop btop nvtop nload pciutils \
         curl \
+        bash \
+        vim \
         && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://code-server.dev/install.sh | sh
 
-RUN python3 -m pip install --no-cache-dir "jupyterlab>=4,<5" \
-                                          "notebook>=7,<8" \
-                                          "jupyter-server>=2,<3" \
-                                          "rich"
+RUN python3 -m pip install --break-system-packages --no-cache-dir "jupyterlab>=4,<5" \
+                                                                  "notebook>=7,<8" \
+                                                                  "jupyter-server>=2,<3" \
+                                                                  "rich"
 
 RUN cat <<'EOF' >/usr/local/bin/dev-entrypoint.sh
 #!/bin/sh
@@ -66,5 +68,6 @@ ENV STELLINE_DEV_INTERFACE=jupyter
 ENV STELLINE_DEV_PORT=8888
 ENV STELLINE_DEV_BASE_URL=/
 ENV STELLINE_DEV_ROOT=/home/sdk
+ENV SHELL=/bin/bash
 
 CMD ["/usr/local/bin/dev-entrypoint.sh"]

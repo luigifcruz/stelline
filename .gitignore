@@ -9,12 +9,16 @@ __pycache__
 builddir
 imgui.ini
 workspace
+cli/dist
+cli/node_modules
+cufile.log
+report.md
 
 *.zip
 
 build*
 build-*
 
+submodules/
 !*.wrap
 !packagefiles
-!libusb-browser
