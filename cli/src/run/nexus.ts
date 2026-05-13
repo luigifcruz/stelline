@@ -34,11 +34,11 @@ export interface NexusBackend {
 }
 
 function metricTypeForFormat(format: string): "number" | "text" | null {
-    if (format === "stelline-metrics-global-number") {
+    if (format === "private-stelline-metrics-global-number") {
         return "number";
     }
 
-    if (format === "stelline-metrics-global-string") {
+    if (format === "private-stelline-metrics-global-string") {
         return "text";
     }
 

@@ -46,7 +46,7 @@ Result DummyReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("timestamp",
                                     "Timestamp",
                                     "Current block timestamp.",
-                                    "stelline-metrics",
+                                    "private-stelline-metrics",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getTimestamp() : U64(0)));
         }));

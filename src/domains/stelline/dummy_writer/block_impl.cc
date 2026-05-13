@@ -28,7 +28,7 @@ Result DummyWriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("iterations",
                                     "Iterations",
                                     "Total number of received blocks.",
-                                    "stelline-metrics",
+                                    "private-stelline-metrics",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getIterationCount() : U64(0)));
         }));
@@ -36,7 +36,7 @@ Result DummyWriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("averageDurationMs",
                                     "Average Duration",
                                     "Average duration in milliseconds per received block.",
-                                    "stelline-metrics",
+                                    "private-stelline-metrics",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{:.2f}", moduleImpl ? moduleImpl->getAverageDurationMs() : F64(0.0)));
         }));
@@ -44,7 +44,7 @@ Result DummyWriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("latestTimestamp",
                                     "Latest Timestamp",
                                     "Latest received timestamp.",
-                                    "stelline-metrics",
+                                    "private-stelline-metrics",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getLatestTimestamp() : U64(0)));
         }));

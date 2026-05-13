@@ -224,7 +224,7 @@ function RemoteCard({ state }: { state: FooterState }) {
 }
 
 function isGlobalMetric(entry: MetricsEntry): boolean {
-    return entry.format === "stelline-metrics-global-number" || entry.format === "stelline-metrics-global-string";
+    return entry.format === "private-stelline-metrics-global-number" || entry.format === "private-stelline-metrics-global-string";
 }
 
 function formatBlockName(name: string): string {

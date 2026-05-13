@@ -43,9 +43,9 @@ namespace stelline {
 namespace {
 
 static bool IsMetricFormat(const std::string& format) {
-    return format == "stelline-metrics" ||
-           format == "stelline-metrics-global-number" ||
-           format == "stelline-metrics-global-string";
+    return format == "private-stelline-metrics" ||
+           format == "private-stelline-metrics-global-number" ||
+           format == "private-stelline-metrics-global-string";
 }
 
 template<typename T>
