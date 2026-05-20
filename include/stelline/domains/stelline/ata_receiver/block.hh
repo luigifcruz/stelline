@@ -24,6 +24,7 @@ struct AtaReceiver : public Block::Config {
     U64 outputPoolSize = 2;
 
     JST_BLOCK_TYPE(ata_receiver);
+    JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(interfaceAddress, gpuDeviceId, masterCore, workerCores,
                      subscriptions, totalBlock, partialBlock, offsetBlock, dataType,
                      packetsPerBurst, maxConcurrentBursts, maxConcurrentBlocks,

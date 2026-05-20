@@ -15,6 +15,7 @@ struct Uvh5Writer : public Block::Config {
     bool recording = false;
 
     JST_BLOCK_TYPE(uvh5_writer);
+    JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(filepath, dspChannelizationRate, dspIntegrationRate, overwrite, recording);
     JST_BLOCK_DESCRIPTION(
         "UVH5 Writer",

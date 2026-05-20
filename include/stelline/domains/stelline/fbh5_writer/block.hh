@@ -13,6 +13,7 @@ struct Fbh5Writer : public Block::Config {
     bool recording = false;
 
     JST_BLOCK_TYPE(fbh5_writer);
+    JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(filepath, overwrite, recording);
     JST_BLOCK_DESCRIPTION(
         "FBH5 Writer",

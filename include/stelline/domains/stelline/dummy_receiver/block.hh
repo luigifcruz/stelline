@@ -14,6 +14,7 @@ struct DummyReceiver : public Block::Config {
     U64 period = 0;
 
     JST_BLOCK_TYPE(dummy_receiver);
+    JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(shape, dataType, period);
     JST_BLOCK_DESCRIPTION(
         "Dummy Receiver",

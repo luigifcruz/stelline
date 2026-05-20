@@ -7,6 +7,7 @@ namespace Jetstream::Blocks {
 
 struct DummyWriter : public Block::Config {
     JST_BLOCK_TYPE(dummy_writer);
+    JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS();
     JST_BLOCK_DESCRIPTION(
         "Dummy Writer",
