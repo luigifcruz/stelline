@@ -2,7 +2,7 @@
 
 #include <jetstream/instance.hh>
 #include <jetstream/logger.hh>
-#include <jetstream/app.hh>
+#include <jetstream/run.hh>
 
 #include <atomic>
 #include <cstdio>
@@ -215,7 +215,7 @@ extern "C" __attribute__((visibility("default"))) void StellineLogPipeClose() {
 
 extern "C" __attribute__((visibility("default"))) int StellineRunApp(int argc, char* argv[]) {
     state.beginLogCapture();
-    const auto res = RunAppNative(argc, argv, CyberEtherPluginCreate, CyberEtherPluginDestroy);
+    const auto res = Run(argc, argv, CyberEtherPluginCreate, CyberEtherPluginDestroy);
     state.endLogCapture();
     return res;
 }
