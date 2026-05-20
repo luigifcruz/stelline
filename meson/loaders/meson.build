@@ -1,7 +1,6 @@
 ldr_lst = {}
 
 subdir('jetstream')
-subdir('blade')
 subdir('threads')
 subdir('hdf5')
 subdir('holoscan_ano')
