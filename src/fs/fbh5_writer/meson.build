@@ -1,8 +1,8 @@
 dep_lst += [
     dependency('cuda', version: '>=11', modules: ['cuda', 'culibos', 'cufile'], required: true),
-    dependency('hdf5_vfd_gds', required: true),
-    dependency('h5dsc99', required: true),
-    dependency('filterbankc99', required: true),
+    stelline_hdf5_vfd_gds_dep,
+    stelline_h5dsc99_dep,
+    stelline_filterbankc99_dep,
 ]
 
 src_lst += files([

@@ -12,7 +12,7 @@ extern "C" {
 #include <jetstream/module_context.hh>
 #include <jetstream/registry.hh>
 
-#include "../net/helpers.hh"
+#include "../helpers.hh"
 #include "module_impl.hh"
 
 namespace Jetstream::Modules {

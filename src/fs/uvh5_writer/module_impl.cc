@@ -9,7 +9,7 @@
 
 #include <stelline/nexus.hh>
 
-#include "../net/helpers.hh"
+#include "../helpers.hh"
 
 extern "C" {
 #include "radiointerferometryc99.h"

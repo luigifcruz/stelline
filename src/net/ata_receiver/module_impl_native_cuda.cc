@@ -15,8 +15,8 @@
 #include <jetstream/scheduler_context.hh>
 #include <jetstream/registry.hh>
 
-#include "../net/endpoint.hh"
-#include "../net/multicast.hh"
+#include "../endpoint.hh"
+#include "../multicast.hh"
 
 #include "detail/kernel.hh"
 #include "module_impl.hh"

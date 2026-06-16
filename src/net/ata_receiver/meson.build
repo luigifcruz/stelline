@@ -1,4 +1,4 @@
-dep_lst += dependency('holoscan-networking', required: true)
+dep_lst += stelline_holoscan_networking_dep
 
 src_lst += files([
     'block_impl.cc',

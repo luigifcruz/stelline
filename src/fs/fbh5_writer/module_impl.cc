@@ -9,7 +9,7 @@
 
 #include <jetstream/backend/devices/cuda/helpers.hh>
 
-#include "../net/helpers.hh"
+#include "../helpers.hh"
 
 extern "C" {
 #include "filterbankc99.h"

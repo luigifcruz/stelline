@@ -1,6 +1,6 @@
 #include "module_impl.hh"
 
-#include "../net/endpoint.hh"
+#include "../endpoint.hh"
 
 namespace Jetstream::Modules {
 

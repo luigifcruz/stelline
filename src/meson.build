@@ -4,8 +4,4 @@ src_lst += files([
 ])
 
 subdir('net')
-subdir('ata_receiver')
-subdir('dummy_receiver')
-subdir('dummy_writer')
-subdir('fbh5_writer')
-subdir('uvh5_writer')
+subdir('fs')
