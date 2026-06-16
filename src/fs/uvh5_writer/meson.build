@@ -1,7 +1,7 @@
 dep_lst += [
     dependency('cuda', version: '>=11', modules: ['cuda', 'culibos', 'cufile'], required: true),
-    stelline_hdf5_vfd_gds_dep,
-    stelline_uvh5c99_dep,
+    subproject('vfd-gds').get_variable('lib_hdf5_vfd_gds_dep'),
+    subproject('uvh5c99').get_variable('lib_uvh5c99_dep'),
 ]
 
 src_lst += files([

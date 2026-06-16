@@ -1,4 +1,4 @@
-dep_lst += stelline_holoscan_networking_dep
+dep_lst += subproject('holoscan-networking').get_variable('holoscan_networking_dep')
 
 src_lst += files([
     'block_impl.cc',

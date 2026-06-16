@@ -1,5 +1,5 @@
 deps = [
-    dependency('holoscan-networking', required: false),
+    subproject('holoscan-networking').get_variable('holoscan_networking_dep'),
 ]
 
 all_deps_found = true

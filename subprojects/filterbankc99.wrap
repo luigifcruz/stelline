@@ -1,0 +1,10 @@
+[wrap-git]
+directory = filterbankc99
+url = https://github.com/MydonSolutions/filterbankc99.git
+revision = v1.5.0
+depth = 1
+clone-recursive = true
+patch_directory = filterbankc99
+
+[provide]
+filterbankc99 = lib_filterbankc99_dep

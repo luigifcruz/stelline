@@ -19,6 +19,13 @@ report.md
 build*
 build-*
 
-submodules/
-!*.wrap
-!packagefiles
+subprojects/*
+!subprojects/packagefiles/
+!subprojects/cyberether.wrap
+!subprojects/erfa.wrap
+!subprojects/filterbankc99.wrap
+!subprojects/h5dsc99.wrap
+!subprojects/hdf5.wrap
+!subprojects/holoscan-networking.wrap
+!subprojects/uvh5c99.wrap
+!subprojects/vfd-gds.wrap

@@ -1,5 +1,5 @@
 deps = [
-    dependency('jetstream', required: true),
+    subproject('cyberether').get_variable('libjetstream_dep'),
 ]
 
 all_deps_found = true
