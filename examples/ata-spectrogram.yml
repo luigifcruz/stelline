@@ -30,20 +30,6 @@ graph:
         width: 260
         y: 40
         x: 28
-  dummy_writer:
-    module: dummy_writer
-    device: cuda
-    runtime: native
-    provider: generic
-    dataType: CI8
-    input:
-      input: '${graph.ata_receiver.output.output}'
-    meta:
-      node:
-        height: 163.66667
-        width: 180
-        y: 55.33333
-        x: 423.92593
   duplicate_host:
     module: duplicate
     device: cuda

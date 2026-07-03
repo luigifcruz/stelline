@@ -4,4 +4,3 @@ src_lst += files([
 ])
 
 subdir('ata_receiver')
-subdir('dummy_receiver')

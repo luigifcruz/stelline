@@ -64,20 +64,6 @@ graph:
         width: 140
         y: 345
         x: 649
-  dummy_writer:
-    module: dummy_writer
-    device: cuda
-    runtime: native
-    provider: generic
-    dataType: CF32
-    input:
-      input: '${graph.ata_receiver.output.output}'
-    meta:
-      node:
-        height: 163.66669
-        width: 194
-        y: 28.333313
-        x: 582.9259
   detector:
     module: detector
     device: cuda
