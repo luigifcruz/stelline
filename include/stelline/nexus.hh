@@ -11,8 +11,6 @@
 
 namespace stelline {
 
-class Runtime;
-struct RuntimeState;
 struct NexusBridge;
 
 class Nexus {
@@ -63,7 +61,6 @@ class Nexus {
     static void MetricsPush(const std::string& blockName, const MetricsList& metrics);
     static void MetricsFlush();
 
-    friend struct RuntimeState;
     friend struct NexusBridge;
 
  private:
