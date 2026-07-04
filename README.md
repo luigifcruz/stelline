@@ -1,44 +1,58 @@
 # Stelline
 
-Stelline is a radio-astronomy plugin for [CyberEther](https://cyberether.org). It extends CyberEther's GPU-accelerated signal-processing and visualization environment with telescope networking, observatory I/O, and radio-astronomy workflow components.
+Radio astronomy blocks for [CyberEther](https://cyberether.org).
 
-The project is part of the broader Stelline stack for real-time sky observations. More context is available at [stelline.space](https://stelline.space).
+Stelline is a CyberEther plugin that ingests telescope data straight off the network into GPU memory and writes it out to disk in standard radio astronomy formats. It currently targets the [Allen Telescope Array](https://www.seti.org/ata), using RDMA packet capture on the receive side and GPUDirect Storage on the write side, so data can flow from the NIC through GPU compute to NVMe without bouncing through host memory.
 
-## Overview
+Stelline is part of the larger [stelline.space](https://stelline.space) stack for real-time sky observation.
 
-CyberEther provides the flowgraph interface, heterogeneous GPU execution layer, and real-time visualization tools. Stelline adds astronomy-specific modules for working with telescope data streams, including Allen Telescope Array workflows, high-throughput packet ingest, and HDF5-based storage paths.
+## Blocks
 
-Stelline is designed for systems that need to move radio data directly from network interfaces through GPU compute and into visualization or storage pipelines with minimal overhead.
+| Block | Kind | Description |
+|---|---|---|
+| `ata_receiver` | Network | High-throughput UDP/multicast ingest of ATA voltage packets directly into GPU buffers. |
+| `uvh5_writer` | Storage | Writes correlated visibilities to [UVH5](https://pyuvdata.readthedocs.io/en/latest/uvh5_format.html) (HDF5) using GPUDirect Storage. |
+| `fbh5_writer` | Storage | Writes filterbank spectra to FBH5 (HDF5) using GPUDirect Storage. |
 
-## What Is Included
-
-- CyberEther plugin library: `libstelline.so`
-- ATA-oriented receiver and networking components
-- HDF5 writer modules using GPUDirect Storage/VFD-GDS paths
-- Example CyberEther flowgraphs in `examples/`
-- Docker files for development and deployment environments
-- Quickstart and hardware-configuration notes in `docs/`
+These compose with CyberEther's built-in DSP and visualization modules (FFT, casting, spectrogram, lineplot, etc.) inside a flowgraph.
 
 ## Example Flowgraphs
 
-The `examples/` directory contains starter CyberEther graphs for radio-astronomy use cases:
+The `examples/` directory contains complete pipelines that are also bundled into the plugin package:
 
-- `examples/ata-correlator.yml`
-- `examples/ata-beamformer.yml`
-- `examples/ata-spectrogram.yml`
+- Live spectrum display from packet ingest (`ata-spectrogram.yml`).
+- Beamforming pipeline (`ata-beamformer.yml`).
+- Correlator with UVH5 output (`ata-correlator.yml`).
 
-These are intended as reference pipelines for ingesting and processing Allen Telescope Array data inside CyberEther.
+## Requirements
 
-## Documentation
+- Linux with an NVIDIA GPU and a recent CUDA toolkit.
+- [CyberEther](https://github.com/luigifcruz/CyberEther) (Jetstream) 1.5.0 or newer.
+- An NVIDIA ConnectX NIC with Mellanox OFED for the networking blocks.
+- The GPUDirect Storage stack (`nvidia-fs`) for the HDF5 writer blocks.
 
-Start with the quickstart documentation:
+Host setup is involved (driver, OFED, GDS, hugepages), so the provided Docker environment is the recommended way to get started.
 
-- `docs/quickstart/installation.md`
-- `docs/quickstart/configuration.md`
-- `docs/quickstart/dependencies.md`
+## Building
 
-The recommended development path is the provided Docker environment, since Stelline targets GPU-enabled systems with CUDA, CyberEther, Holoscan-related dependencies, GPUDirect Storage, and high-performance networking components.
+Stelline is a standard Meson project:
+
+```
+meson setup build
+meson compile -C build
+```
+
+This produces `build/stelline.cep`, the CyberEther plugin bundle (plugin library, manifest, and example flowgraphs), ready to be loaded by CyberEther's plugin manager.
+
+## Development Environment
+
+The provided Docker images ship a ready-to-use development environment with all dependencies preinstalled, exposed through JupyterLab or code-server:
+
+```
+docker build -t stelline-base -f docker/Dockerfile-base .
+docker build -t stelline -f docker/Dockerfile-dev .
+```
 
 ## License
 
-Stelline is distributed under the MIT License. See `LICENSE`.
+Stelline is distributed under the MIT License. See [LICENSE](LICENSE).
