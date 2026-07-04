@@ -1,5 +1,9 @@
 deps = [
-    subproject('cyberether').get_variable('libjetstream_dep'),
+    dependency(
+        'jetstream',
+        version: '>=' + minimum_jetstream_version,
+        required: true,
+    ),
 ]
 
 all_deps_found = true
@@ -8,7 +12,8 @@ foreach x_dep : deps
 endforeach
 
 if all_deps_found
+    cfg_lst.set('STELLINE_LOADER_JETSTREAM_AVAILABLE', true)
     dep_lst += deps
 endif
 
-ldr_lst += {'jetstream': all_deps_found}
+ldr_lst += {'Jetstream': all_deps_found}

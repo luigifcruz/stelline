@@ -1,5 +1,3 @@
-dep_lst += subproject('holoscan-networking').get_variable('holoscan_networking_dep')
-
 src_lst += files([
     'block_impl.cc',
     'module_impl.cc',

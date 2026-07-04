@@ -7,4 +7,4 @@ clone-recursive = true
 method = cmake
 
 [provide]
-hdf5 = hdf5_shared_dep
+hdf5 = hdf5_static_dep
