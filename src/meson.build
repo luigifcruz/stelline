@@ -1,5 +1,4 @@
 src_lst += files([
-    'nexus.cc',
     'plugin.cc',
 ])
 

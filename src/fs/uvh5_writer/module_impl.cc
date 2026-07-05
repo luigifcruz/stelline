@@ -7,8 +7,6 @@
 
 #include <hdf5.h>
 
-#include <stelline/nexus.hh>
-
 #include "../helpers.hh"
 
 extern "C" {
@@ -18,32 +16,6 @@ extern "C" {
 #include "H5FDgds.h"
 
 namespace Jetstream::Modules {
-
-using stelline::Nexus;
-
-namespace {
-
-template<typename T>
-Result RequireMetadata(const std::string& key, T& value) {
-    if (Nexus::TryMetadataFetch(key, value)) {
-        return Result::SUCCESS;
-    }
-
-    JST_WARN("[MODULE_UVH5_WRITER] Missing required Nexus metadata '{}'.", key);
-    return Result::INCOMPLETE;
-}
-
-template<typename T>
-Result RequireMetadata(const std::string& key, const U64 timestamp, T& value) {
-    if (Nexus::TryMetadataFetch(key, value, timestamp)) {
-        return Result::SUCCESS;
-    }
-
-    JST_WARN("[MODULE_UVH5_WRITER] Missing required Nexus metadata '{}' for timestamp {}.", key, timestamp);
-    return Result::INCOMPLETE;
-}
-
-}  // namespace
 
 Result Uvh5WriterImpl::validate() {
     const auto& config = *candidate();
@@ -70,98 +42,251 @@ Result Uvh5WriterImpl::define() {
 Result Uvh5WriterImpl::loadMetadata() {
     metadata = {};
 
-    JST_CHECK(RequireMetadata("observatory.name", metadata.telescopeName));
-    JST_CHECK(RequireMetadata("observatory.coordinates.latitude", metadata.latitude));
-    JST_CHECK(RequireMetadata("observatory.coordinates.longitude", metadata.longitude));
-    JST_CHECK(RequireMetadata("observatory.coordinates.altitude", metadata.altitude));
+    struct {
+        std::string value;
+        JST_SERDES(value);
+    } text;
 
-    I32 antennaCount = 0;
-    JST_CHECK(RequireMetadata("observation.antennas.length", antennaCount));
-    if (antennaCount <= 0) {
-        JST_WARN("[MODULE_UVH5_WRITER] Invalid observation antenna count {}.", antennaCount);
+    struct {
+        F64 value = 0.0;
+        JST_SERDES(value);
+    } real;
+
+    struct {
+        I64 value = 0;
+        JST_SERDES(value);
+    } integer;
+
+    if (!environment()->tryGet("observatory.name", text)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observatory.name' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.telescopeName = text.value;
+
+    if (!environment()->tryGet("observatory.coordinates.latitude", real)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observatory.coordinates.latitude' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.latitude = real.value;
+
+    if (!environment()->tryGet("observatory.coordinates.longitude", real)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observatory.coordinates.longitude' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.longitude = real.value;
+
+    if (!environment()->tryGet("observatory.coordinates.altitude", real)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observatory.coordinates.altitude' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.altitude = real.value;
+
+    if (!environment()->tryGet("observation.antennas.length", integer)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observation.antennas.length' environment value.");
         return Result::INCOMPLETE;
     }
 
-    metadata.antennas.resize(static_cast<size_t>(antennaCount));
-    for (I32 index = 0; index < antennaCount; index++) {
-        auto& antenna = metadata.antennas[static_cast<size_t>(index)];
+    if (integer.value <= 0) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Invalid observation antenna count {}.", integer.value);
+        return Result::INCOMPLETE;
+    }
 
-        JST_CHECK(RequireMetadata(jst::fmt::format("observation.antennas.{}", index), antenna.name));
-        JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.number", antenna.name), antenna.number));
-        JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.diameter", antenna.name), antenna.diameter));
-        JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.position.x", antenna.name), antenna.position[0]));
-        JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.position.y", antenna.name), antenna.position[1]));
-        JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.position.z", antenna.name), antenna.position[2]));
+    metadata.antennas.resize(static_cast<size_t>(integer.value));
+    for (size_t index = 0; index < metadata.antennas.size(); index++) {
+        auto& antenna = metadata.antennas[index];
+
+        {
+            const auto key = jst::fmt::format("observation.antennas.{}", index);
+            if (!environment()->tryGet(key, text)) {
+                JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+                return Result::INCOMPLETE;
+            }
+            antenna.name = text.value;
+        }
+
+        {
+            const auto key = jst::fmt::format("observatory.antenna.{}.number", antenna.name);
+            if (!environment()->tryGet(key, integer)) {
+                JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+                return Result::INCOMPLETE;
+            }
+            antenna.number = static_cast<U64>(integer.value);
+        }
+
+        {
+            const auto key = jst::fmt::format("observatory.antenna.{}.diameter", antenna.name);
+            if (!environment()->tryGet(key, real)) {
+                JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+                return Result::INCOMPLETE;
+            }
+            antenna.diameter = real.value;
+        }
+
+        for (size_t axis = 0; axis < antenna.position.size(); axis++) {
+            const auto key = jst::fmt::format("observatory.antenna.{}.position.{}", antenna.name, "xyz"[axis]);
+            if (!environment()->tryGet(key, real)) {
+                JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+                return Result::INCOMPLETE;
+            }
+            antenna.position[axis] = real.value;
+        }
     }
 
     const auto& firstAntenna = metadata.antennas.front().name;
 
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.pointing.ra", firstAntenna), metadata.pointingRa));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.pointing.dec", firstAntenna), metadata.pointingDec));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.pointing.source_name", firstAntenna),
-                              metadata.pointingSourceName));
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.pointing.ra", firstAntenna);
+        if (!environment()->tryGet(key, real)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        metadata.pointingRa = real.value;
+    }
 
-    F64 frequencyStart = 0.0;
-    F64 frequencyStop = 0.0;
-    U64 channelStart = 0;
-    U64 channelStop = 0;
-    U64 bandCount = 0;
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.pointing.dec", firstAntenna);
+        if (!environment()->tryGet(key, real)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        metadata.pointingDec = real.value;
+    }
 
-    JST_CHECK(RequireMetadata("instance.bands.len", bandCount));
-    if (bandCount == 0) {
-        JST_WARN("[MODULE_UVH5_WRITER] Invalid instance band count {}.", bandCount);
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.pointing.source_name", firstAntenna);
+        if (!environment()->tryGet(key, text)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        metadata.pointingSourceName = text.value;
+    }
+
+    if (!environment()->tryGet("instance.bands.len", integer)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'instance.bands.len' environment value.");
         return Result::INCOMPLETE;
     }
 
-    // TODO: This is trash but rewrite needs Nexus Server change.
+    if (integer.value <= 0) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Invalid instance band count {}.", integer.value);
+        return Result::INCOMPLETE;
+    }
 
-    const std::string bandKey = "instance.bands.0";
+    // TODO: Support instances with more than one band.
 
-    JST_CHECK(RequireMetadata(jst::fmt::format("{}.tuning", bandKey), metadata.instanceTuning));
-    JST_CHECK(RequireMetadata(jst::fmt::format("{}.band_index", bandKey), metadata.instanceBandIndex));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.frequency_start",
-                                               firstAntenna,
-                                               metadata.instanceTuning,
-                                               metadata.instanceBandIndex),
-                              frequencyStart));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.frequency_stop",
-                                               firstAntenna,
-                                               metadata.instanceTuning,
-                                               metadata.instanceBandIndex),
-                              frequencyStop));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.channel_start",
-                                               firstAntenna,
-                                               metadata.instanceTuning,
-                                               metadata.instanceBandIndex),
-                              channelStart));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.channel_stop",
-                                               firstAntenna,
-                                               metadata.instanceTuning,
-                                               metadata.instanceBandIndex),
-                              channelStop));
+    if (!environment()->tryGet("instance.bands.0.tuning", text)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'instance.bands.0.tuning' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.instanceTuning = text.value;
+
+    if (!environment()->tryGet("instance.bands.0.band_index", integer)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'instance.bands.0.band_index' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.instanceBandIndex = static_cast<U64>(integer.value);
+
+    F64 frequencyStart = 0.0;
+    F64 frequencyStop = 0.0;
+    I64 channelStart = 0;
+    I64 channelStop = 0;
+
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.frequency_start",
+                                          firstAntenna,
+                                          metadata.instanceTuning,
+                                          metadata.instanceBandIndex);
+        if (!environment()->tryGet(key, real)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        frequencyStart = real.value;
+    }
+
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.frequency_stop",
+                                          firstAntenna,
+                                          metadata.instanceTuning,
+                                          metadata.instanceBandIndex);
+        if (!environment()->tryGet(key, real)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        frequencyStop = real.value;
+    }
+
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.channel_start",
+                                          firstAntenna,
+                                          metadata.instanceTuning,
+                                          metadata.instanceBandIndex);
+        if (!environment()->tryGet(key, integer)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        channelStart = integer.value;
+    }
+
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.bands.{}.channel_stop",
+                                          firstAntenna,
+                                          metadata.instanceTuning,
+                                          metadata.instanceBandIndex);
+        if (!environment()->tryGet(key, integer)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        channelStop = integer.value;
+    }
 
     metadata.instanceBandCenter = (frequencyStop + frequencyStart) / 2.0;
     metadata.instanceBandwidth = frequencyStop - frequencyStart;
-    metadata.instanceChannelCount = channelStop - channelStart;
-    if (metadata.instanceChannelCount == 0) {
-        JST_WARN("[MODULE_UVH5_WRITER] Invalid instance channel count derived from '{}' and '{}'.",
+    if (channelStop <= channelStart) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Invalid instance channel count derived from '{}' and '{}'.",
                  channelStart,
                  channelStop);
         return Result::INCOMPLETE;
     }
+    metadata.instanceChannelCount = static_cast<U64>(channelStop - channelStart);
 
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.tunings.{}.fengine.synctime",
-                                               firstAntenna,
-                                               metadata.instanceTuning),
-                              metadata.packetTimestampOffset));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.tunings.{}.fengine.sample_period",
-                                               firstAntenna,
-                                               metadata.instanceTuning),
-                              metadata.sampleTimespan));
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.fengine.synctime",
+                                          firstAntenna,
+                                          metadata.instanceTuning);
+        if (!environment()->tryGet(key, integer)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        metadata.packetTimestampOffset = static_cast<U64>(integer.value);
+    }
 
-    JST_CHECK(RequireMetadata("observation.iers.pm_x_arcsec", metadata.iersPmXArcsec));
-    JST_CHECK(RequireMetadata("observation.iers.pm_y_arcsec", metadata.iersPmYArcsec));
-    JST_CHECK(RequireMetadata("observation.iers.ut1_utc", metadata.iersUt1Utc));
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.fengine.sample_period",
+                                          firstAntenna,
+                                          metadata.instanceTuning);
+        if (!environment()->tryGet(key, real)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+            return Result::INCOMPLETE;
+        }
+        metadata.sampleTimespan = real.value;
+    }
+
+    if (!environment()->tryGet("observation.iers.pm_x_arcsec", real)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observation.iers.pm_x_arcsec' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.iersPmXArcsec = real.value;
+
+    if (!environment()->tryGet("observation.iers.pm_y_arcsec", real)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observation.iers.pm_y_arcsec' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.iersPmYArcsec = real.value;
+
+    if (!environment()->tryGet("observation.iers.ut1_utc", real)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'observation.iers.ut1_utc' environment value.");
+        return Result::INCOMPLETE;
+    }
+    metadata.iersUt1Utc = real.value;
 
     integrationTimespan = metadata.sampleTimespan * static_cast<F64>(dspIntegrationRate);
     frequencyBandwidth = metadata.instanceBandwidth / static_cast<F64>(metadata.instanceChannelCount);
@@ -174,23 +299,66 @@ Result Uvh5WriterImpl::loadMetadata() {
 
 Result Uvh5WriterImpl::refreshDynamicMetadata(const U64& timestamp) {
     if (!metadata.valid || metadata.antennas.empty()) {
+        JST_ERROR("[MODULE_UVH5_WRITER] UVH5 metadata is not initialized.");
         return Result::INCOMPLETE;
     }
 
     const auto& firstAntenna = metadata.antennas.front().name;
 
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.pointing.ra", firstAntenna),
-                              timestamp,
-                              metadata.pointingRa));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.pointing.dec", firstAntenna),
-                              timestamp,
-                              metadata.pointingDec));
-    JST_CHECK(RequireMetadata(jst::fmt::format("observatory.antenna.{}.pointing.source_name", firstAntenna),
-                              timestamp,
-                              metadata.pointingSourceName));
-    JST_CHECK(RequireMetadata("observation.iers.pm_x_arcsec", timestamp, metadata.iersPmXArcsec));
-    JST_CHECK(RequireMetadata("observation.iers.pm_y_arcsec", timestamp, metadata.iersPmYArcsec));
-    JST_CHECK(RequireMetadata("observation.iers.ut1_utc", timestamp, metadata.iersUt1Utc));
+    struct {
+        F64 value = 0.0;
+        JST_SERDES(value);
+    } real;
+
+    struct {
+        std::string value;
+        JST_SERDES(value);
+    } text;
+
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.pointing.ra", firstAntenna);
+        if (!environment()->tryGet(key, real, timestamp)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing environment value '{}' for timestamp {}.", key, timestamp);
+            return Result::INCOMPLETE;
+        }
+        metadata.pointingRa = real.value;
+    }
+
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.pointing.dec", firstAntenna);
+        if (!environment()->tryGet(key, real, timestamp)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing environment value '{}' for timestamp {}.", key, timestamp);
+            return Result::INCOMPLETE;
+        }
+        metadata.pointingDec = real.value;
+    }
+
+    {
+        const auto key = jst::fmt::format("observatory.antenna.{}.pointing.source_name", firstAntenna);
+        if (!environment()->tryGet(key, text, timestamp)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing environment value '{}' for timestamp {}.", key, timestamp);
+            return Result::INCOMPLETE;
+        }
+        metadata.pointingSourceName = text.value;
+    }
+
+    if (!environment()->tryGet("observation.iers.pm_x_arcsec", real, timestamp)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing environment value 'observation.iers.pm_x_arcsec' for timestamp {}.", timestamp);
+        return Result::INCOMPLETE;
+    }
+    metadata.iersPmXArcsec = real.value;
+
+    if (!environment()->tryGet("observation.iers.pm_y_arcsec", real, timestamp)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing environment value 'observation.iers.pm_y_arcsec' for timestamp {}.", timestamp);
+        return Result::INCOMPLETE;
+    }
+    metadata.iersPmYArcsec = real.value;
+
+    if (!environment()->tryGet("observation.iers.ut1_utc", real, timestamp)) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Missing environment value 'observation.iers.ut1_utc' for timestamp {}.", timestamp);
+        return Result::INCOMPLETE;
+    }
+    metadata.iersUt1Utc = real.value;
 
     return Result::SUCCESS;
 }
@@ -258,7 +426,7 @@ Result Uvh5WriterImpl::create() {
     }
 
     if (filepath.empty()) {
-        JST_WARN("[MODULE_UVH5_WRITER] File path is empty.");
+        JST_ERROR("[MODULE_UVH5_WRITER] File path is empty.");
         return Result::INCOMPLETE;
     }
 
@@ -266,7 +434,7 @@ Result Uvh5WriterImpl::create() {
     if (!parentPath.empty()) {
         std::error_code ec;
         if (!std::filesystem::exists(parentPath, ec)) {
-            JST_WARN("[MODULE_UVH5_WRITER] Parent directory '{}' does not exist.", parentPath.string());
+            JST_ERROR("[MODULE_UVH5_WRITER] Parent directory '{}' does not exist.", parentPath.string());
             return Result::INCOMPLETE;
         }
     }
