@@ -31,7 +31,7 @@ The `examples/` directory contains complete pipelines that are also bundled into
 - An NVIDIA ConnectX NIC with Mellanox OFED for the networking blocks.
 - The GPUDirect Storage stack (`nvidia-fs`) for the HDF5 writer blocks.
 
-Host setup is involved (driver, OFED, GDS, hugepages), so the provided Docker environment is the recommended way to get started.
+Host setup is involved (driver, OFED, GDS, hugepages), while userspace dependencies are resolved by CyberEther and Meson subprojects.
 
 ## Building
 
@@ -46,11 +46,18 @@ This produces `build/stelline.cep`, the CyberEther plugin bundle (plugin library
 
 ## Development Environment
 
-The provided Docker images ship a ready-to-use development environment with all dependencies preinstalled, exposed through JupyterLab or code-server:
+For development, use the CyberEther CUDA containers for the target architecture:
 
 ```
-docker build -t stelline-base -f docker/Dockerfile-base .
-docker build -t stelline -f docker/Dockerfile-dev .
+docker pull ghcr.io/luigifcruz/cyberether:ubuntu24-x86_64-cuda
+docker pull ghcr.io/luigifcruz/cyberether:ubuntu24-aarch64-cuda
+```
+
+CyberEther and the remaining userspace dependencies are fetched through Meson subprojects:
+
+```
+meson setup build
+meson compile -C build
 ```
 
 ## License
