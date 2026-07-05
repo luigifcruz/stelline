@@ -4,3 +4,4 @@ src_lst += files([
 ])
 
 subdir('ata_receiver')
+subdir('nexus_bridge')
