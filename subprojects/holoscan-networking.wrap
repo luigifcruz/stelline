@@ -1,0 +1,8 @@
+[wrap-git]
+directory = holoscan-networking
+url = https://github.com/luigifcruz/holoscan-networking.git
+revision = slim
+depth = 1
+
+[provide]
+holoscan-networking = holoscan_networking_dep

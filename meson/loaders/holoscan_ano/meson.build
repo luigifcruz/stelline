@@ -1,5 +1,11 @@
 deps = [
-    dependency('holoscan-networking', required: false),
+    subproject(
+        'holoscan-networking',
+        default_options: [
+            'default_library=static',
+            'b_staticpic=true',
+        ],
+    ).get_variable('holoscan_networking_dep'),
 ]
 
 all_deps_found = true
@@ -8,7 +14,7 @@ foreach x_dep : deps
 endforeach
 
 if all_deps_found
-    cfg_lst.set('STELLINE_LOADER_HOLOSCAN_ANO', true)
+    cfg_lst.set('STELLINE_LOADER_HOLOSCAN_ANO_AVAILABLE', true)
     dep_lst += deps
 endif
 

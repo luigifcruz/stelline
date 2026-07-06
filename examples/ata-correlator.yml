@@ -1,0 +1,288 @@
+---
+version: 1.0.0
+
+title: ATA Correlator
+summary: Simple correlator example for the Allen Telescope Array (ATA).
+graph:
+  ata_receiver:
+    module: ata_receiver
+    device: cuda
+    runtime: native
+    provider: generic
+    outputDataType: CI8
+    config:
+      outputPoolSize: 8
+      packetsPerBurst: 8192
+      dataType: CI8
+      totalBlock: '[28, 192, 8192, 2]'
+      subscriptions: "- 10.11.1.201:10000 -> 239.1.1.1:50000\n- 10.11.1.202:10000 -> 239.1.1.1:50000\n- 10.11.1.203:10000 -> 239.1.1.1:50000\n- 10.11.1.204:10000 -> 239.1.1.1:50000\n- 10.11.1.231:10000 -> 239.1.1.1:50000\n- 10.11.1.232:10000 -> 239.1.1.1:50000\n- 10.11.1.233:10000 -> 239.1.1.1:50000\n- 10.11.1.234:10000 -> 239.1.1.1:50000\n"
+      offsetBlock: '[0, 352, 0, 0]'
+      workerCores: '[1]'
+      masterCore: 0
+      maxConcurrentBursts: 64
+      gpuDeviceId: 0
+      maxConcurrentBlocks: 16
+      partialBlock: '[1, 96, 16, 2]'
+      interfaceAddress: '0000:01:00.0'
+    meta:
+      node:
+        height: 898
+        width: 274
+        y: 10
+        x: 42
+  duplicate_1:
+    module: duplicate
+    device: cuda
+    runtime: native
+    provider: generic
+    config:
+      outputDevice: cpu
+      hostAccessible: false
+    meta:
+      node:
+        height: 133
+        width: 120
+        y: 364
+        x: 963
+  correlator:
+    module: correlator
+    device: cuda
+    runtime: native
+    provider: generic
+    inputDataType: CI8
+    outputDataType: CF32
+    config:
+      blockSize: 32
+      calculationMode: integer
+      useSharedMemory: true
+      conjugateAntennaIndex: 1
+      integrationRate: 1
+    input:
+      buffer: '${graph.ata_receiver.output.output}'
+    meta:
+      node:
+        height: 231.4815
+        width: 158.51848
+        y: 240.5185
+        x: 375.07407
+  slice:
+    module: slice
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      contiguous: false
+      slice: '[0, 28:, :, 0]'
+    input:
+      buffer: '${graph.duplicate_1.output.buffer}'
+    meta:
+      node:
+        height: 133
+        width: 120
+        y: 490
+        x: 557
+  permutation_1:
+    module: permutation
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: CF32
+    config:
+      permutation: '[2, 0, 1, 3]'
+    input:
+      buffer: '${graph.correlator.output.buffer}'
+    meta:
+      node:
+        height: 100
+        width: 140
+        y: 211
+        x: 579.4074
+  arithmetic:
+    module: arithmetic
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      squeeze: false
+      axis: 0
+      operation: add
+    input:
+      buffer: '${graph.slice.output.buffer}'
+    meta:
+      node:
+        height: 166
+        width: 140
+        y: 462
+        x: 795
+  duplicate:
+    module: duplicate
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: CF32
+    config:
+      outputDevice: cuda
+      hostAccessible: false
+    input:
+      buffer: '${graph.permutation_1.output.buffer}'
+    meta:
+      node:
+        height: 132.81482
+        width: 132.59256
+        y: 183.18518
+        x: 774.6666
+  file_writer:
+    module: file_writer
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      recording: false
+      overwrite: true
+      fileFormat: raw
+      filepath: /mnt/raid1/pulsar_no_baseline_longer.npy
+    input:
+      buffer: '${graph.arithmetic.output.buffer}'
+    meta:
+      node:
+        height: 221.80005
+        width: 140
+        y: 419.19995
+        x: 1285
+  arithmetic_1:
+    module: arithmetic
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      squeeze: false
+      axis: 1
+      operation: add
+    input:
+      buffer: '${graph.arithmetic.output.buffer}'
+    meta:
+      node:
+        height: 165.19995
+        width: 140
+        y: 729.80005
+        x: 934
+  multiply_constant:
+    module: multiply_constant
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      constant: 1e-08
+    input:
+      factor: '${graph.arithmetic_1.output.buffer}'
+    meta:
+      node:
+        height: 99.19995
+        width: 140
+        y: 519.80005
+        x: 1018
+  amplitude:
+    module: amplitude
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    input:
+      signal: '${graph.multiply_constant.output.product}'
+    meta:
+      node:
+        height: 67
+        width: 120
+        y: 719
+        x: 1157
+  range:
+    module: range
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      max: 0
+      min: -100
+    input:
+      signal: '${graph.amplitude.output.signal}'
+    meta:
+      node:
+        height: 133
+        width: 140
+        y: 700
+        x: 383
+  lineplot:
+    module: lineplot
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      thickness: 1
+      numberOfHorizontalLines: 5
+      numberOfVerticalLines: 11
+      decimation: 1
+      averaging: 1
+    input:
+      signal: '${graph.range.output.signal}'
+    meta:
+      surface_default:
+        detached: true
+        detachedHeight: 981
+        detachedWidth: 760
+        attachedHeight: 140
+        attachedWidth: 140
+      node:
+        height: 111
+        width: 140
+        y: 795
+        x: 726
+  waterfall:
+    module: waterfall
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: NONE
+    config:
+      interpolate: true
+      height: 128
+    input:
+      signal: '${graph.range.output.signal}'
+    meta:
+      surface_default:
+        attachedWidth: 289
+        attachedHeight: 645
+        detachedWidth: 760
+        detachedHeight: 981
+        detached: true
+      node:
+        height: 110.19995
+        width: 124
+        y: 780
+        x: 555
+  uvh5_writer:
+    module: uvh5_writer
+    device: cuda
+    runtime: native
+    provider: generic
+    dataType: CF32
+    config:
+      recording: false
+      overwrite: true
+      dspIntegrationRate: 1
+      dspChannelizationRate: 1
+      filepath: /mnt/raid1/test.uvh5
+    input:
+      input: '${graph.duplicate.output.buffer}'
+    meta:
+      node:
+        height: 329
+        width: 140
+        y: 77
+        x: 1132

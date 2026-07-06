@@ -1,0 +1,10 @@
+[wrap-git]
+directory = vfd-gds
+url = https://github.com/hpc-io/vfd-gds.git
+revision = e33bae67a16238c2677f23abac76b9fe30b99869
+clone-recursive = true
+patch_directory = vfd-gds
+method = meson
+
+[provide]
+hdf5_vfd_gds = lib_hdf5_vfd_gds_dep

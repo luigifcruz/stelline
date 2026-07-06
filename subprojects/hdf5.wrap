@@ -1,0 +1,10 @@
+[wrap-git]
+directory = hdf5
+url = https://github.com/HDFGroup/hdf5.git
+revision = hdf5-1.14.6
+depth = 1
+clone-recursive = true
+method = cmake
+
+[provide]
+hdf5 = hdf5_static_dep

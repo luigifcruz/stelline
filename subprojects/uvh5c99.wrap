@@ -1,0 +1,9 @@
+[wrap-git]
+directory = uvh5c99
+url = https://github.com/MydonSolutions/uvh5c99.git
+revision = v0.9.2
+depth = 1
+clone-recursive = true
+
+[provide]
+uvh5c99 = lib_uvh5c99_dep

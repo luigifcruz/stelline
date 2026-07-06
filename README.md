@@ -1,53 +1,27 @@
 # Stelline
-This repository contains all the parts of the next-generation data processing pipeline of the Allen Telescope Array.
 
-## Project Structure
-This project aggregates all the custom Holoscan operators and glue code.
+Radio astronomy blocks for [CyberEther](https://cyberether.org).
 
-- `operators`: Contains all the custom Holoscan operators (e.g., `transport`, `blade`, `frbnn`, `io`, etc.).
-- `bits`: Contains glue code between the YAML configuration file and the custom Holoscan operators (e.g. `BladeBit`, `FrbnnInferenceBit`, `FrbnnDetectionBit`, `FilesystemBit`, `TransportBit`, etc.). Its purpose is to reduce the amount of boilerplate code needed to create custom pipelines.
-- `recipes`: Contains the YAML configuration files that define the data processing pipelines without the need to write any glue code or compile any C++ code.
+Stelline is a CyberEther plugin that ingests telescope data straight off the network into GPU memory and writes it out to disk in standard radio astronomy formats. It currently targets the [Allen Telescope Array](https://www.seti.org/ata), using RDMA packet capture on the receive side and GPUDirect Storage on the write side, so data can flow from the NIC through GPU compute to NVMe without bouncing through host memory.
 
-## Build Development Image
+Stelline is part of the larger [stelline.space](https://stelline.space) stack for GPU-accelerated radio astronomy.
 
-### 1. Clone this repository
-```
-$ git clone https://github.com/luigifcruz/stelline
-$ cd stelline
-```
+## Documentation
 
-### 2. Build base container
-```
-$ docker build -t stelline-base -f docker/Dockerfile-base .
-```
+The full documentation lives at [stelline.space/docs](https://stelline.space/docs). It covers [installation](https://stelline.space/docs/installation), host and system setup, and a reference page for every block: the ATA Receiver, the UVH5 Writer, the FBH5 Writer, and the Nexus Bridge.
 
-### 3. Build demo container
-```
-$ docker build -t stelline-dev -f docker/Dockerfile-dev .
-```
+## Example Flowgraphs
 
-### 4. Run the demo container
-```
-$ nvidia_icd_json=$(find /usr/share /etc -path '*/vulkan/icd.d/nvidia_icd.json' -type f -print -quit 2>/dev/null | grep .) || (echo "nvidia_icd.json not found" >&2 && false)
-$ sudo docker run -it --rm -u root \
-    --net host \
-    --privileged \
-    --gpus=all \
-    --cap-add CAP_SYS_PTRACE \
-    --ipc=host \
-    --volume /run/udev:/run/udev:ro \
-    --ulimit memlock=-1 \
-    --ulimit stack=67108864 \
-    --device=/dev/nvidia-fs* \
-    -v /dev/bus/usb:/dev/bus/usb \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -v /mnt/huge:/mnt/huge \
-    -v .:/home/sdk \
-    -v $nvidia_icd_json:$nvidia_icd_json:ro \
-    -e NVIDIA_DRIVER_CAPABILITIES=graphics,video,compute,utility,display \
-    -e DISPLAY=$DISPLAY \
-    stelline-dev
-```
+The `examples/` directory contains complete pipelines that are also bundled into the plugin package:
 
-### 5. Fun!
-This will create a Jupyter Notebook with everything pre-installed for you. All you have to do is to navigate to `http://[SPARK-IP]:8888` and start exploring. Execute `stelline -h` in the command line for more information.
+- Live spectrum display from packet ingest (`ata-spectrogram.yml`).
+- Beamforming pipeline (`ata-beamformer.yml`).
+- Correlator with UVH5 output (`ata-correlator.yml`).
+
+## Building
+
+Build instructions, container images, and host setup are covered in the [installation documentation](https://stelline.space/docs/installation).
+
+## License
+
+Stelline is distributed under the MIT License. See [LICENSE](LICENSE).

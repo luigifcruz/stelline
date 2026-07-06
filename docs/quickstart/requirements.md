@@ -1,9 +1,0 @@
-# Requirements
-
-## Hardware
-
-// TODO: Write (THIS IS WHAT WORKS FOR US TM, 4U SERVERS, LOW END ENTERPRISE GPU, COMPUTE MODULES (GPU/NIC/NVMe), TOTAL GB/s INGEST RATE).
-
-## Software
-
-// TODO: Write.
