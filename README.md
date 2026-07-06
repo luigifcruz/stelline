@@ -1,10 +1,8 @@
 # Stelline
 
-Radio astronomy blocks for [CyberEther](https://cyberether.org).
+A GPU-accelerated radio astronomy plugin for [CyberEther](https://cyberether.org).
 
-Stelline is a CyberEther plugin that ingests telescope data straight off the network into GPU memory and writes it out to disk in standard radio astronomy formats. It currently targets the [Allen Telescope Array](https://www.seti.org/ata), using RDMA packet capture on the receive side and GPUDirect Storage on the write side, so data can flow from the NIC through GPU compute to NVMe without bouncing through host memory.
-
-Stelline is part of the larger [stelline.space](https://stelline.space) stack for GPU-accelerated radio astronomy.
+Stelline is a CyberEther plugin from the [stelline.space](https://stelline.space) stack. It captures telescope voltage packets straight off the network into GPU memory with RDMA and writes finished data products to disk in standard radio astronomy formats with GPUDirect Storage, so data flows from the NIC through GPU compute to NVMe without ever bouncing through host memory. The blocks currently target the [Allen Telescope Array](https://www.seti.org/ata).
 
 ## Documentation
 
