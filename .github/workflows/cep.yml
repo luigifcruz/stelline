@@ -25,19 +25,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.3.1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.12.0
-
       - name: Build CEP artifact
-        uses: docker/build-push-action@v5.4.0
-        with:
-          context: .
-          file: ./Dockerfile
-          target: artifact
-          outputs: type=local,dest=.dist/${{ matrix.tag }}
-          build-args: |
-            BASE_IMAGE=${{ matrix.base }}
-            BUILD_TYPE=release
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --env BUILD_TYPE=release \
+            --env CEP_OUTPUT_DIR=.dist/${{ matrix.tag }} \
+            --volume "${PWD}:/workspace" \
+            --workdir /workspace \
+            "${{ matrix.base }}" \
+            sh -lc '
+              set -eu
+              workspace_owner="$(stat -c "%u:%g" /workspace)"
+              trap '\''chown -R "${workspace_owner}" /workspace/.dist /workspace/build /workspace/subprojects 2>/dev/null || true'\'' EXIT
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update --fix-missing
+              apt-get install -y --no-install-recommends cmake libdpdk-dev
+              rm -rf /var/lib/apt/lists/*
+              git config --global --add safe.directory /workspace
+              sh tools/ci/package_cep.sh
+            '
 
       - name: Stage artifact
         run: |
