@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=ghcr.io/luigifcruz/cyberether:ubuntu24-x86_64-cuda
+ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
