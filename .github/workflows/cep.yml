@@ -70,11 +70,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/merger.py \
-            --output .dist/artifacts/stelline-ubuntu24-cuda.cep \
+            --output .dist/artifacts/stelline.cep \
             .dist/ceps/stelline-ubuntu24-x86_64-cuda.cep \
             .dist/ceps/stelline-ubuntu24-aarch64-cuda.cep
 
       - uses: actions/upload-artifact@v4.6.2
         with:
           name: stelline-cep-ubuntu24-cuda
-          path: .dist/artifacts/stelline-ubuntu24-cuda.cep
+          path: .dist/artifacts/stelline.cep
