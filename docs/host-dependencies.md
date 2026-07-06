@@ -1,6 +1,12 @@
-# Dependencies
+---
+title: Host Dependencies
+description: Driver, CUDA, and GPUDirect components required on the host.
+order: 22
+category: System Setup
+---
 
-After finishing the machine configuration, some host dependencies need to be installed before running the Docker container. Some of these are not required. Refer to the Stelline module documentation to check whether any of these components are necessary for your specific requirements.
+
+After finishing the machine configuration, some host dependencies need to be installed before running the Docker container. Some of these are not required. Refer to the block pages in the Stelline section to check whether any of these components are necessary for your specific requirements.
 
 ## NVIDIA Driver & CUDA
 

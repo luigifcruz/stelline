@@ -1,10 +1,16 @@
-# Configuration
+---
+title: System Configuration
+description: BIOS, kernel, and NIC settings required for high-throughput ingest.
+order: 21
+category: System Setup
+---
+
 
 It is important to validate that the server is configured correctly before running the Docker image. Below is a list of the configurations to check.
 
 ## BIOS Configuration
 
-// TODO: Write.
+<!-- TODO: Write. -->
 
 ```
 Bios> Advanced> PCIe/PCI/PnP Configuration> ASPM Support> Disabled
@@ -18,11 +24,11 @@ Bios> Advanced> North Bridge(NB) Configuration> IOMMU> Disabled
 
 As previously discussed, this is not a hard requirement for Stelline but it's highly recommended for the best performance.
 
-Most servers come with resizable BAR disabled by default. It's necessary to go to the BIOS to enable this feature. On Supermicro machines, navigate to Advanced > PCIe Configuration > \[Re-Size BAR Support > Enabled\] and \[Above 4G Decoding > Enabled\]. To validate if this worked, follow the "PCIe Resizable BAR" instructions of the Installation section.
+Most servers come with resizable BAR disabled by default. It's necessary to go to the BIOS to enable this feature. On Supermicro machines, navigate to Advanced > PCIe Configuration > \[Re-Size BAR Support > Enabled\] and \[Above 4G Decoding > Enabled\]. To validate if this worked, follow the verification instructions below.
 
-Beware that servers with Broadcom PCIe switches do not support this feature. It's listed as supported, and even available in the server BIOS as an option, but it's actually not and will break the system. Check the "Validated Servers" servers for more information about this issue.
+Beware that servers with Broadcom PCIe switches do not support this feature. It's listed as supported, and even available in the server BIOS as an option, but it's actually not and will break the system. Check the [Validated Hardware](/docs/validated-hardware) page for more information about this issue.
 
-To verify that the system and devices are properly configured, run the following command—replacing `41:00.0` with the correct device slot. Check the output for the "BAR 1" or "Region 1" size. If the reported size is greater than 256 MB, then Resizable BAR is enabled and functioning correctly.
+To verify that the system and devices are properly configured, run the following command, replacing `41:00.0` with the correct device slot. Check the output for the "BAR 1" or "Region 1" size. If the reported size is greater than 256 MB, then Resizable BAR is enabled and functioning correctly.
 
 ```shell
 $ sonata@dev-coyote1:~$ sudo lspci -s 41:00.0 -vvv | grep -E "BAR 1|Region 1"
@@ -94,9 +100,7 @@ ACSCtl: SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- Direc
 
 Now ACS should be disabled by default for every PCIe device on boot.
 
-##### Multithreading
-
-// TODO: Write.
+<!-- TODO: Write Multithreading section. -->
 
 ## Kernel Configuration
 
@@ -137,9 +141,9 @@ CPU NODE SOCKET CORE
   5    0      1    5
 ```
 
-In this example, cores 0–2 belong to socket 0, and cores 3–5 belong to socket 1.
+In this example, cores 0 to 2 belong to socket 0, and cores 3 to 5 belong to socket 1.
 
-To isolate two cores from each socket (e.g., cores 0–1 from socket 0 and cores 3–4 from socket 1), the kernel arguments would be:
+To isolate two cores from each socket (e.g., cores 0 and 1 from socket 0 and cores 3 and 4 from socket 1), the kernel arguments would be:
 
 ```
 isolcpus=0-1,3-4 nohz_full=0-1,3-4 rcu_nocbs=0-1,3-4 irqaffinity=3,5 rcu_nocb_poll
@@ -151,7 +155,7 @@ This configuration ensures the selected cores are shielded from general scheduli
 
 Required for `Transport` and `I/O` modules.
 
-// TODO: Write why this is important.
+<!-- TODO: Write why this is important. -->
 
 For servers with an **AMD CPU**, use the following flags.
 
@@ -176,7 +180,7 @@ $ cat /proc/cmdline
 
 Required for `Transport` and `I/O` modules.
 
-// TODO: Write why this is important.
+<!-- TODO: Write why this is important. -->
 
 ```
 pci=realloc=off
@@ -193,7 +197,7 @@ $ cat /proc/cmdline
 
 Required for `Transport` modules.
 
-// TODO: Write why this is important.
+<!-- TODO: Write why this is important. -->
 
 ```
 $ sudo mkdir /mnt/huge
@@ -231,7 +235,7 @@ tsc=reliable audit=0 nosoftlockup
 
 ## Storage Configuration
 
-// TODO: Write.
+<!-- TODO: Write. -->
 
 ### Software RAID
 
