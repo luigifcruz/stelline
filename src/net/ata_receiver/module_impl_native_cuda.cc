@@ -9,8 +9,9 @@
 
 #include "jetstream/backend/devices/cuda/helpers.hh"
 
-#include <advanced_network/common.h>
+#include <daqiri/daqiri.h>
 
+#include <jetstream/backend/base.hh>
 #include <jetstream/runtime_context_native_cuda.hh>
 #include <jetstream/scheduler_context.hh>
 #include <jetstream/registry.hh>
@@ -25,7 +26,6 @@
 
 namespace Jetstream::Modules {
 
-namespace ano = holoscan::advanced_network;
 using namespace stelline::domains::stelline::utils;
 
 struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
@@ -38,10 +38,13 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
     Result computeSubmit(const cudaStream_t& stream) override;
 
   private:
+    Result buildRawConfig(daqiri::NetworkConfig& cfg,
+                          const std::vector<SubscriptionEndpoint>& parsedSubscriptions);
+
     Result receiveLoop();
     Result burstCollectorLoop();
 
-    Result processBurst(const std::shared_ptr<ano::BurstParams>& burst);
+    Result processBurst(const std::shared_ptr<daqiri::BurstParams>& burst);
 
     Result releaseReceivedBlocks();
     Result releaseComputedBlocks();
@@ -55,6 +58,97 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
 
     MulticastMembership multicastMembership;
 };
+
+Result AtaReceiverImplNativeCuda::buildRawConfig(daqiri::NetworkConfig& cfg,
+                                                 const std::vector<SubscriptionEndpoint>& parsedSubscriptions) {
+    const auto subscriptionCount = parsedSubscriptions.size();
+    const auto totalNumBufs = static_cast<size_t>(packetsPerBurst * maxConcurrentBursts);
+
+    cfg.common_.stream_type = daqiri::StreamType::RAW;
+    cfg.common_.engine = daqiri::EngineType::IBVERBS;
+
+    // Unified memory platforms (integrated GPUs, e.g. DGX Spark) take the
+    // payload regions in pinned host memory instead: same physical DRAM,
+    // without depending on GPUDirect registration of device memory.
+    const bool unifiedMemory = Backend::State<DeviceType::CUDA>()->hasUnifiedMemory();
+    const auto dataMemoryKind = unifiedMemory ? daqiri::MemoryKind::HOST_PINNED
+                                              : daqiri::MemoryKind::DEVICE;
+    if (unifiedMemory) {
+        JST_INFO("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Unified memory platform detected. "
+                 "Using pinned host memory for packet payloads.");
+    }
+
+    daqiri::InterfaceConfig interfaceCfg = {};
+    interfaceCfg.address_ = interfaceAddress;
+    interfaceCfg.rx_.flow_isolation_ = true;
+
+    U16 nextId = 0;
+    for (const auto& subscription : parsedSubscriptions) {
+        const auto queueNumBufs = totalNumBufs / subscriptionCount +
+                                  (static_cast<size_t>(nextId) < (totalNumBufs % subscriptionCount) ? 1 : 0);
+        if (queueNumBufs == 0) {
+            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Total buffer count is too small for the number of subscriptions.");
+            return Result::ERROR;
+        }
+
+        const auto headerMrName = "RX_HEADER_" + std::to_string(nextId);
+        const auto dataMrName = "RX_DATA_" + std::to_string(nextId);
+
+        daqiri::MemoryRegionConfig headerMemoryCfg = {};
+        headerMemoryCfg.name_ = headerMrName;
+        headerMemoryCfg.kind_ = daqiri::MemoryKind::HUGE;
+        headerMemoryCfg.affinity_ = 0;
+        headerMemoryCfg.buf_size_ = kPacketHeaderOffset + kPacketHeaderSize;
+        headerMemoryCfg.num_bufs_ = queueNumBufs;
+        headerMemoryCfg.access_ = daqiri::MEM_ACCESS_LOCAL;
+        headerMemoryCfg.owned_ = true;
+        cfg.mrs_.emplace(headerMemoryCfg.name_, headerMemoryCfg);
+
+        daqiri::MemoryRegionConfig dataMemoryCfg = {};
+        dataMemoryCfg.name_ = dataMrName;
+        dataMemoryCfg.kind_ = dataMemoryKind;
+        dataMemoryCfg.affinity_ = gpuDeviceId;
+        dataMemoryCfg.buf_size_ = kPacketDataSize;
+        dataMemoryCfg.num_bufs_ = queueNumBufs;
+        dataMemoryCfg.access_ = daqiri::MEM_ACCESS_LOCAL;
+        dataMemoryCfg.owned_ = true;
+        cfg.mrs_.emplace(dataMemoryCfg.name_, dataMemoryCfg);
+
+        daqiri::RxQueueConfig queueCfg = {};
+        queueCfg.common_.name_ = "subscription-" + std::to_string(nextId);
+        queueCfg.common_.id_ = nextId;
+        queueCfg.common_.batch_size_ = packetsPerBurst;
+        queueCfg.common_.cpu_core_ = jst::fmt::format("{}", workerCores[nextId % workerCores.size()]);
+        queueCfg.common_.mrs_ = {headerMrName, dataMrName};
+        queueCfg.timeout_us_ = 0;
+        interfaceCfg.rx_.queues_.push_back(queueCfg);
+
+        EndpointMatch source;
+        JST_CHECK(ParseEndpoint(subscription.source, source));
+
+        EndpointMatch destination;
+        JST_CHECK(ParseEndpoint(subscription.destination, destination));
+
+        daqiri::FlowConfig flowCfg = {};
+        flowCfg.name_ = "subscription-" + std::to_string(nextId);
+        flowCfg.id_ = nextId;
+        flowCfg.action_.type_ = daqiri::FlowType::QUEUE;
+        flowCfg.action_.id_ = nextId;
+        flowCfg.match_.type_ = daqiri::FlowMatchType::IPV4_UDP;
+        flowCfg.match_.udp_src_ = source.hasPort ? source.port : 0;
+        flowCfg.match_.udp_dst_ = destination.hasPort ? destination.port : 0;
+        flowCfg.match_.ipv4_len_ = 0;
+        flowCfg.match_.ipv4_src_ = source.hasIp ? source.ip : INADDR_ANY;
+        flowCfg.match_.ipv4_dst_ = destination.hasIp ? destination.ip : INADDR_ANY;
+        interfaceCfg.rx_.flows_.push_back(flowCfg);
+
+        nextId += 1;
+    }
+
+    cfg.ifs_.push_back(interfaceCfg);
+
+    return Result::SUCCESS;
+}
 
 Result AtaReceiverImplNativeCuda::create() {
     JST_CHECK(AtaReceiverImpl::create());
@@ -72,94 +166,23 @@ Result AtaReceiverImplNativeCuda::create() {
         JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to set CUDA device: {}", err);
     });
 
-    // Initialize Advanced Network
+    // Initialize DAQIRI
 
     {
-        const auto subscriptionCount = parsedSubscriptions.size();
-        const auto totalNumBufs = static_cast<size_t>(packetsPerBurst * maxConcurrentBursts);
-
-        ano::NetworkConfig cfg = {};
-        cfg.log_level_ = ano::LogLevel::TRACE;
-        cfg.tx_meta_buffers_ = ano::DEFAULT_TX_META_BUFFERS * 8;
-        cfg.rx_meta_buffers_ = ano::DEFAULT_RX_META_BUFFERS * 8;
+        daqiri::NetworkConfig cfg = {};
+        cfg.log_level_ = daqiri::LogLevel::TRACE;
+        cfg.tx_meta_buffers_ = daqiri::DEFAULT_TX_META_BUFFERS * 8;
+        cfg.rx_meta_buffers_ = daqiri::DEFAULT_RX_META_BUFFERS * 8;
 
         cfg.common_.version = 1;
         cfg.common_.master_core_ = masterCore;
-        cfg.common_.dir = ano::Direction::RX;
-        cfg.common_.manager_type = ano::ManagerType::DPDK;
-        cfg.common_.loopback_ = ano::LoopbackType::DISABLED;
+        cfg.common_.dir = daqiri::Direction::RX;
+        cfg.common_.loopback_ = daqiri::LoopbackType::DISABLED;
 
-        ano::InterfaceConfig interfaceCfg = {};
-        interfaceCfg.address_ = interfaceAddress;
-        interfaceCfg.rx_.flow_isolation_ = true;
+        JST_CHECK(buildRawConfig(cfg, parsedSubscriptions));
 
-        U16 nextId = 0;
-        for (const auto& subscription : parsedSubscriptions) {
-            const auto queueNumBufs = totalNumBufs / subscriptionCount +
-                                      (static_cast<size_t>(nextId) < (totalNumBufs % subscriptionCount) ? 1 : 0);
-            if (queueNumBufs == 0) {
-                JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Total buffer count is too small for the number of subscriptions.");
-                return Result::ERROR;
-            }
-
-            const auto headerMrName = "RX_HEADER_" + std::to_string(nextId);
-            const auto dataMrName = "RX_DATA_" + std::to_string(nextId);
-
-            ano::MemoryRegionConfig headerMemoryCfg = {};
-            headerMemoryCfg.name_ = headerMrName;
-            headerMemoryCfg.kind_ = ano::MemoryKind::HUGE;
-            headerMemoryCfg.affinity_ = 0;
-            headerMemoryCfg.buf_size_ = kPacketHeaderOffset + kPacketHeaderSize;
-            headerMemoryCfg.num_bufs_ = queueNumBufs;
-            headerMemoryCfg.access_ = ano::MEM_ACCESS_LOCAL;
-            headerMemoryCfg.owned_ = true;
-            cfg.mrs_.emplace(headerMemoryCfg.name_, headerMemoryCfg);
-
-            ano::MemoryRegionConfig dataMemoryCfg = {};
-            dataMemoryCfg.name_ = dataMrName;
-            dataMemoryCfg.kind_ = ano::MemoryKind::DEVICE;
-            dataMemoryCfg.affinity_ = gpuDeviceId;
-            dataMemoryCfg.buf_size_ = kPacketDataSize;
-            dataMemoryCfg.num_bufs_ = queueNumBufs;
-            dataMemoryCfg.access_ = ano::MEM_ACCESS_LOCAL;
-            dataMemoryCfg.owned_ = true;
-            cfg.mrs_.emplace(dataMemoryCfg.name_, dataMemoryCfg);
-
-            ano::RxQueueConfig queueCfg = {};
-            queueCfg.common_.name_ = "subscription-" + std::to_string(nextId);
-            queueCfg.common_.id_ = nextId;
-            queueCfg.common_.batch_size_ = packetsPerBurst;
-            queueCfg.common_.cpu_core_ = jst::fmt::format("{}", workerCores[nextId % workerCores.size()]);
-            queueCfg.common_.mrs_ = {headerMrName, dataMrName};
-            queueCfg.timeout_us_ = 0;
-            interfaceCfg.rx_.queues_.push_back(queueCfg);
-
-            EndpointMatch source;
-            JST_CHECK(ParseEndpoint(subscription.source, source));
-
-            EndpointMatch destination;
-            JST_CHECK(ParseEndpoint(subscription.destination, destination));
-
-            ano::FlowConfig flowCfg = {};
-            flowCfg.name_ = "subscription-" + std::to_string(nextId);
-            flowCfg.id_ = nextId;
-            flowCfg.action_.type_ = ano::FlowType::QUEUE;
-            flowCfg.action_.id_ = nextId;
-            flowCfg.match_.type_ = ano::FlowMatchType::NORMAL;
-            flowCfg.match_.udp_src_ = source.hasPort ? source.port : 0;
-            flowCfg.match_.udp_dst_ = destination.hasPort ? destination.port : 0;
-            flowCfg.match_.ipv4_len_ = 0;
-            flowCfg.match_.ipv4_src_ = source.hasIp ? source.ip : INADDR_ANY;
-            flowCfg.match_.ipv4_dst_ = destination.hasIp ? destination.ip : INADDR_ANY;
-            interfaceCfg.rx_.flows_.push_back(flowCfg);
-
-            nextId += 1;
-        }
-
-        cfg.ifs_.push_back(interfaceCfg);
-
-        if (ano::adv_net_init(cfg) != ano::Status::SUCCESS) {
-            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to configure the Advanced Network manager.");
+        if (daqiri::daqiri_init(cfg) != daqiri::Status::SUCCESS) {
+            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to configure the DAQIRI engine.");
             return Result::ERROR;
         }
     }
@@ -186,7 +209,7 @@ Result AtaReceiverImplNativeCuda::create() {
 
     // Flush receiving queues.
 
-    ano::drop_all_traffic(0);
+    daqiri::drop_all_traffic(0);
 
     // Start all threads.
 
@@ -289,7 +312,7 @@ Result AtaReceiverImpl::destroy() {
     // Destroy bursts.
 
     {
-        std::unordered_set<std::shared_ptr<ano::BurstParams>> staleBursts;
+        std::unordered_set<std::shared_ptr<daqiri::BurstParams>> staleBursts;
         {
             std::lock_guard<std::mutex> lock(burstCollectorMutex);
             staleBursts.swap(bursts);
@@ -297,7 +320,7 @@ Result AtaReceiverImpl::destroy() {
         }
 
         for (const auto& burst : staleBursts) {
-            ano::free_all_packets_and_burst_rx(burst.get());
+            daqiri::free_all_packets_and_burst_rx(burst.get());
         }
     }
 
@@ -348,14 +371,13 @@ Result AtaReceiverImplNativeCuda::receiveLoop() {
     U64 lastThroughputPackets = 0;
     auto lastThroughputUpdate = std::chrono::steady_clock::now();
 
-    ano::flush_port_queue(0, 0);
-    ano::allow_all_traffic(0);
+    daqiri::allow_all_traffic(0);
 
     while (packetProcessingThreadRunning.load()) {
-        ano::BurstParams* burstPointer = nullptr;
+        daqiri::BurstParams* burstPointer = nullptr;
 
-        if (ano::get_rx_burst(&burstPointer) == ano::Status::SUCCESS) {
-            auto burst = std::shared_ptr<ano::BurstParams>(burstPointer, [](ano::BurstParams*) {});
+        if (daqiri::get_rx_burst(&burstPointer) == daqiri::Status::SUCCESS) {
+            auto burst = std::shared_ptr<daqiri::BurstParams>(burstPointer, [](daqiri::BurstParams*) {});
             {
                 std::lock_guard<std::mutex> lock(burstCollectorMutex);
                 bursts.insert(burst);
@@ -402,7 +424,7 @@ Result AtaReceiverImplNativeCuda::burstCollectorLoop() {
 
     while (burstCollectorThreadRunning.load()) {
         const auto startTime = std::chrono::steady_clock::now();
-        std::unordered_set<std::shared_ptr<ano::BurstParams>> staleBursts;
+        std::unordered_set<std::shared_ptr<daqiri::BurstParams>> staleBursts;
 
         {
             std::lock_guard<std::mutex> lock(burstCollectorMutex);
@@ -420,7 +442,7 @@ Result AtaReceiverImplNativeCuda::burstCollectorLoop() {
         }
 
         for (const auto& burst : staleBursts) {
-            ano::free_all_packets_and_burst_rx(burst.get());
+            daqiri::free_all_packets_and_burst_rx(burst.get());
         }
 
         const auto elapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -438,7 +460,7 @@ Result AtaReceiverImplNativeCuda::burstCollectorLoop() {
     return Result::SUCCESS;
 }
 
-Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<ano::BurstParams>& burst) {
+Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<daqiri::BurstParams>& burst) {
     const AtaReceiverBlockGeometry totalGeometry{
         totalBlock[kAntennaAxis],
         totalBlock[kChannelAxis],
@@ -457,9 +479,9 @@ Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<ano::BurstP
     auto filteredChannelsValue = filteredChannels.get();
     auto payloadSizesValue = payloadSizes.get();
 
-    for (int64_t burstPacketIndex = 0; burstPacketIndex < ano::get_num_packets(burst.get()); burstPacketIndex++) {
+    for (int64_t burstPacketIndex = 0; burstPacketIndex < daqiri::get_num_packets(burst.get()); burstPacketIndex++) {
         const auto* packetHeader = reinterpret_cast<const U8*>(
-            ano::get_segment_packet_ptr(burst.get(), kRxHeaderSegment, burstPacketIndex));
+            daqiri::get_segment_packet_ptr(burst.get(), kRxHeaderSegment, burstPacketIndex));
         const VoltagePacket packet(packetHeader + kPacketHeaderOffset);
 
         U64 antennaIndex = packet.antennaId;
@@ -467,7 +489,7 @@ Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<ano::BurstP
 
         allAntennasValue.insert(antennaIndex);
         allChannelsValue.insert(channelIndex);
-        payloadSizesValue.insert(get_segment_packet_length(burst.get(), kRxDataSegment, burstPacketIndex));
+        payloadSizesValue.insert(daqiri::get_segment_packet_length(burst.get(), kRxDataSegment, burstPacketIndex));
 
         antennaIndex -= offsetBlock[kAntennaAxis];
         channelIndex -= offsetBlock[kChannelAxis];
@@ -530,7 +552,10 @@ Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<ano::BurstP
         blockPacketIndex += channelIndex * slotShape[kSampleAxis];
         blockPacketIndex += blockPacketTimeIndex;
 
-        blockMap.at(blockTimeIndex)->addPacket(blockPacketIndex, burstPacketIndex, burst);
+        blockMap.at(blockTimeIndex)->addPacket(
+            blockPacketIndex,
+            daqiri::get_segment_packet_ptr(burst.get(), kRxDataSegment, burstPacketIndex),
+            burst);
         receivedPackets.publish(receivedPackets.get() + 1);
     }
 

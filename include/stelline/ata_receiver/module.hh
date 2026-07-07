@@ -9,6 +9,7 @@
 namespace Jetstream::Modules {
 
 struct AtaReceiver : public Module::Config {
+    std::string engine = "ibverbs";
     std::string interfaceAddress;
     U64 gpuDeviceId = 0;
     U64 masterCore = 0;
@@ -24,7 +25,7 @@ struct AtaReceiver : public Module::Config {
     U64 outputPoolSize = 2;
 
     JST_MODULE_TYPE(ata_receiver);
-    JST_MODULE_PARAMS(interfaceAddress, gpuDeviceId, masterCore, workerCores,
+    JST_MODULE_PARAMS(engine, interfaceAddress, gpuDeviceId, masterCore, workerCores,
                       subscriptions, totalBlock, partialBlock, offsetBlock, dataType,
                       packetsPerBurst, maxConcurrentBursts, maxConcurrentBlocks,
                       outputPoolSize);

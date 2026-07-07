@@ -9,6 +9,7 @@
 namespace Jetstream::Blocks {
 
 struct AtaReceiver : public Block::Config {
+    std::string engine = "ibverbs";
     std::string interfaceAddress;
     U64 gpuDeviceId = 0;
     U64 masterCore = 0;
@@ -25,7 +26,7 @@ struct AtaReceiver : public Block::Config {
 
     JST_BLOCK_TYPE(ata_receiver);
     JST_BLOCK_DOMAIN("Stelline");
-    JST_BLOCK_PARAMS(interfaceAddress, gpuDeviceId, masterCore, workerCores,
+    JST_BLOCK_PARAMS(engine, interfaceAddress, gpuDeviceId, masterCore, workerCores,
                      subscriptions, totalBlock, partialBlock, offsetBlock, dataType,
                      packetsPerBurst, maxConcurrentBursts, maxConcurrentBlocks,
                      outputPoolSize);
@@ -39,6 +40,7 @@ struct AtaReceiver : public Block::Config {
         "kernel gathers them into blocks shaped as [antennas, channels, samples, polarizations].\n\n"
 
         "## Arguments\n"
+        "- **Engine**: Network backend used to receive packets (currently ibverbs).\n"
         "- **Interface Address**: Network interface address used to receive packets.\n"
         "- **GPU Device ID**: CUDA device used by the receiver backend.\n"
         "- **Master Core**: CPU core assigned to the receiver control thread.\n"

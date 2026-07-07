@@ -31,6 +31,11 @@ bool ValidateBlockShape(const std::vector<U64>& shape,
 Result AtaReceiverImpl::validate() {
     const auto& config = *candidate();
 
+    if (config.engine != "ibverbs") {
+        JST_ERROR("[MODULE_ATA_RECEIVER] Unsupported engine '{}'. Valid values: ibverbs.", config.engine);
+        return Result::ERROR;
+    }
+
     if (!ValidateBlockShape(config.totalBlock, "totalBlock", false)) {
         return Result::ERROR;
     }

@@ -16,9 +16,7 @@
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/memory/tensor.hh>
 #include <jetstream/tools/snapshot.hh>
-#include <advanced_network/common.h>
-
-namespace ano = holoscan::advanced_network;
+#include <daqiri/daqiri.h>
 
 namespace Jetstream::Modules {
 
@@ -105,7 +103,7 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
      std::queue<AtaReceiverReadyTensor> readyOutputTensors;
 
      std::mutex burstCollectorMutex;
-     std::unordered_set<std::shared_ptr<ano::BurstParams>> bursts;
+     std::unordered_set<std::shared_ptr<daqiri::BurstParams>> bursts;
 
      Tools::Snapshot<U64> latestBlockTimeIndex{0};
      Tools::Snapshot<U64> latestTimestamp{0};

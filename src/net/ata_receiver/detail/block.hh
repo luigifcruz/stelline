@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_set>
 
-#include <advanced_network/common.h>
+#include <daqiri/daqiri.h>
 
 #include <jetstream/memory/tensor.hh>
 #include <jetstream/logger.hh>
@@ -63,9 +63,9 @@ struct AtaReceiverBlock {
     }
 
     void addPacket(const U64 blockPacketIndex,
-                   const U64 burstPacketIndex,
-                   const std::shared_ptr<holoscan::advanced_network::BurstParams>& burst) {
-        gpuData[blockPacketIndex] = holoscan::advanced_network::get_segment_packet_ptr(burst.get(), 1, burstPacketIndex);
+                   void* payloadPointer,
+                   const std::shared_ptr<daqiri::BurstParams>& burst) {
+        gpuData[blockPacketIndex] = payloadPointer;
         bursts.insert(burst);
         packetCount++;
     }
@@ -105,7 +105,7 @@ struct AtaReceiverBlock {
     U64 packetCount = 0;
     void** gpuData = nullptr;
     cudaStream_t stream = nullptr;
-    std::unordered_set<std::shared_ptr<holoscan::advanced_network::BurstParams>> bursts;
+    std::unordered_set<std::shared_ptr<daqiri::BurstParams>> bursts;
     std::shared_ptr<Tensor> outputTensor;
 };
 

@@ -1,11 +1,11 @@
 deps = [
     subproject(
-        'holoscan-networking',
+        'daqiri',
         default_options: [
             'default_library=static',
             'b_staticpic=true',
         ],
-    ).get_variable('holoscan_networking_dep'),
+    ).get_variable('daqiri_dep'),
 ]
 
 all_deps_found = true
@@ -14,8 +14,8 @@ foreach x_dep : deps
 endforeach
 
 if all_deps_found
-    cfg_lst.set('STELLINE_LOADER_HOLOSCAN_ANO_AVAILABLE', true)
+    cfg_lst.set('STELLINE_LOADER_DAQIRI_AVAILABLE', true)
     dep_lst += deps
 endif
 
-ldr_lst += {'Holoscan Networking': all_deps_found}
+ldr_lst += {'DAQIRI': all_deps_found}

@@ -17,6 +17,7 @@ protected:
 };
 
 Result AtaReceiverImpl::configure() {
+    moduleConfig->engine = engine;
     moduleConfig->gpuDeviceId = gpuDeviceId;
     moduleConfig->interfaceAddress = interfaceAddress;
     moduleConfig->masterCore = masterCore;
@@ -35,6 +36,11 @@ Result AtaReceiverImpl::configure() {
 }
 
 Result AtaReceiverImpl::define() {
+    JST_CHECK(defineInterfaceConfig("engine",
+                                    "Engine",
+                                    "Network backend used to receive packets.",
+                                    "dropdown:InfiniBandVerbs(ibverbs)"));
+
     JST_CHECK(defineInterfaceConfig("interfaceAddress",
                                     "Interface Address",
                                     "Network interface address used by the ATA receiver.",
