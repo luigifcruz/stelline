@@ -1,7 +1,7 @@
 project(
     'stelline',
     ['cpp', 'cuda'],
-    version: '0.4.1',
+    version: '0.4.2',
     default_options: [
         'cpp_std=c++20',
         'buildtype=release',
