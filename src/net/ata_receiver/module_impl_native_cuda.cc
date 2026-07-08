@@ -56,6 +56,8 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
 
     std::shared_ptr<Tensor> acquireOutputTensor();
 
+    bool daqiriActive = false;
+
     MulticastMembership multicastMembership;
 };
 
@@ -181,10 +183,15 @@ Result AtaReceiverImplNativeCuda::create() {
 
         JST_CHECK(buildRawConfig(cfg, parsedSubscriptions));
 
-        if (daqiri::daqiri_init(cfg) != daqiri::Status::SUCCESS) {
+        const auto initStatus = daqiri::daqiri_init(cfg);
+        if (initStatus != daqiri::Status::SUCCESS) {
             JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to configure the DAQIRI engine.");
+            if (initStatus == daqiri::Status::INTERNAL_ERROR) {
+                daqiri::shutdown();
+            }
             return Result::ERROR;
         }
+        daqiriActive = true;
     }
 
     // Allocate reception blocks.
@@ -250,6 +257,12 @@ Result AtaReceiverImplNativeCuda::create() {
 
 Result AtaReceiverImplNativeCuda::destroy() {
     const auto result = AtaReceiverImpl::destroy();
+
+    if (daqiriActive) {
+        daqiri::shutdown();
+        daqiriActive = false;
+    }
+
     multicastMembership.destroy();
     return result;
 }
