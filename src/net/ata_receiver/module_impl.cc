@@ -2,6 +2,8 @@
 
 #include "../endpoint.hh"
 
+#include "detail/block.hh"
+
 namespace Jetstream::Modules {
 
 using namespace stelline::domains::stelline::utils;
@@ -185,8 +187,122 @@ Result AtaReceiverImpl::create() {
     return Result::SUCCESS;
 }
 
+Result AtaReceiverImpl::destroy() {
+    stopThreads();
+
+    // Destroy reception blocks.
+
+    while (!idleQueue.empty()) {
+        idleQueue.front()->destroy();
+        idleQueue.pop();
+    }
+
+    while (!receiveQueue.empty()) {
+        receiveQueue.front()->destroy();
+        receiveQueue.pop();
+    }
+
+    while (!computeQueue.empty()) {
+        computeQueue.front()->destroy();
+        computeQueue.pop();
+    }
+
+    while (!swapQueue.empty()) {
+        swapQueue.front()->destroy();
+        swapQueue.pop();
+    }
+
+    // Destroy output tensors.
+
+    for (auto& [_, block] : blockMap) {
+        block->destroy();
+    }
+    blockMap.clear();
+    blockMapDepth.publish(0);
+
+    while (!readyOutputTensors.empty()) {
+        readyOutputTensors.pop();
+    }
+
+    while (!availableOutputTensors.empty()) {
+        availableOutputTensors.pop();
+    }
+    outputPoolDepth.publish(0);
+
+    // Destroy bursts.
+
+    {
+        std::unordered_set<std::shared_ptr<daqiri::BurstParams>> staleBursts;
+        {
+            std::lock_guard<std::mutex> lock(burstCollectorMutex);
+            staleBursts.swap(bursts);
+            burstsInFlight.publish(0);
+        }
+
+        for (const auto& burst : staleBursts) {
+            daqiri::free_all_packets_and_burst_rx(burst.get());
+        }
+    }
+
+    return Result::SUCCESS;
+}
+
 Result AtaReceiverImpl::reconfigure() {
     return Result::RECREATE;
+}
+
+void AtaReceiverImpl::stopThreads() {
+    packetProcessingThreadRunning.store(false);
+    burstCollectorThreadRunning.store(false);
+
+    if (packetProcessingThread.joinable()) {
+        packetProcessingThread.join();
+    }
+
+    if (burstCollectorThread.joinable()) {
+        burstCollectorThread.join();
+    }
+}
+
+Result AtaReceiverImpl::pushReadyTensor(const std::shared_ptr<Tensor>& tensor, const U64 timestamp) {
+    std::lock_guard<std::mutex> lock(readyMutex);
+    readyOutputTensors.push({tensor, timestamp});
+    readyQueueDepth.publish(readyOutputTensors.size());
+
+    return Result::SUCCESS;
+}
+
+Result AtaReceiverImpl::popReadyTensor(AtaReceiverReadyTensor& ready) {
+    std::lock_guard<std::mutex> lock(readyMutex);
+    if (readyOutputTensors.empty()) {
+        readyQueueDepth.publish(0);
+        return Result::YIELD;
+    }
+
+    ready = readyOutputTensors.front();
+    readyOutputTensors.pop();
+    readyQueueDepth.publish(readyOutputTensors.size());
+    return Result::SUCCESS;
+}
+
+std::shared_ptr<Tensor> AtaReceiverImpl::tryAcquireOutputTensor() {
+    std::lock_guard<std::mutex> lock(poolMutex);
+    if (availableOutputTensors.empty()) {
+        return nullptr;
+    }
+
+    auto tensor = availableOutputTensors.front();
+    availableOutputTensors.pop();
+    outputPoolDepth.publish(availableOutputTensors.size());
+    return tensor;
+}
+
+Result AtaReceiverImpl::recycleOutputTensor(const std::shared_ptr<Tensor>& tensor) {
+    std::lock_guard<std::mutex> lock(poolMutex);
+    availableOutputTensors.push(tensor);
+    outputPoolDepth.publish(availableOutputTensors.size());
+
+    return Result::SUCCESS;
 }
 
 U64 AtaReceiverImpl::getReceivedBlocks() const {
@@ -268,6 +384,10 @@ U64 AtaReceiverImpl::getReceiveQueue() const {
 
 U64 AtaReceiverImpl::getComputeQueue() const {
     return computeQueueDepth.get();
+}
+
+U64 AtaReceiverImpl::getReadyQueue() const {
+    return readyQueueDepth.get();
 }
 
 std::string AtaReceiverImpl::getPayloadSizes() const {

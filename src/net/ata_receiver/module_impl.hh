@@ -2,12 +2,12 @@
 #define STELLINE_ATA_RECEIVER_MODULE_IMPL_HH
 
 #include <atomic>
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -32,13 +32,6 @@ constexpr U64 kAntennaAxis = 0;
 constexpr U64 kChannelAxis = 1;
 constexpr U64 kSampleAxis = 2;
 constexpr U64 kPolarizationAxis = 3;
-
-constexpr U64 kPacketDataSize = 6144;
-constexpr U64 kPacketHeaderSize = 16;
-constexpr U64 kPacketHeaderOffset = 42;
-
-constexpr int kRxHeaderSegment = 0;
-constexpr int kRxDataSegment = 1;
 
 struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> {
  public:
@@ -65,6 +58,7 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
     U64 getIdleQueue() const;
     U64 getReceiveQueue() const;
     U64 getComputeQueue() const;
+    U64 getReadyQueue() const;
     U64 getAverageBurstReleaseTimeUs() const;
     U64 getEmittedBlocks() const;
     U64 getMaxConcurrentBursts() const;
@@ -75,6 +69,13 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
     std::string getFilteredChannels() const;
 
  protected:
+     void stopThreads();
+
+     Result pushReadyTensor(const std::shared_ptr<Tensor>& tensor, const U64 timestamp);
+     Result popReadyTensor(AtaReceiverReadyTensor& ready);
+     Result recycleOutputTensor(const std::shared_ptr<Tensor>& tensor);
+     std::shared_ptr<Tensor> tryAcquireOutputTensor();
+
      Tensor outputTensor;
 
      std::vector<U64> slotShape;
@@ -96,7 +97,6 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
      std::unordered_map<U64, std::shared_ptr<AtaReceiverBlock>> blockMap;
 
      std::mutex poolMutex;
-     std::condition_variable outputPoolCv;
      std::queue<std::shared_ptr<Tensor>> availableOutputTensors;
 
      std::mutex readyMutex;

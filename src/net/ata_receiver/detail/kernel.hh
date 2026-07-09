@@ -15,14 +15,13 @@ struct AtaReceiverBlockGeometry {
     std::uint64_t numberOfPolarizations = 0;
 };
 
-cudaError_t LaunchAtaGatherKernel(void* output,
-                                  void** input,
-                                  std::uint64_t numberOfPackets,
-                                  const AtaReceiverBlockGeometry& totalShape,
-                                  const AtaReceiverBlockGeometry& partialShape,
-                                  const AtaReceiverBlockGeometry& slotShape,
-                                  const std::string& outputType,
-                                  cudaStream_t stream);
+cudaError_t LaunchAtaScatterKernel(const void* const* inputs,
+                                   void* const* outputs,
+                                   std::uint64_t numberOfPackets,
+                                   const AtaReceiverBlockGeometry& totalShape,
+                                   const AtaReceiverBlockGeometry& partialShape,
+                                   const std::string& outputType,
+                                   cudaStream_t stream);
 
 }  // namespace Jetstream::Modules
 

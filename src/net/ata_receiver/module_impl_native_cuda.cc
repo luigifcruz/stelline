@@ -1,11 +1,11 @@
-#include <arpa/inet.h>
-
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 #include <unordered_set>
+#include <vector>
 
 #include "jetstream/backend/devices/cuda/helpers.hh"
 
@@ -19,14 +19,50 @@
 #include "../endpoint.hh"
 #include "../multicast.hh"
 
-#include "detail/kernel.hh"
 #include "module_impl.hh"
-#include "detail/packet.hh"
 #include "detail/block.hh"
+#include "detail/daqiri_config.hh"
+#include "detail/geometry.hh"
+#include "detail/kernel.hh"
+#include "detail/packet.hh"
+#include "detail/scatter_pool.hh"
 
 namespace Jetstream::Modules {
 
 using namespace stelline::domains::stelline::utils;
+
+namespace {
+
+class ThroughputMeter {
+ public:
+    bool sample(const U64 totalPackets, const F64 previousGbps, F64& gbps) {
+        const auto now = std::chrono::steady_clock::now();
+        const F64 elapsedSeconds = std::chrono::duration<F64>(now - lastUpdate).count();
+        if (elapsedSeconds < 0.10) {
+            return false;
+        }
+
+        const U64 deltaPackets = totalPackets >= lastPackets
+                                     ? totalPackets - lastPackets
+                                     : 0;
+        const F64 instantGbps = static_cast<F64>(deltaPackets) *
+                                static_cast<F64>(kPacketDataSize) *
+                                8.0 / elapsedSeconds / 1.0e9;
+
+        constexpr F64 kEmaAlpha = 0.3;
+        gbps = kEmaAlpha * instantGbps + (1.0 - kEmaAlpha) * previousGbps;
+
+        lastPackets = totalPackets;
+        lastUpdate = now;
+        return true;
+    }
+
+ private:
+    U64 lastPackets = 0;
+    std::chrono::steady_clock::time_point lastUpdate = std::chrono::steady_clock::now();
+};
+
+}  // namespace
 
 struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
                                    public NativeCudaRuntimeContext,
@@ -37,120 +73,47 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
     Result hasPendingCompute() override;
     Result computeSubmit(const cudaStream_t& stream) override;
 
-  private:
-    Result buildRawConfig(daqiri::NetworkConfig& cfg,
-                          const std::vector<SubscriptionEndpoint>& parsedSubscriptions);
+ private:
+    struct StreamStatsBatch {
+        std::set<U64> allAntennas;
+        std::set<U64> filteredAntennas;
+        std::set<U64> allChannels;
+        std::set<U64> filteredChannels;
+        std::set<U64> payloadSizes;
+    };
 
     Result receiveLoop();
     Result burstCollectorLoop();
 
     Result processBurst(const std::shared_ptr<daqiri::BurstParams>& burst);
 
+    bool acceptPacket(const VoltagePacket& packet,
+                      const AtaReceiverBlockGeometry& totalGeometry,
+                      U64& antennaIndex,
+                      U64& channelIndex);
+
+    // Leaves `block` null when out of capacity so the caller drops the packet.
+    Result ensureBlock(const U64 blockTimeIndex,
+                       const U64 timestamp,
+                       std::shared_ptr<AtaReceiverBlock>& block,
+                       std::vector<std::shared_ptr<AtaReceiverBlock>>& deferredDrops);
+
+    Result sealBlock(const std::shared_ptr<AtaReceiverBlock>& block, const bool emit);
+
     Result releaseReceivedBlocks();
     Result releaseComputedBlocks();
     Result updateBlockQueueDepths();
 
-    Result pushReadyTensor(const std::shared_ptr<Tensor>& tensor, const U64 timestamp);
-    Result popReadyTensor(AtaReceiverReadyTensor& ready);
-    Result recycleOutputTensor(const std::shared_ptr<Tensor>& tensor);
+    void publishStreamStats();
 
-    std::shared_ptr<Tensor> acquireOutputTensor();
+    ScatterStagingPool scatterPool;
+    StreamStatsBatch streamStats;
+    U64 outputElementSize = 0;
 
     bool daqiriActive = false;
 
     MulticastMembership multicastMembership;
 };
-
-Result AtaReceiverImplNativeCuda::buildRawConfig(daqiri::NetworkConfig& cfg,
-                                                 const std::vector<SubscriptionEndpoint>& parsedSubscriptions) {
-    const auto subscriptionCount = parsedSubscriptions.size();
-    const auto totalNumBufs = static_cast<size_t>(packetsPerBurst * maxConcurrentBursts);
-
-    cfg.common_.stream_type = daqiri::StreamType::RAW;
-    cfg.common_.engine = daqiri::EngineType::IBVERBS;
-
-    // Unified memory platforms (integrated GPUs, e.g. DGX Spark) take the
-    // payload regions in pinned host memory instead: same physical DRAM,
-    // without depending on GPUDirect registration of device memory.
-    const bool unifiedMemory = Backend::State<DeviceType::CUDA>()->hasUnifiedMemory();
-    const auto dataMemoryKind = unifiedMemory ? daqiri::MemoryKind::HOST_PINNED
-                                              : daqiri::MemoryKind::DEVICE;
-    if (unifiedMemory) {
-        JST_INFO("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Unified memory platform detected. "
-                 "Using pinned host memory for packet payloads.");
-    }
-
-    daqiri::InterfaceConfig interfaceCfg = {};
-    interfaceCfg.address_ = interfaceAddress;
-    interfaceCfg.rx_.flow_isolation_ = true;
-
-    U16 nextId = 0;
-    for (const auto& subscription : parsedSubscriptions) {
-        const auto queueNumBufs = totalNumBufs / subscriptionCount +
-                                  (static_cast<size_t>(nextId) < (totalNumBufs % subscriptionCount) ? 1 : 0);
-        if (queueNumBufs == 0) {
-            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Total buffer count is too small for the number of subscriptions.");
-            return Result::ERROR;
-        }
-
-        const auto headerMrName = "RX_HEADER_" + std::to_string(nextId);
-        const auto dataMrName = "RX_DATA_" + std::to_string(nextId);
-
-        daqiri::MemoryRegionConfig headerMemoryCfg = {};
-        headerMemoryCfg.name_ = headerMrName;
-        headerMemoryCfg.kind_ = daqiri::MemoryKind::HUGE;
-        headerMemoryCfg.affinity_ = 0;
-        headerMemoryCfg.buf_size_ = kPacketHeaderOffset + kPacketHeaderSize;
-        headerMemoryCfg.num_bufs_ = queueNumBufs;
-        headerMemoryCfg.access_ = daqiri::MEM_ACCESS_LOCAL;
-        headerMemoryCfg.owned_ = true;
-        cfg.mrs_.emplace(headerMemoryCfg.name_, headerMemoryCfg);
-
-        daqiri::MemoryRegionConfig dataMemoryCfg = {};
-        dataMemoryCfg.name_ = dataMrName;
-        dataMemoryCfg.kind_ = dataMemoryKind;
-        dataMemoryCfg.affinity_ = gpuDeviceId;
-        dataMemoryCfg.buf_size_ = kPacketDataSize;
-        dataMemoryCfg.num_bufs_ = queueNumBufs;
-        dataMemoryCfg.access_ = daqiri::MEM_ACCESS_LOCAL;
-        dataMemoryCfg.owned_ = true;
-        cfg.mrs_.emplace(dataMemoryCfg.name_, dataMemoryCfg);
-
-        daqiri::RxQueueConfig queueCfg = {};
-        queueCfg.common_.name_ = "subscription-" + std::to_string(nextId);
-        queueCfg.common_.id_ = nextId;
-        queueCfg.common_.batch_size_ = packetsPerBurst;
-        queueCfg.common_.cpu_core_ = jst::fmt::format("{}", workerCores[nextId % workerCores.size()]);
-        queueCfg.common_.mrs_ = {headerMrName, dataMrName};
-        queueCfg.timeout_us_ = 0;
-        interfaceCfg.rx_.queues_.push_back(queueCfg);
-
-        EndpointMatch source;
-        JST_CHECK(ParseEndpoint(subscription.source, source));
-
-        EndpointMatch destination;
-        JST_CHECK(ParseEndpoint(subscription.destination, destination));
-
-        daqiri::FlowConfig flowCfg = {};
-        flowCfg.name_ = "subscription-" + std::to_string(nextId);
-        flowCfg.id_ = nextId;
-        flowCfg.action_.type_ = daqiri::FlowType::QUEUE;
-        flowCfg.action_.id_ = nextId;
-        flowCfg.match_.type_ = daqiri::FlowMatchType::IPV4_UDP;
-        flowCfg.match_.udp_src_ = source.hasPort ? source.port : 0;
-        flowCfg.match_.udp_dst_ = destination.hasPort ? destination.port : 0;
-        flowCfg.match_.ipv4_len_ = 0;
-        flowCfg.match_.ipv4_src_ = source.hasIp ? source.ip : INADDR_ANY;
-        flowCfg.match_.ipv4_dst_ = destination.hasIp ? destination.ip : INADDR_ANY;
-        interfaceCfg.rx_.flows_.push_back(flowCfg);
-
-        nextId += 1;
-    }
-
-    cfg.ifs_.push_back(interfaceCfg);
-
-    return Result::SUCCESS;
-}
 
 Result AtaReceiverImplNativeCuda::create() {
     JST_CHECK(AtaReceiverImpl::create());
@@ -168,20 +131,30 @@ Result AtaReceiverImplNativeCuda::create() {
         JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to set CUDA device: {}", err);
     });
 
-    // Initialize DAQIRI
+    // Initialize DAQIRI.
 
     {
+        // Unified memory platforms (integrated GPUs, e.g. DGX Spark) take the
+        // payload regions in pinned host memory instead: same physical DRAM,
+        // without depending on GPUDirect registration of device memory.
+        const bool unifiedMemory = Backend::State<DeviceType::CUDA>()->hasUnifiedMemory();
+        if (unifiedMemory) {
+            JST_INFO("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Unified memory platform detected. "
+                     "Using pinned host memory for packet payloads.");
+        }
+
+        DaqiriRxConfigParams params = {};
+        params.interfaceAddress = interfaceAddress;
+        params.gpuDeviceId = gpuDeviceId;
+        params.masterCore = masterCore;
+        params.workerCores = workerCores;
+        params.packetsPerBurst = packetsPerBurst;
+        params.maxConcurrentBursts = maxConcurrentBursts;
+        params.dataMemoryKind = unifiedMemory ? daqiri::MemoryKind::HOST_PINNED
+                                              : daqiri::MemoryKind::DEVICE;
+
         daqiri::NetworkConfig cfg = {};
-        cfg.log_level_ = daqiri::LogLevel::TRACE;
-        cfg.tx_meta_buffers_ = daqiri::DEFAULT_TX_META_BUFFERS * 8;
-        cfg.rx_meta_buffers_ = daqiri::DEFAULT_RX_META_BUFFERS * 8;
-
-        cfg.common_.version = 1;
-        cfg.common_.master_core_ = masterCore;
-        cfg.common_.dir = daqiri::Direction::RX;
-        cfg.common_.loopback_ = daqiri::LoopbackType::DISABLED;
-
-        JST_CHECK(buildRawConfig(cfg, parsedSubscriptions));
+        JST_CHECK(BuildDaqiriRxConfig(params, parsedSubscriptions, cfg));
 
         const auto initStatus = daqiri::daqiri_init(cfg);
         if (initStatus != daqiri::Status::SUCCESS) {
@@ -212,6 +185,10 @@ Result AtaReceiverImplNativeCuda::create() {
     }
     outputPoolDepth.publish(availableOutputTensors.size());
 
+    outputElementSize = (NameToDataType(dataType) == DataType::CI8) ? 2 : 8;
+
+    JST_CHECK(scatterPool.create(maxConcurrentBursts, packetsPerBurst));
+
     JST_CHECK(multicastMembership.create(interfaceAddress, parsedSubscriptions));
 
     // Flush receiving queues.
@@ -227,7 +204,6 @@ Result AtaReceiverImplNativeCuda::create() {
         errored.store(true);
         packetProcessingThreadRunning.store(false);
         burstCollectorThreadRunning.store(false);
-        outputPoolCv.notify_all();
     };
 
     packetProcessingThread = std::thread([this, handleThreadFailure]() {
@@ -256,7 +232,13 @@ Result AtaReceiverImplNativeCuda::create() {
 }
 
 Result AtaReceiverImplNativeCuda::destroy() {
+    stopThreads();
+
+    scatterPool.drain();
+
     const auto result = AtaReceiverImpl::destroy();
+
+    scatterPool.destroy();
 
     if (daqiriActive) {
         daqiri::shutdown();
@@ -265,79 +247,6 @@ Result AtaReceiverImplNativeCuda::destroy() {
 
     multicastMembership.destroy();
     return result;
-}
-
-Result AtaReceiverImpl::destroy() {
-    // Stop all threads.
-
-    packetProcessingThreadRunning.store(false);
-    burstCollectorThreadRunning.store(false);
-
-    outputPoolCv.notify_all();
-
-    if (packetProcessingThread.joinable()) {
-        packetProcessingThread.join();
-    }
-
-    if (burstCollectorThread.joinable()) {
-        burstCollectorThread.join();
-    }
-
-    // Destroy reception blocks.
-
-    while (!idleQueue.empty()) {
-        idleQueue.front()->destroy();
-        idleQueue.pop();
-    }
-
-    while (!receiveQueue.empty()) {
-        receiveQueue.front()->destroy();
-        receiveQueue.pop();
-    }
-
-    while (!computeQueue.empty()) {
-        computeQueue.front()->destroy();
-        computeQueue.pop();
-    }
-
-    while (!swapQueue.empty()) {
-        swapQueue.front()->destroy();
-        swapQueue.pop();
-    }
-
-    // Destroy output tensors.
-
-    for (auto& [_, block] : blockMap) {
-        block->destroy();
-    }
-    blockMap.clear();
-    blockMapDepth.publish(0);
-
-    while (!readyOutputTensors.empty()) {
-        readyOutputTensors.pop();
-    }
-
-    while (!availableOutputTensors.empty()) {
-        availableOutputTensors.pop();
-    }
-    outputPoolDepth.publish(0);
-
-    // Destroy bursts.
-
-    {
-        std::unordered_set<std::shared_ptr<daqiri::BurstParams>> staleBursts;
-        {
-            std::lock_guard<std::mutex> lock(burstCollectorMutex);
-            staleBursts.swap(bursts);
-            burstsInFlight.publish(0);
-        }
-
-        for (const auto& burst : staleBursts) {
-            daqiri::free_all_packets_and_burst_rx(burst.get());
-        }
-    }
-
-    return Result::SUCCESS;
 }
 
 Result AtaReceiverImplNativeCuda::hasPendingCompute() {
@@ -381,8 +290,7 @@ Result AtaReceiverImplNativeCuda::receiveLoop() {
         JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to set CUDA device for ATA receive thread: {}", err);
     });
 
-    U64 lastThroughputPackets = 0;
-    auto lastThroughputUpdate = std::chrono::steady_clock::now();
+    ThroughputMeter throughputMeter;
 
     daqiri::allow_all_traffic(0);
 
@@ -402,29 +310,17 @@ Result AtaReceiverImplNativeCuda::receiveLoop() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
+        JST_CHECK(scatterPool.reap(false));
         JST_CHECK(releaseReceivedBlocks());
         JST_CHECK(releaseComputedBlocks());
 
-        const auto now = std::chrono::steady_clock::now();
-        const F64 elapsedSeconds = std::chrono::duration<F64>(now - lastThroughputUpdate).count();
-
-        if (elapsedSeconds >= 0.10) {
-            const U64 totalPackets = receivedPackets.get() +
-                                     evictedPackets.get() +
-                                     lostPackets.get();
-            const U64 deltaPackets = totalPackets >= lastThroughputPackets
-                                         ? totalPackets - lastThroughputPackets
-                                         : 0;
-
-            const F64 instantGbps = elapsedSeconds > 0 ? static_cast<F64>(deltaPackets) *
-                                                         static_cast<F64>(kPacketDataSize) *
-                                                         8.0 / elapsedSeconds / 1.0e9 : 0.0;
-
-            constexpr F64 kEmaAlpha = 0.3;
-            throughputGbps.publish(kEmaAlpha * instantGbps + (1.0 - kEmaAlpha) * throughputGbps.get());
-
-            lastThroughputPackets = totalPackets;
-            lastThroughputUpdate = now;
+        const U64 totalPackets = receivedPackets.get() +
+                                 evictedPackets.get() +
+                                 lostPackets.get();
+        F64 gbps = 0.0;
+        if (throughputMeter.sample(totalPackets, throughputGbps.get(), gbps)) {
+            throughputGbps.publish(gbps);
+            publishStreamStats();
         }
     }
 
@@ -486,11 +382,10 @@ Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<daqiri::Bur
         partialBlock[kSampleAxis],
         partialBlock[kPolarizationAxis],
     };
-    auto allAntennasValue = allAntennas.get();
-    auto filteredAntennasValue = filteredAntennas.get();
-    auto allChannelsValue = allChannels.get();
-    auto filteredChannelsValue = filteredChannels.get();
-    auto payloadSizesValue = payloadSizes.get();
+    ScatterStagingPool::Staging* staging = nullptr;
+    JST_CHECK(scatterPool.acquire(staging));
+    U64 stagedCount = 0;
+    std::vector<std::shared_ptr<AtaReceiverBlock>> deferredDrops;
 
     for (int64_t burstPacketIndex = 0; burstPacketIndex < daqiri::get_num_packets(burst.get()); burstPacketIndex++) {
         const auto* packetHeader = reinterpret_cast<const U8*>(
@@ -500,28 +395,11 @@ Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<daqiri::Bur
         U64 antennaIndex = packet.antennaId;
         U64 channelIndex = packet.channelNumber;
 
-        allAntennasValue.insert(antennaIndex);
-        allChannelsValue.insert(channelIndex);
-        payloadSizesValue.insert(daqiri::get_segment_packet_length(burst.get(), kRxDataSegment, burstPacketIndex));
+        streamStats.allAntennas.insert(antennaIndex);
+        streamStats.allChannels.insert(channelIndex);
+        streamStats.payloadSizes.insert(daqiri::get_segment_packet_length(burst.get(), kRxDataSegment, burstPacketIndex));
 
-        antennaIndex -= offsetBlock[kAntennaAxis];
-        channelIndex -= offsetBlock[kChannelAxis];
-
-        if (antennaIndex >= totalGeometry.numberOfAntennas) {
-            evictedPackets.publish(evictedPackets.get() + 1);
-            continue;
-        }
-
-        if (channelIndex >= totalGeometry.numberOfChannels) {
-            evictedPackets.publish(evictedPackets.get() + 1);
-            continue;
-        }
-
-        if (packet.timestamp > latestTimestamp.get()) {
-            latestTimestamp.publish(packet.timestamp);
-        }
-        if (packet.timestamp < timestampCutoff) {
-            evictedPackets.publish(evictedPackets.get() + 1);
+        if (!acceptPacket(packet, totalGeometry, antennaIndex, channelIndex)) {
             continue;
         }
 
@@ -531,76 +409,143 @@ Result AtaReceiverImplNativeCuda::processBurst(const std::shared_ptr<daqiri::Bur
             latestBlockTimeIndex.publish(blockTimeIndex);
         }
 
-        if (!blockMap.contains(blockTimeIndex)) {
-            if (idleQueue.empty()) {
-                if (receiveQueue.empty()) {
-                    lostPackets.publish(lostPackets.get() + 1);
-                    continue;
-                }
-
-                auto block = receiveQueue.front();
-                receiveQueue.pop();
-                blockMap.erase(block->index);
-                block->destroy();
-                idleQueue.push(block);
-                lostBlocks.publish(lostBlocks.get() + 1);
-            }
-
-            auto block = idleQueue.front();
-            idleQueue.pop();
-            block->create(blockTimeIndex, packet.timestamp);
-            receiveQueue.push(block);
-            blockMap[blockTimeIndex] = block;
-            JST_CHECK(updateBlockQueueDepths());
+        std::shared_ptr<AtaReceiverBlock> block;
+        JST_CHECK(ensureBlock(blockTimeIndex, packet.timestamp, block, deferredDrops));
+        if (!block) {
+            continue;
         }
 
         antennaIndex /= partialGeometry.numberOfAntennas;
         channelIndex /= partialGeometry.numberOfChannels;
 
-        filteredAntennasValue.insert(antennaIndex);
-        filteredChannelsValue.insert(channelIndex);
+        streamStats.filteredAntennas.insert(antennaIndex);
+        streamStats.filteredChannels.insert(channelIndex);
 
-        U64 blockPacketIndex = 0;
-        blockPacketIndex += antennaIndex * slotShape[kChannelAxis] * slotShape[kSampleAxis];
-        blockPacketIndex += channelIndex * slotShape[kSampleAxis];
-        blockPacketIndex += blockPacketTimeIndex;
+        if (stagedCount >= packetsPerBurst) {
+            lostPackets.publish(lostPackets.get() + 1);
+            continue;
+        }
 
-        blockMap.at(blockTimeIndex)->addPacket(
-            blockPacketIndex,
-            daqiri::get_segment_packet_ptr(burst.get(), kRxDataSegment, burstPacketIndex),
-            burst);
+        const U64 blockPacketIndex = PacketSlotIndex(totalGeometry, partialGeometry,
+                                                     antennaIndex, channelIndex, blockPacketTimeIndex);
+        if (!block->claimSlot(blockPacketIndex)) {
+            evictedPackets.publish(evictedPackets.get() + 1);
+            continue;
+        }
+
+        const U64 elementOffset = PacketElementOffset(totalGeometry, partialGeometry,
+                                                      antennaIndex, channelIndex, blockPacketTimeIndex);
+
+        staging->sources[stagedCount] =
+            daqiri::get_segment_packet_ptr(burst.get(), kRxDataSegment, burstPacketIndex);
+        staging->destinations[stagedCount] =
+            static_cast<U8*>(block->outputTensor->data()) + elementOffset * outputElementSize;
+        stagedCount++;
+
         receivedPackets.publish(receivedPackets.get() + 1);
     }
 
-    allAntennas.publish(allAntennasValue);
-    filteredAntennas.publish(filteredAntennasValue);
-    allChannels.publish(allChannelsValue);
-    filteredChannels.publish(filteredChannelsValue);
-    payloadSizes.publish(payloadSizesValue);
+    if (stagedCount > 0) {
+        JST_CUDA_CHECK(LaunchAtaScatterKernel(staging->sources,
+                                              staging->destinations,
+                                              stagedCount,
+                                              totalGeometry,
+                                              partialGeometry,
+                                              dataType,
+                                              scatterPool.stream()), [&] {
+            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to launch ATA scatter kernel: {}", err);
+        });
+        JST_CHECK(scatterPool.submit(staging, burst));
+    } else {
+        scatterPool.release(staging);
+    }
+
+    for (const auto& block : deferredDrops) {
+        JST_CHECK(sealBlock(block, false));
+    }
+
+    return Result::SUCCESS;
+}
+
+bool AtaReceiverImplNativeCuda::acceptPacket(const VoltagePacket& packet,
+                                             const AtaReceiverBlockGeometry& totalGeometry,
+                                             U64& antennaIndex,
+                                             U64& channelIndex) {
+    antennaIndex -= offsetBlock[kAntennaAxis];
+    channelIndex -= offsetBlock[kChannelAxis];
+
+    if (antennaIndex >= totalGeometry.numberOfAntennas) {
+        evictedPackets.publish(evictedPackets.get() + 1);
+        return false;
+    }
+
+    if (channelIndex >= totalGeometry.numberOfChannels) {
+        evictedPackets.publish(evictedPackets.get() + 1);
+        return false;
+    }
+
+    if (packet.timestamp > latestTimestamp.get()) {
+        latestTimestamp.publish(packet.timestamp);
+    }
+
+    if (packet.timestamp < timestampCutoff) {
+        evictedPackets.publish(evictedPackets.get() + 1);
+        return false;
+    }
+
+    return true;
+}
+
+Result AtaReceiverImplNativeCuda::ensureBlock(const U64 blockTimeIndex,
+                                              const U64 timestamp,
+                                              std::shared_ptr<AtaReceiverBlock>& block,
+                                              std::vector<std::shared_ptr<AtaReceiverBlock>>& deferredDrops) {
+    if (blockMap.contains(blockTimeIndex)) {
+        block = blockMap.at(blockTimeIndex);
+        return Result::SUCCESS;
+    }
+
+    std::shared_ptr<Tensor> tensor;
+    if (!idleQueue.empty()) {
+        tensor = tryAcquireOutputTensor();
+    }
+
+    if (idleQueue.empty() || !tensor) {
+        if (!receiveQueue.empty()) {
+            auto oldest = receiveQueue.front();
+            receiveQueue.pop();
+            blockMap.erase(oldest->index);
+            // Current burst may already have staged writes to this block.
+            // Record its completion event only after the burst scatter launch.
+            deferredDrops.push_back(oldest);
+            lostBlocks.publish(lostBlocks.get() + 1);
+        }
+        lostPackets.publish(lostPackets.get() + 1);
+        block = nullptr;
+        return Result::SUCCESS;
+    }
+
+    block = idleQueue.front();
+    idleQueue.pop();
+    block->create(blockTimeIndex, timestamp, tensor);
+    receiveQueue.push(block);
+    blockMap[blockTimeIndex] = block;
+    JST_CHECK(updateBlockQueueDepths());
+
+    return Result::SUCCESS;
+}
+
+Result AtaReceiverImplNativeCuda::sealBlock(const std::shared_ptr<AtaReceiverBlock>& block, const bool emit) {
+    block->emit = emit;
+    JST_CUDA_CHECK(cudaEventRecord(block->event, scatterPool.stream()), [&] {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to record block event: {}", err);
+    });
+    computeQueue.push(block);
 
     return Result::SUCCESS;
 }
 
 Result AtaReceiverImplNativeCuda::releaseReceivedBlocks() {
-    const AtaReceiverBlockGeometry totalGeometry{
-        totalBlock[kAntennaAxis],
-        totalBlock[kChannelAxis],
-        totalBlock[kSampleAxis],
-        totalBlock[kPolarizationAxis],
-    };
-    const AtaReceiverBlockGeometry partialGeometry{
-        partialBlock[kAntennaAxis],
-        partialBlock[kChannelAxis],
-        partialBlock[kSampleAxis],
-        partialBlock[kPolarizationAxis],
-    };
-    const AtaReceiverBlockGeometry slotGeometry{
-        slotShape[kAntennaAxis],
-        slotShape[kChannelAxis],
-        slotShape[kSampleAxis],
-        slotShape[kPolarizationAxis],
-    };
-
     while (!receiveQueue.empty()) {
         auto block = receiveQueue.front();
         receiveQueue.pop();
@@ -609,29 +554,11 @@ Result AtaReceiverImplNativeCuda::releaseReceivedBlocks() {
 
         if (block->isComplete()) {
             blockMap.erase(block->index);
-
-            auto tensor = acquireOutputTensor();
-            if (!tensor) {
-                swapQueue.push(block);
-                break;
-            }
-
-            if (block->compute(tensor,
-                               totalGeometry,
-                               partialGeometry,
-                               slotGeometry,
-                               dataType) != Result::SUCCESS) {
-                JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to launch ATA gather kernel.");
-                JST_CHECK(recycleOutputTensor(tensor));
-                return Result::ERROR;
-            }
-
-            computeQueue.push(block);
+            JST_CHECK(sealBlock(block, true));
             receivedBlocks.publish(receivedBlocks.get() + 1);
         } else if (isStale) {
             blockMap.erase(block->index);
-            block->destroy();
-            idleQueue.push(block);
+            JST_CHECK(sealBlock(block, false));
             lostBlocks.publish(lostBlocks.get() + 1);
         } else {
             swapQueue.push(block);
@@ -651,22 +578,30 @@ Result AtaReceiverImplNativeCuda::releaseReceivedBlocks() {
 Result AtaReceiverImplNativeCuda::releaseComputedBlocks() {
     while (!computeQueue.empty()) {
         auto block = computeQueue.front();
+
+        // Block events share the scatter stream, so they complete in seal
+        // order: once the front is pending, everything behind it is too.
+        const auto status = cudaEventQuery(block->event);
+        if (status == cudaErrorNotReady) {
+            break;
+        }
+        if (status != cudaSuccess) {
+            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] ATA scatter kernel failed on the block stream: {}",
+                      cudaGetErrorString(status));
+            return Result::ERROR;
+        }
+
         computeQueue.pop();
 
-        if (!block->isProcessing()) {
+        if (block->emit) {
             auto tensor = block->outputTensor;
             JST_CHECK(tensor->setAttribute("timestamp", block->timestamp));
             JST_CHECK(pushReadyTensor(tensor, block->timestamp));
-            block->destroy();
-            idleQueue.push(block);
         } else {
-            swapQueue.push(block);
+            JST_CHECK(recycleOutputTensor(block->outputTensor));
         }
-    }
-
-    while (!swapQueue.empty()) {
-        computeQueue.push(swapQueue.front());
-        swapQueue.pop();
+        block->destroy();
+        idleQueue.push(block);
     }
 
     JST_CHECK(updateBlockQueueDepths());
@@ -683,51 +618,12 @@ Result AtaReceiverImplNativeCuda::updateBlockQueueDepths() {
     return Result::SUCCESS;
 }
 
-Result AtaReceiverImplNativeCuda::pushReadyTensor(const std::shared_ptr<Tensor>& tensor, const U64 timestamp) {
-    std::lock_guard<std::mutex> lock(readyMutex);
-    readyOutputTensors.push({tensor, timestamp});
-    readyQueueDepth.publish(readyOutputTensors.size());
-
-    return Result::SUCCESS;
-}
-
-Result AtaReceiverImplNativeCuda::popReadyTensor(AtaReceiverReadyTensor& ready) {
-    std::lock_guard<std::mutex> lock(readyMutex);
-    if (readyOutputTensors.empty()) {
-        readyQueueDepth.publish(0);
-        return Result::YIELD;
-    }
-
-    ready = readyOutputTensors.front();
-    readyOutputTensors.pop();
-    readyQueueDepth.publish(readyOutputTensors.size());
-    return Result::SUCCESS;
-}
-
-std::shared_ptr<Tensor> AtaReceiverImplNativeCuda::acquireOutputTensor() {
-    std::unique_lock<std::mutex> lock(poolMutex);
-    outputPoolCv.wait(lock, [this]() {
-        return !packetProcessingThreadRunning.load() || !availableOutputTensors.empty();
-    });
-
-    if (!packetProcessingThreadRunning.load() && availableOutputTensors.empty()) {
-        outputPoolDepth.publish(0);
-        return nullptr;
-    }
-
-    auto tensor = availableOutputTensors.front();
-    availableOutputTensors.pop();
-    outputPoolDepth.publish(availableOutputTensors.size());
-    return tensor;
-}
-
-Result AtaReceiverImplNativeCuda::recycleOutputTensor(const std::shared_ptr<Tensor>& tensor) {
-    std::lock_guard<std::mutex> lock(poolMutex);
-    availableOutputTensors.push(tensor);
-    outputPoolDepth.publish(availableOutputTensors.size());
-    outputPoolCv.notify_one();
-
-    return Result::SUCCESS;
+void AtaReceiverImplNativeCuda::publishStreamStats() {
+    allAntennas.publish(streamStats.allAntennas);
+    filteredAntennas.publish(streamStats.filteredAntennas);
+    allChannels.publish(streamStats.allChannels);
+    filteredChannels.publish(streamStats.filteredChannels);
+    payloadSizes.publish(streamStats.payloadSizes);
 }
 
 JST_REGISTER_MODULE(AtaReceiverImplNativeCuda, DeviceType::CUDA, RuntimeType::NATIVE, "generic");

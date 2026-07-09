@@ -1,11 +1,9 @@
 #ifndef STELLINE_ATA_RECEIVER_DETAIL_BLOCK_HH
 #define STELLINE_ATA_RECEIVER_DETAIL_BLOCK_HH
 
+#include <algorithm>
 #include <memory>
-#include <string>
-#include <unordered_set>
-
-#include <daqiri/daqiri.h>
+#include <vector>
 
 #include <jetstream/memory/tensor.hh>
 #include <jetstream/logger.hh>
@@ -13,99 +11,70 @@
 
 #include <jetstream/backend/devices/cuda/helpers.hh>
 
-#include "kernel.hh"
-
 namespace Jetstream::Modules {
 
 struct AtaReceiverBlock {
-    explicit AtaReceiverBlock(const U64 packetsPerBlock) : packetsPerBlock(packetsPerBlock) {
-        bursts.reserve(packetsPerBlock);
-
-        JST_CUDA_CHECK_THROW(cudaMallocHost(&gpuData, packetsPerBlock * sizeof(void*)), [&] {
-            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to allocate ATA gather packet pointers.");
-        });
-
-        int lowPriority = 0;
-        int highPriority = 0;
-        JST_CUDA_CHECK_THROW(cudaDeviceGetStreamPriorityRange(&lowPriority, &highPriority), [&] {
-            cudaFreeHost(gpuData);
-            gpuData = nullptr;
-            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to query CUDA stream priority range.");
-        });
-
-        JST_CUDA_CHECK_THROW(cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, highPriority), [&] {
-            cudaFreeHost(gpuData);
-            gpuData = nullptr;
-            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to create ATA gather CUDA stream.");
+    explicit AtaReceiverBlock(const U64 packetsPerBlock)
+        : packetsPerBlock(packetsPerBlock),
+          slotFilled(packetsPerBlock, 0) {
+        JST_CUDA_CHECK_THROW(cudaEventCreateWithFlags(&event, cudaEventDisableTiming), [&] {
+            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to create ATA block event.");
         });
     }
 
     ~AtaReceiverBlock() {
         destroy();
-        if (gpuData) {
-            cudaFreeHost(gpuData);
-        }
-        if (stream) {
-            cudaStreamDestroy(stream);
+        if (event) {
+            cudaEventDestroy(event);
         }
     }
 
-    void create(const U64 newIndex, const U64 newTimestamp) {
+    void create(const U64 newIndex,
+                const U64 newTimestamp,
+                const std::shared_ptr<Tensor>& tensor) {
         index = newIndex;
         timestamp = newTimestamp;
         packetCount = 0;
+        emit = false;
+        outputTensor = tensor;
+        std::fill(slotFilled.begin(), slotFilled.end(), 0);
     }
 
     void destroy() {
         outputTensor.reset();
         packetCount = 0;
-        bursts.clear();
+        emit = false;
     }
 
-    void addPacket(const U64 blockPacketIndex,
-                   void* payloadPointer,
-                   const std::shared_ptr<daqiri::BurstParams>& burst) {
-        gpuData[blockPacketIndex] = payloadPointer;
-        bursts.insert(burst);
+    bool claimSlot(const U64 blockPacketIndex) {
+        if (slotFilled[blockPacketIndex]) {
+            return false;
+        }
+        slotFilled[blockPacketIndex] = 1;
         packetCount++;
+        return true;
     }
 
     bool isComplete() const {
         return packetCount == packetsPerBlock;
     }
 
-    bool isProcessing() const {
-        return cudaStreamQuery(stream) != cudaSuccess;
+    bool isDone() const {
+        return cudaEventQuery(event) == cudaSuccess;
     }
 
-    Result compute(const std::shared_ptr<Tensor>& newOutputTensor,
-                   const AtaReceiverBlockGeometry& totalGeometry,
-                   const AtaReceiverBlockGeometry& partialGeometry,
-                   const AtaReceiverBlockGeometry& slotGeometry,
-                   const std::string& outputType) {
-        outputTensor = newOutputTensor;
-
-        JST_CUDA_CHECK(LaunchAtaGatherKernel(outputTensor->data(),
-                                             gpuData,
-                                             packetsPerBlock,
-                                             totalGeometry,
-                                             partialGeometry,
-                                             slotGeometry,
-                                             outputType,
-                                             stream), [&] {
-            outputTensor.reset();
-        });
-
-        return Result::SUCCESS;
+    bool isFailed() const {
+        const auto status = cudaEventQuery(event);
+        return status != cudaSuccess && status != cudaErrorNotReady;
     }
 
     U64 index = 0;
     U64 timestamp = 0;
     U64 packetsPerBlock = 0;
     U64 packetCount = 0;
-    void** gpuData = nullptr;
-    cudaStream_t stream = nullptr;
-    std::unordered_set<std::shared_ptr<daqiri::BurstParams>> bursts;
+    bool emit = false;
+    cudaEvent_t event = nullptr;
+    std::vector<U8> slotFilled;
     std::shared_ptr<Tensor> outputTensor;
 };
 
