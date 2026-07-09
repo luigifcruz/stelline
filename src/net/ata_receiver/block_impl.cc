@@ -190,6 +190,14 @@ Result AtaReceiverImpl::define() {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getComputeQueue() : U64(0)));
         }));
 
+    JST_CHECK(defineInterfaceMetric("readyQueue",
+                                    "Ready Queue",
+                                    "Current ready queue depth.",
+                                    "private-stelline-metrics",
+        [this]() -> std::any {
+            return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getReadyQueue() : U64(0)));
+        }));
+
     JST_CHECK(defineInterfaceMetric("burstsInFlight",
                                     "Bursts In Flight",
                                     "Current number of in-flight bursts.",
@@ -331,6 +339,21 @@ Result AtaReceiverImpl::define() {
             const U64 total = receive + compute + swap;
             const F32 value = total > 0 ? static_cast<F32>(receive + compute) / static_cast<F32>(total) : 0.0f;
             const std::string label = jst::fmt::format("{}R:{}C/{}", receive, compute, total);
+            return std::pair<std::string, F32>{label, value};
+        }));
+
+    JST_CHECK(defineInterfaceMetric("readyQueueDisplay",
+                                    "Ready Queue",
+                                    "Completed blocks waiting for the downstream consumer.",
+                                    "progressbar",
+        [this]() -> std::any {
+            if (!moduleImpl) {
+                return std::pair<std::string, F32>{"0/0", 0.0f};
+            }
+            const U64 ready = moduleImpl->getReadyQueue();
+            const U64 capacity = outputPoolSize;
+            const F32 value = capacity > 0 ? static_cast<F32>(ready) / static_cast<F32>(capacity) : 0.0f;
+            const std::string label = jst::fmt::format("{}/{}", ready, capacity);
             return std::pair<std::string, F32>{label, value};
         }));
 

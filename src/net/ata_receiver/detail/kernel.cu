@@ -24,12 +24,11 @@ __device__ cuda::std::complex<float> convertSample(const cuda::std::complex<int8
 }
 
 template<typename DstType>
-__global__ void AtaGatherKernel(void* output,
-                                void** input,
-                                U64 numberOfPackets,
-                                AtaReceiverBlockGeometry totalShape,
-                                AtaReceiverBlockGeometry partialShape,
-                                AtaReceiverBlockGeometry slotShape) {
+__global__ void AtaScatterKernel(const void* const* inputs,
+                                 void* const* outputs,
+                                 U64 numberOfPackets,
+                                 AtaReceiverBlockGeometry totalShape,
+                                 AtaReceiverBlockGeometry partialShape) {
     const U64 idx = static_cast<U64>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (idx >= numberOfPackets) {
         return;
@@ -44,24 +43,8 @@ __global__ void AtaGatherKernel(void* output,
     const U64 pSamples = partialShape.numberOfSamples;
     const U64 pPolarizations = partialShape.numberOfPolarizations;
 
-    const U64 sAntennas = slotShape.numberOfAntennas;
-    const U64 sChannels = slotShape.numberOfChannels;
-    const U64 sSamples = slotShape.numberOfSamples;
-    const U64 sPolarizations = slotShape.numberOfPolarizations;
-
-    const U64 fragmentPolarizationIndex = idx % sPolarizations;
-    const U64 fragmentSampleIndex = (idx / sPolarizations) % sSamples;
-    const U64 fragmentChannelIndex = (idx / (sPolarizations * sSamples)) % sChannels;
-    const U64 fragmentAntennaIndex = (idx / (sPolarizations * sSamples * sChannels)) % sAntennas;
-
-    U64 baseOffset = 0;
-    baseOffset += (fragmentAntennaIndex * pAntennas) * tChannels * tSamples * tPolarizations;
-    baseOffset += (fragmentChannelIndex * pChannels) * tSamples * tPolarizations;
-    baseOffset += (fragmentSampleIndex * pSamples) * tPolarizations;
-    baseOffset += fragmentPolarizationIndex * pPolarizations;
-
-    const auto* src = reinterpret_cast<const cuda::std::complex<int8_t>*>(input[idx]);
-    auto* dst = reinterpret_cast<DstType*>(output) + baseOffset;
+    const auto* src = reinterpret_cast<const cuda::std::complex<int8_t>*>(inputs[idx]);
+    auto* dst = reinterpret_cast<DstType*>(outputs[idx]);
 
     for (U64 antenna = 0; antenna < pAntennas; antenna++) {
         for (U64 channel = 0; channel < pChannels; channel++) {
@@ -85,36 +68,33 @@ __global__ void AtaGatherKernel(void* output,
 
 }  // namespace
 
-cudaError_t LaunchAtaGatherKernel(void* output,
-                                  void** input,
-                                  U64 numberOfPackets,
-                                  const AtaReceiverBlockGeometry& totalShape,
-                                  const AtaReceiverBlockGeometry& partialShape,
-                                  const AtaReceiverBlockGeometry& slotShape,
-                                  const std::string& outputType,
-                                  cudaStream_t stream) {
+cudaError_t LaunchAtaScatterKernel(const void* const* inputs,
+                                   void* const* outputs,
+                                   U64 numberOfPackets,
+                                   const AtaReceiverBlockGeometry& totalShape,
+                                   const AtaReceiverBlockGeometry& partialShape,
+                                   const std::string& outputType,
+                                   cudaStream_t stream) {
     const dim3 threadsPerBlock(256, 1, 1);
     const dim3 blocksPerGrid((numberOfPackets + threadsPerBlock.x - 1) / threadsPerBlock.x, 1, 1);
 
     if (outputType == "CI8") {
-        AtaGatherKernel<cuda::std::complex<int8_t>><<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
-            output,
-            input,
+        AtaScatterKernel<cuda::std::complex<int8_t>><<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
+            inputs,
+            outputs,
             numberOfPackets,
             totalShape,
-            partialShape,
-            slotShape);
+            partialShape);
         return cudaGetLastError();
     }
 
     if (outputType == "CF32") {
-        AtaGatherKernel<cuda::std::complex<float>><<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
-            output,
-            input,
+        AtaScatterKernel<cuda::std::complex<float>><<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
+            inputs,
+            outputs,
             numberOfPackets,
             totalShape,
-            partialShape,
-            slotShape);
+            partialShape);
         return cudaGetLastError();
     }
 

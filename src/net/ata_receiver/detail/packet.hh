@@ -7,6 +7,13 @@
 
 namespace Jetstream::Modules {
 
+constexpr U64 kPacketDataSize = 6144;
+constexpr U64 kPacketHeaderSize = 16;
+constexpr U64 kPacketHeaderOffset = 42;
+
+constexpr int kRxHeaderSegment = 0;
+constexpr int kRxDataSegment = 1;
+
 struct VoltagePacket {
     U8 version;
     U8 type;
