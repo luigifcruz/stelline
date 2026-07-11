@@ -11,6 +11,12 @@ namespace Jetstream::Modules {
 
 using namespace stelline::domains::stelline::utils;
 
+namespace {
+
+constexpr U64 kRxBurstTimeoutUs = 10'000;
+
+}  // namespace
+
 Result BuildDaqiriRxConfig(const DaqiriRxConfigParams& params,
                            const std::vector<SubscriptionEndpoint>& subscriptions,
                            daqiri::NetworkConfig& cfg) {
@@ -70,7 +76,7 @@ Result BuildDaqiriRxConfig(const DaqiriRxConfigParams& params,
         queueCfg.common_.batch_size_ = params.packetsPerBurst;
         queueCfg.common_.cpu_core_ = jst::fmt::format("{}", params.workerCores[nextId % params.workerCores.size()]);
         queueCfg.common_.mrs_ = {headerMrName, dataMrName};
-        queueCfg.timeout_us_ = 0;
+        queueCfg.timeout_us_ = kRxBurstTimeoutUs;
         interfaceCfg.rx_.queues_.push_back(queueCfg);
 
         EndpointMatch source;
