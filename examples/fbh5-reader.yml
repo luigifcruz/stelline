@@ -1,0 +1,43 @@
+---
+version: 1.0.0
+
+title: FBH5 Reader
+summary: Offline playback of FBH5 filterbank data into a waterfall.
+graph:
+  fbh5_reader:
+    module: fbh5_reader
+    device: cpu
+    runtime: native
+    provider: generic
+    config:
+      filepath: /tests/test.fbh5
+      batchSize: 256
+      loop: true
+      playing: true
+    meta:
+      node:
+        height: 220
+        width: 260
+        y: 40
+        x: 40
+  waterfall:
+    module: waterfall
+    device: cpu
+    runtime: native
+    provider: generic
+    dataType: F32
+    config:
+      height: 512
+      interpolate: false
+    input:
+      signal: '${graph.fbh5_reader.output.signal}'
+    meta:
+      surface_default:
+        detached: false
+        attachedWidth: 600
+        attachedHeight: 294
+      node:
+        height: 420
+        width: 600
+        y: 40
+        x: 360
