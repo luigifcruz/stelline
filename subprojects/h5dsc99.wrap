@@ -1,9 +1,9 @@
 [wrap-git]
 directory = h5dsc99
 url = https://github.com/MydonSolutions/h5dsc99.git
-revision = 9f5ec3c481dcbb0608ad2e459aea2debd4a76976
-clone-recursive = true
-patch_directory = h5dsc99
+revision = v0.5.0
+depth = 1
+diff_files = h5dsc99/hdf5_dep.diff
 
 [provide]
 h5dsc99 = lib_h5dsc99_dep
