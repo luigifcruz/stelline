@@ -1,0 +1,9 @@
+--- a/meson.build
++++ b/meson.build
+@@ -14,8 +14,7 @@
+ 
+ dep_lst = [
+-  dependency('zlib', required: true),
+-  dependency('hdf5', version: '>=1.14.0', required: true)
++  dependency('hdf5', required: true)
+ ]

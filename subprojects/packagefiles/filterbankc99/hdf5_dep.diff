@@ -1,0 +1,9 @@
+--- a/meson.build
++++ b/meson.build
+@@ -32,5 +32,4 @@
+-require_hdf5 = get_option('hdf5')
+-hdf5_dep = dependency('hdf5', required: require_hdf5, version: '>=1.14.0', language: 'c')
++hdf5_dep = dependency('hdf5', required: true, language: 'c')
+ cfg_lst.set('HDF5', hdf5_dep.found())
+ if hdf5_dep.found()
+   dep_lst += [
