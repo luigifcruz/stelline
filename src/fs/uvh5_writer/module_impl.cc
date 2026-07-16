@@ -690,7 +690,6 @@ Result Uvh5WriterImpl::create() {
                   filepath);
         return Result::ERROR;
     }
-
     fileOpen = true;
 
     if (uvh5File.visdata) {
