@@ -597,7 +597,6 @@ Result Uvh5WriterImpl::create() {
         JST_ERROR("[MODULE_UVH5_WRITER] UVH5 open failed for '{}': invalid HDF5 file handle.", filepath);
         return Result::ERROR;
     }
-
     fileOpen = true;
 
     if (uvh5File.visdata) {
@@ -610,12 +609,6 @@ Result Uvh5WriterImpl::create() {
 
 Result Uvh5WriterImpl::destroy() {
     if (fileOpen) {
-        uvh5File.visdata = std::malloc(8);
-        if (!uvh5File.visdata) {
-            JST_ERROR("[MODULE_UVH5_WRITER] Failed to allocate the UVH5 close placeholder buffer.");
-            return Result::ERROR;
-        }
-
         UVH5close(&uvh5File);
         uvh5File.visdata = nullptr;
         fileOpen = false;

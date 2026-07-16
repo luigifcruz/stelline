@@ -1,0 +1,73 @@
+extern "C" {
+#include "h5dsc99/h5_dataspace.h"
+}
+
+#include <jetstream/backend/devices/cuda/helpers.hh>
+#include <jetstream/runtime_context_native_cuda.hh>
+#include <jetstream/scheduler_context.hh>
+#include <jetstream/module_context.hh>
+#include <jetstream/registry.hh>
+
+#include "../helpers.hh"
+#include "module_impl.hh"
+
+#include "H5FDgds.h"
+
+namespace Jetstream::Modules {
+
+struct Uvh5ReaderImplNativeCuda : public Uvh5ReaderImpl,
+                                  public NativeCudaRuntimeContext,
+                                  public Scheduler::Context {
+ public:
+    Result create() final;
+    Result computeSubmit(const cudaStream_t& stream) override;
+};
+
+Result Uvh5ReaderImplNativeCuda::create() {
+    faplId = H5Pcreate(H5P_FILE_ACCESS);
+    if (faplId < 0) {
+        JST_ERROR("[MODULE_UVH5_READER] Failed to create the HDF5 file access property list.");
+        return Result::ERROR;
+    }
+    faplOpen = true;
+
+    JST_HDF5_CHECK(H5Pset_fapl_gds(faplId, MBOUNDARY_DEF, FBSIZE_DEF, CBSIZE_DEF), [&] {
+        JST_ERROR("[MODULE_UVH5_READER] Failed to configure the HDF5 GDS file access property list. Error {}.", err);
+    });
+
+    JST_CHECK(Uvh5ReaderImpl::create());
+
+    return Result::SUCCESS;
+}
+
+Result Uvh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
+    if (!(uvh5File.DS_data_visdata.D_id >= 0) || !playing) {
+        return Result::SUCCESS;
+    }
+    
+    // We need to synchronize here because the HDF VFD is not asynchronous.
+    JST_CUDA_CHECK(cudaStreamSynchronize(stream), [&] {
+        JST_ERROR("[MODULE_UVH5_READER_NATIVE_CUDA] Failed to synchronize CUDA stream before UVH5 read: {}.", err);
+    });
+
+    const U64 currentIndex = getCurrentBatchIndex();
+    herr_t status = UVH5read(&uvh5File);
+    if (status < 0) {
+        JST_ERROR("[MODULE_UVH5_READER_NATIVE_CPU] Read failed at offset batch #{} (data index {}).", currentIndex, uvh5File.DS_data_visdata.hyperslab_start[0]);
+    }
+    else if (status == 1) {
+        JST_DEBUG("[MODULE_UVH5_READER_NATIVE_CPU] Looping back to start of '{}'.", filepath);
+    }
+
+    currentBatchIndex.publish(uvh5File.DS_data_visdata.hyperslab_start[0]/uvh5File.header.Nbls);
+    const U64 actualBytesRead = static_cast<U64>(H5DSsize(&uvh5File.DS_data_visdata));
+    if (actualBytesRead > 0) {
+        updateBandwidth(actualBytesRead);
+    }
+
+    return Result::SUCCESS;
+}
+
+JST_REGISTER_MODULE(Uvh5ReaderImplNativeCuda, DeviceType::CUDA, RuntimeType::NATIVE, "generic");
+
+}  // namespace Jetstream::Modules
