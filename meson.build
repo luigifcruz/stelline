@@ -20,7 +20,7 @@ if not stl_is_linux
     error('Stelline only supports Linux targets for now.')
 endif
 
-minimum_jetstream_version = '1.5.0'
+minimum_jetstream_version = '1.7.0'
 
 #
 # Load Python

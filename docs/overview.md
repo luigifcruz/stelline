@@ -28,6 +28,6 @@ Blade is the digital signal processing engine of the stack, with GPU beamforming
 
 ## Requirements
 
-Stelline requires [CyberEther](https://github.com/luigifcruz/CyberEther) 1.6.0 or newer. Beyond that, requirements differ between blocks, so check the Requirements section of each block page. The [System Setup](/docs/considerations) category covers the host side in detail.
+Stelline requires [CyberEther](https://github.com/luigifcruz/CyberEther) 1.7.0 or newer. Beyond that, requirements differ between blocks, so check the Requirements section of each block page. The [System Setup](/docs/considerations) category covers the host side in detail.
 
 Check out the [installation](/docs/installation) page to get started!
