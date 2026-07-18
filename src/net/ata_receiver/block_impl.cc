@@ -49,17 +49,17 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceConfig("gpuDeviceId",
                                     "GPU Device ID",
                                     "CUDA device ID used by the receiver backend.",
-                                    "int:id"));
+                                    "uint:id"));
 
     JST_CHECK(defineInterfaceConfig("masterCore",
                                     "Master Core",
                                     "CPU core assigned to the receiver control thread.",
-                                    "int:core"));
+                                    "uint:core"));
 
     JST_CHECK(defineInterfaceConfig("workerCores",
                                     "Worker Cores",
                                     "CPU cores assigned to networking workers.",
-                                    "vector-inline:int:core"));
+                                    "vector-inline:uint:core"));
 
     JST_CHECK(defineInterfaceConfig("subscriptions",
                                     "Subscriptions",
@@ -69,17 +69,17 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceConfig("totalBlock",
                                     "Total Block",
                                     "Output block shape as [antennas, channels, samples, polarizations].",
-                                    "vector-inline:int:dim"));
+                                    "vector-inline:uint:dim"));
 
     JST_CHECK(defineInterfaceConfig("partialBlock",
                                     "Partial Block",
                                     "Per-packet fragment shape as [antennas, channels, samples, polarizations].",
-                                    "vector-inline:int:dim"));
+                                    "vector-inline:uint:dim"));
 
     JST_CHECK(defineInterfaceConfig("offsetBlock",
                                     "Offset Block",
                                     "Input offset as [antennas, channels, samples, polarizations].",
-                                    "vector-inline:int:dim"));
+                                    "vector-inline:uint:dim"));
 
     JST_CHECK(defineInterfaceConfig("dataType",
                                     "Data Type",
@@ -93,22 +93,22 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceConfig("packetsPerBurst",
                                     "Packets Per Burst",
                                     "Maximum packets expected in each burst.",
-                                    "int:packets"));
+                                    "uint:packets"));
 
     JST_CHECK(defineInterfaceConfig("maxConcurrentBursts",
                                     "Max Concurrent Bursts",
                                     "Maximum number of concurrent ANO bursts in flight.",
-                                    "int:bursts"));
+                                    "uint:bursts"));
 
     JST_CHECK(defineInterfaceConfig("maxConcurrentBlocks",
                                     "Max Concurrent Blocks",
                                     "Maximum number of in-flight receive blocks.",
-                                    "int:blocks"));
+                                    "uint:blocks"));
 
     JST_CHECK(defineInterfaceConfig("outputPoolSize",
                                     "Output Pool Size",
                                     "Number of reusable output tensors for completed blocks.",
-                                    "int:buffers"));
+                                    "uint:buffers"));
 
     JST_CHECK(defineInterfaceMetric("blocksReceived",
                                     "Blocks Received",
