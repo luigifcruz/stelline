@@ -9,7 +9,7 @@ namespace Jetstream::Blocks {
 
 struct Uvh5Reader : public Block::Config {
     std::string filepath = "./file.uvh5";
-    U64 batchSize = 8192;
+    U64 batchSize = 1;
     bool loop = true;
     bool playing = true;
 

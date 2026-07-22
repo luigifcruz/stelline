@@ -20,6 +20,13 @@ extern "C" {
 namespace Jetstream::Modules {
 
 Result Fbh5ReaderImpl::validate() {
+    const auto& config = *candidate();
+    
+    if (config.batchSize == 0) {
+        // TODO if zero, just read everything...
+        JST_ERROR("[MODULE_FBH5_READER] The 'batchSize' must be positive.");
+        return Result::ERROR;
+    }
     return Result::SUCCESS;
 }
 
@@ -94,6 +101,7 @@ Result Fbh5ReaderImpl::create() {
                       filepath,
                       nbits
                       );
+            return Result::ERROR;
     }
     JST_CHECK(buffer.create(device(), dataType, {fbh5File.ds_data.dimchunks[0], fbh5File.ds_data.dimchunks[1], fbh5File.ds_data.dims[2]}));
     if (buffer.sizeBytes() != H5DSsize(&fbh5File.ds_data)) {
