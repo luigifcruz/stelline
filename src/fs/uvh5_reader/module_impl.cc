@@ -19,6 +19,12 @@ extern "C" {
 namespace Jetstream::Modules {
 
 Result Uvh5ReaderImpl::validate() {
+    const auto& config = *candidate();
+    if (config.batchSize == 0) {
+        // TODO if zero, just read everything...
+        JST_ERROR("[MODULE_UVH5_READER] The 'batchSize' must be positive.");
+        return Result::ERROR;
+    }
     return Result::SUCCESS;
 }
 
@@ -91,6 +97,7 @@ Result Uvh5ReaderImpl::create() {
                       filepath,
                       nbits
                       );
+            return Result::ERROR;
     }
     JST_CHECK(buffer.create(device(), dataType, {batchSize*uvh5File.header.Nbls, uvh5File.DS_data_visdata.dims[1], uvh5File.DS_data_visdata.dims[2]}));
     if (buffer.sizeBytes() != H5DSsize(&uvh5File.DS_data_visdata)) {

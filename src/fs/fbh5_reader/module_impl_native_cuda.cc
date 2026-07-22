@@ -21,6 +21,10 @@ struct Fbh5ReaderImplNativeCuda : public Fbh5ReaderImpl,
  public:
     Result create() final;
     Result computeSubmit(const cudaStream_t& stream) override;
+ private:
+    const void* registeredBuffer = nullptr;
+    U64 registeredBufferSize = 0;
+    bool bufferRegistered = false;
 };
 
 Result Fbh5ReaderImplNativeCuda::create() {
@@ -50,13 +54,40 @@ Result Fbh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         JST_ERROR("[MODULE_FBH5_READER_NATIVE_CUDA] Failed to synchronize CUDA stream before FBH5 read: {}.", err);
     });
 
+    const void* inputPtr = buffer.data();
+    const U64 inputBytes = buffer.sizeBytes();
+    if (!bufferRegistered || registeredBuffer != inputPtr || registeredBufferSize != inputBytes) {
+        if (bufferRegistered) {
+            JST_CUFILE_CHECK(cuFileBufDeregister(const_cast<void*>(registeredBuffer)), [&] {
+                JST_ERROR("[MODULE_FBH5_READER_NATIVE_CUDA] Failed to deregister the previous input buffer (CUfile error {}).",
+                          err);
+            });
+            bufferRegistered = false;
+            registeredBuffer = nullptr;
+            registeredBufferSize = 0;
+        }
+
+        JST_CUFILE_CHECK(cuFileBufRegister(const_cast<void*>(inputPtr), inputBytes, 0), [&] {
+            JST_ERROR("[MODULE_FBH5_READER_NATIVE_CUDA] Failed to register the input buffer with GDS (CUfile error {}).",
+                      err);
+        });
+
+        bufferRegistered = true;
+        registeredBuffer = inputPtr;
+        registeredBufferSize = inputBytes;
+    }
+
     const U64 currentIndex = getCurrentBatchIndex();
     herr_t status = filterbank_h5_read(&fbh5File);
     if (status < 0) {
         JST_ERROR("[MODULE_FBH5_READER_NATIVE_CPU] Read failed at offset batch #{} (data index {}).", currentIndex, fbh5File.ds_data.hyperslab_start[0]);
+        return Result::ERROR;
     }
     else if (status == 1) {
         JST_DEBUG("[MODULE_FBH5_READER_NATIVE_CPU] Looping back to start of '{}'.", filepath);
+        if (!loop) {
+            playing = false;
+        }
     }
 
     currentBatchIndex.publish(fbh5File.ds_data.hyperslab_start[0]);
