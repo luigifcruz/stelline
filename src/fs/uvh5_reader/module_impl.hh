@@ -28,6 +28,7 @@ struct Uvh5ReaderImpl : public Module::Impl, public DynamicConfig<Uvh5Reader> {
     F32 getCurrentBandwidth() const;
 
  protected:
+    Result publishMetadata(const UVH5_header_t* header, const bool& access_phase_center);
     void updateBandwidth(const U64 deltaBytes);
 
     Tensor buffer;

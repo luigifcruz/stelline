@@ -63,6 +63,7 @@ Result Uvh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         }
     }
 
+    JST_CHECK(publishMetadata(&uvh5File.header, true));
     currentBatchIndex.publish(uvh5File.DS_data_visdata.hyperslab_start[0]/uvh5File.header.Nbls);
     const U64 actualBytesRead = static_cast<U64>(H5DSsize(&uvh5File.DS_data_visdata));
     if (actualBytesRead > 0) {

@@ -12,11 +12,85 @@
 #include "../helpers.hh"
 
 extern "C" {
-#include "filterbankc99.h"
 #include "h5dsc99/h5_dataspace.h"
 }
 
 namespace Jetstream::Modules {
+
+struct ObservationBand {
+    F64 frequency_start;
+    F64 frequency_stop;
+    U64 channel_start;
+    U64 channel_stop;
+    
+    JST_SERDES(frequency_start, frequency_stop, channel_start, channel_stop);
+};
+
+struct ObservationTuning {
+    std::string name;
+    std::vector<ObservationBand> bands;
+
+    JST_SERDES(name, bands);
+};
+
+struct AntennaCoordinates {
+    F64 x;
+    F64 y;
+    F64 z;
+
+    JST_SERDES(x, y, z);
+};
+
+struct AntennaPointing {
+    F64 ra;
+    F64 dec;
+    std::string source_name;
+
+    JST_SERDES(ra, dec);
+};
+
+struct AntennaDetails {
+    std::string name;
+    U64 number;
+    F32 diameter;
+    AntennaCoordinates position;
+    AntennaPointing pointing;
+    std::vector<ObservationTuning> tunings;
+
+    JST_SERDES(number, diameter, position);
+};
+
+struct ObservationFengine {
+    // U64 synctime;
+    F64 sample_period;
+    
+    JST_SERDES(/* synctime, */sample_period);
+};
+
+struct ObservationIers {
+    // F64 pm_x_arcsec;
+    // F64 pm_y_arcsec;
+    F64 ut1_utc;
+    
+    JST_SERDES(/* pm_x_arcsec, pm_y_arcsec, */ut1_utc);
+};
+
+struct TelescopeCoordinates {
+    F64 latitude;
+    F64 longitude;
+    F32 altitude;
+
+    JST_SERDES(latitude, longitude, altitude);
+};
+
+struct TelescopeInfo {
+    std::string name;
+    TelescopeCoordinates coordinates;
+    std::vector<AntennaDetails> antennas;
+    ObservationIers iers;
+
+    JST_SERDES(name, coordinates, antennas, iers);
+};
 
 Result Uvh5ReaderImpl::validate() {
     const auto& config = *candidate();
@@ -30,6 +104,58 @@ Result Uvh5ReaderImpl::validate() {
 
 Result Uvh5ReaderImpl::define() {
     JST_CHECK(defineInterfaceOutput("signal"));
+
+    return Result::SUCCESS;
+}
+
+Result Uvh5ReaderImpl::publishMetadata(const UVH5_header_t* header, const bool& access_phase_center) {
+    TelescopeInfo info;
+    info.name = header->telescope_name;
+    info.coordinates.latitude = header->latitude;
+    info.coordinates.longitude = header->longitude;
+    info.coordinates.altitude = header->altitude;
+    info.iers.ut1_utc = header->dut1;
+
+    ObservationTuning tuning;
+    tuning.name = "Unknown";
+    ObservationBand band;
+    band.frequency_start = header->freq_array[0]-0.5*header->channel_width[0];
+    band.frequency_stop = header->freq_array[0]+0.5*header->channel_width[0];
+    band.channel_start = 0;
+    band.channel_stop = 1;
+    tuning.bands.push_back(band);
+    
+    if (access_phase_center) {
+        // phase_center_id_array is incrementally read,
+        // index 0 is always appropriate
+        int catalog_index = header->phase_center_id_array[0];
+        UVH5_phase_center_t phase_center = header->phase_center_catalog[catalog_index];
+        for (size_t index = 0; index < header->Nants_telescope; index++) {
+            AntennaDetails ant;
+    
+            ant.name = header->antenna_names[index];
+            ant.number = header->antenna_numbers[index];
+            ant.diameter = header->antenna_diameters[index];
+            ant.position.x = header->antenna_positions[(3*index)+0];
+            ant.position.y = header->antenna_positions[(3*index)+1];
+            ant.position.z = header->antenna_positions[(3*index)+2];
+            ant.pointing.ra = phase_center.pm_ra;
+            ant.pointing.dec = phase_center.pm_dec;
+            if (phase_center.info_source != NULL && strlen(phase_center.info_source) > 0) {
+                ant.pointing.source_name = phase_center.info_source;
+            } else {
+                ant.pointing.source_name = "Unknown";
+            }
+            
+            ant.tunings.push_back(tuning);
+            info.antennas.push_back(ant);
+        }
+    }
+
+    if (environment()->set("observatory", info) != Result::SUCCESS) {
+        JST_ERROR("[MODULE_UVH5_READER] Could not publish 'observatory' nested environment value.");
+        return Result::INCOMPLETE;
+    }
 
     return Result::SUCCESS;
 }
@@ -67,6 +193,7 @@ Result Uvh5ReaderImpl::create() {
         JST_ERROR("[MODULE_UVH5_READER] Cannot open file '{}'.", filepath);
         return Result::INCOMPLETE;
     }
+    JST_CHECK(publishMetadata(&uvh5File.header, false));
     
     UVH5change_access_chunking(
         &uvh5File,
