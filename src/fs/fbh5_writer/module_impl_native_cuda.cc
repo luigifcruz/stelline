@@ -17,19 +17,26 @@ struct Fbh5WriterImplNativeCuda : public Fbh5WriterImpl,
                                   public NativeCudaRuntimeContext,
                                   public Scheduler::Context {
  public:
-    Result create() final;
+    Result validate() final;
     Result computeSubmit(const cudaStream_t& stream) override;
 };
 
-Result Fbh5WriterImplNativeCuda::create() {
+Result Fbh5WriterImplNativeCuda::validate() {
+    JST_CHECK(Fbh5WriterImpl::validate());
+
+    if (!inputs().contains("input")) {
+        return Result::SUCCESS;
+    }
+
     const Tensor& input = inputs().at("input").tensor;
+    if (!input.validShape() || input.size() == 0) {
+        return Result::SUCCESS;
+    }
 
     if (input.dtype() != DataType::F32) {
         JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Unsupported data type '{}'. Expected F32.", input.dtype());
         return Result::ERROR;
     }
-
-    JST_CHECK(Fbh5WriterImpl::create());
 
     return Result::SUCCESS;
 }
