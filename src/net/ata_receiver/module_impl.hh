@@ -2,6 +2,7 @@
 #define STELLINE_ATA_RECEIVER_MODULE_IMPL_HH
 
 #include <atomic>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -17,6 +18,8 @@
 #include <jetstream/memory/tensor.hh>
 #include <jetstream/tools/snapshot.hh>
 #include <daqiri/daqiri.h>
+
+#include "../endpoint.hh"
 
 namespace Jetstream::Modules {
 
@@ -78,6 +81,14 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
 
      Tensor outputTensor;
 
+     Shape validatedSlotShape;
+     U64 validatedPacketsPerBlock = 0;
+     U64 validatedPacketDuration = 0;
+     U64 validatedBlockDuration = 0;
+     U64 validatedOutputSizeBytes = 0;
+     U64 validatedOutputPoolSizeBytes = 0;
+     std::vector<stelline::domains::stelline::utils::SubscriptionEndpoint> validatedSubscriptions;
+
      std::vector<U64> slotShape;
      U64 packetsPerBlock = 0;
      U64 packetDuration = 0;
@@ -100,6 +111,7 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
      std::queue<std::shared_ptr<Tensor>> availableOutputTensors;
 
      std::mutex readyMutex;
+     std::condition_variable readyCondition;
      std::queue<AtaReceiverReadyTensor> readyOutputTensors;
 
      std::mutex burstCollectorMutex;
