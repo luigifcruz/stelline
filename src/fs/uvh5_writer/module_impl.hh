@@ -80,6 +80,9 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
     Result refreshDynamicMetadata(const U64& timestamp);
     void updateBandwidth(const U64 deltaBytes);
 
+    Shape validatedExpectedShape;
+    DataType validatedInputDataType = DataType::None;
+
     Shape expectedShape;
     DataType inputDataType = DataType::None;
 
@@ -88,6 +91,8 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
     hid_t faplId = -1;
     bool faplOpen = false;
     UVH5_file_t uvh5File = {};
+    bool headerAllocated = false;
+    bool openAttempted = false;
     bool fileOpen = false;
 
     F64 integrationTimespan = 0.0;

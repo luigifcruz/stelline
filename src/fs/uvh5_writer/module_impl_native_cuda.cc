@@ -45,22 +45,29 @@ I32 CalToMjd(I32 year, I32 month, I32 day) {
 }  // namespace
 
 struct Uvh5WriterImplNativeCuda : public Uvh5WriterImpl,
-                                  public NativeCudaRuntimeContext,
-                                  public Scheduler::Context {
+                                   public NativeCudaRuntimeContext,
+                                   public Scheduler::Context {
  public:
-    Result create() final;
+    Result validate() final;
     Result computeSubmit(const cudaStream_t& stream) override;
 };
 
-Result Uvh5WriterImplNativeCuda::create() {
+Result Uvh5WriterImplNativeCuda::validate() {
+    JST_CHECK(Uvh5WriterImpl::validate());
+
+    if (!inputs().contains("input")) {
+        return Result::SUCCESS;
+    }
+
     const Tensor& input = inputs().at("input").tensor;
+    if (!input.validShape() || input.size() == 0) {
+        return Result::SUCCESS;
+    }
 
     if (input.dtype() != DataType::CF32) {
         JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Unsupported data type '{}'. Expected CF32.", input.dtype());
         return Result::ERROR;
     }
-
-    JST_CHECK(Uvh5WriterImpl::create());
 
     return Result::SUCCESS;
 }
@@ -113,8 +120,13 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         return Result::ERROR;
     }
 
-    const U64 timestamp = std::any_cast<U64>(input.attribute("timestamp"));
-    JST_CHECK(refreshDynamicMetadata(timestamp));
+    const std::any timestampValue = input.attribute("timestamp");
+    const auto* timestamp = std::any_cast<U64>(&timestampValue);
+    if (!timestamp) {
+        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Input 'timestamp' attribute must have type U64.");
+        return Result::ERROR;
+    }
+    JST_CHECK(refreshDynamicMetadata(*timestamp));
 
     uvh5File.visdata = const_cast<void*>(input.data());
 
@@ -123,7 +135,7 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     F64 realtimeSeconds = 0.0;
     const F64 channelBandwidth = metadata.instanceBandwidth / static_cast<F64>(metadata.instanceChannelCount);
     if (channelBandwidth != 0.0) {
-        realtimeSeconds = static_cast<F64>(timestamp) / (1e6 * std::fabs(channelBandwidth));
+        realtimeSeconds = static_cast<F64>(*timestamp) / (1e6 * std::fabs(channelBandwidth));
     }
 
     struct timespec timeSpec = {};
@@ -175,15 +187,18 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     }
 
     uvh5File.nsamples[0] = input.size();
-    for (I32 baseline = 0; baseline < header->Nbls; baseline++) {
+    const U64 baselineCount = static_cast<U64>(header->Nbls);
+    const U64 samplesPerBaseline = static_cast<U64>(header->Nfreqs) *
+                                   static_cast<U64>(header->Npols);
+    for (U64 baseline = 0; baseline < baselineCount; baseline++) {
         header->time_array[baseline] = header->time_array[0];
         header->phase_center_id_array[baseline] = 0;
         header->phase_center_app_ra[baseline] = updatedRightAscensionRad;
         header->phase_center_app_dec[baseline] = updatedDeclinationRad;
         header->phase_center_frame_pa[baseline] = positionAngle;
 
-        for (I32 sample = 0; sample < header->Nfreqs * header->Npols; sample++) {
-            const I32 sampleIndex = baseline * header->Nfreqs * header->Npols + sample;
+        for (U64 sample = 0; sample < samplesPerBaseline; sample++) {
+            const U64 sampleIndex = baseline * samplesPerBaseline + sample;
             uvh5File.nsamples[sampleIndex] = uvh5File.nsamples[0];
             uvh5File.flags[sampleIndex] = H5_FALSE;
         }
@@ -211,7 +226,10 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
                                         calc_rad_from_degree(header->latitude));
     UVH5permute_uvws(header);
 
-    UVH5write_dynamic(&uvh5File);
+    if (UVH5write_dynamic(&uvh5File) != 0) {
+        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to write the UVH5 datasets.");
+        return Result::ERROR;
+    }
 
     hsize_t currentFileSize = 0;
     JST_HDF5_CHECK(H5Fget_filesize(uvh5File.file_id, &currentFileSize), [&] {
