@@ -17,9 +17,11 @@ jobs:
           - tag: x86_64-cuda
             runner: ubuntu-latest
             base: ghcr.io/luigifcruz/cyberether:v1.8.0-ubuntu24-x86_64-cuda
+            device: cuda
           - tag: aarch64-cuda
             runner: ubuntu-24.04-arm
             base: ghcr.io/luigifcruz/cyberether:v1.8.0-ubuntu24-aarch64-cuda
+            device: cuda
 
     steps:
       - name: Checkout
@@ -30,6 +32,7 @@ jobs:
           set -euo pipefail
           docker run --rm \
             --env BUILD_TYPE=release \
+            --env STELLINE_DEVICES=${{ matrix.device }} \
             --env CEP_OUTPUT_DIR=.dist/${{ matrix.tag }} \
             --volume "${PWD}:/workspace" \
             --workdir /workspace \
@@ -43,7 +46,11 @@ jobs:
               apt-get install -y --no-install-recommends cmake libdpdk-dev
               rm -rf /var/lib/apt/lists/*
               git config --global --add safe.directory /workspace
-              sh tools/ci/package_cep.sh
+              rm -rf build
+              meson setup build -Dbuildtype="${BUILD_TYPE}" -Ddevices="${STELLINE_DEVICES}"
+              meson compile -C build stelline_cep
+              mkdir -p "${CEP_OUTPUT_DIR}"
+              cp build/stelline.cep "${CEP_OUTPUT_DIR}/stelline.cep"
             '
 
       - name: Stage artifact
