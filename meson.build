@@ -22,7 +22,7 @@ if not plugin_is_linux
     error('Stelline only supports Linux targets for now.')
 endif
 
-minimum_jetstream_version = '1.8.0'
+minimum_jetstream_version = '1.8.2'
 
 #
 # Load Python
