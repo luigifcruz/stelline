@@ -401,6 +401,6 @@ Result AtaReceiverImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(AtaReceiverImpl);
+JST_REGISTER_BLOCK(AtaReceiverImpl, {"ata_receiver"});
 
 }  // namespace Jetstream::Blocks
