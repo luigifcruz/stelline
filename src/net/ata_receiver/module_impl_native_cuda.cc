@@ -1,5 +1,6 @@
 #include <chrono>
 #include <memory>
+#include <limits>
 #include <mutex>
 #include <set>
 #include <string>
@@ -15,6 +16,7 @@
 #include <jetstream/runtime_context_native_cuda.hh>
 #include <jetstream/scheduler_context.hh>
 #include <jetstream/registry.hh>
+#include <jetstream/tools/numeric.hh>
 
 #include "../endpoint.hh"
 #include "../multicast.hh"
@@ -68,6 +70,7 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
                                    public NativeCudaRuntimeContext,
                                    public Scheduler::Context {
  public:
+    Result validate() final;
     Result create() final;
     Result destroy() final;
     Result hasPendingCompute() override;
@@ -84,6 +87,7 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
 
     Result receiveLoop();
     Result burstCollectorLoop();
+    Result createInternal();
 
     Result processBurst(const std::shared_ptr<daqiri::BurstParams>& burst);
 
@@ -115,15 +119,82 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
     MulticastMembership multicastMembership;
 };
 
+Result AtaReceiverImplNativeCuda::validate() {
+    JST_CHECK(AtaReceiverImpl::validate());
+
+    const auto& config = *candidate();
+
+    if (config.gpuDeviceId > static_cast<U64>(std::numeric_limits<U16>::max()) ||
+        config.masterCore > static_cast<U64>(std::numeric_limits<int>::max())) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] CUDA device or master core identifier is out of range.");
+        return Result::ERROR;
+    }
+
+    if (config.packetsPerBurst > static_cast<U64>(std::numeric_limits<int>::max()) ||
+        config.maxConcurrentBursts > std::numeric_limits<std::size_t>::max() ||
+        config.maxConcurrentBlocks > std::numeric_limits<std::size_t>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Burst or block count is too large.");
+        return Result::ERROR;
+    }
+
+    if (validatedSubscriptions.size() > std::numeric_limits<U16>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Too many subscriptions for DAQIRI queue identifiers.");
+        return Result::ERROR;
+    }
+
+    U64 totalBuffers = 0;
+    U64 stagingArraySizeBytes = 0;
+    U64 stagingPoolSizeBytes = 0;
+    U64 daqiriDataSizeBytes = 0;
+    if (!detail::CheckedMultiply(config.packetsPerBurst,
+                                 config.maxConcurrentBursts,
+                                 totalBuffers) ||
+        totalBuffers < validatedSubscriptions.size() ||
+        totalBuffers > std::numeric_limits<std::size_t>::max() ||
+        !detail::CheckedMultiply(config.packetsPerBurst,
+                                 static_cast<U64>(sizeof(void*)),
+                                 stagingArraySizeBytes) ||
+        !detail::CheckedMultiply(stagingArraySizeBytes,
+                                 config.maxConcurrentBursts,
+                                 stagingPoolSizeBytes) ||
+        !detail::CheckedMultiply(stagingPoolSizeBytes,
+                                 U64{2},
+                                 stagingPoolSizeBytes) ||
+        stagingPoolSizeBytes > std::numeric_limits<std::size_t>::max() ||
+        !detail::CheckedMultiply(totalBuffers,
+                                 kPacketDataSize,
+                                 daqiriDataSizeBytes) ||
+        daqiriDataSizeBytes > std::numeric_limits<std::size_t>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] DAQIRI or scatter staging allocation is too large.");
+        return Result::ERROR;
+    }
+
+    return Result::SUCCESS;
+}
+
 Result AtaReceiverImplNativeCuda::create() {
+    try {
+        return createInternal();
+    } catch (const Result& result) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] ATA receiver creation failed.");
+        return result;
+    } catch (const std::exception& error) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] ATA receiver creation failed: {}",
+                  error.what());
+        return Result::ERROR;
+    } catch (...) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] ATA receiver creation failed with an unknown error.");
+        return Result::ERROR;
+    }
+}
+
+Result AtaReceiverImplNativeCuda::createInternal() {
     JST_CHECK(AtaReceiverImpl::create());
 
     // Initialize variables.
 
     errored.store(false);
-
-    std::vector<SubscriptionEndpoint> parsedSubscriptions;
-    JST_CHECK(ParseSubscriptions(subscriptions, parsedSubscriptions));
+    streamStats = {};
 
     // Set CUDA device.
 
@@ -154,7 +225,7 @@ Result AtaReceiverImplNativeCuda::create() {
                                               : daqiri::MemoryKind::DEVICE;
 
         daqiri::NetworkConfig cfg = {};
-        JST_CHECK(BuildDaqiriRxConfig(params, parsedSubscriptions, cfg));
+        JST_CHECK(BuildDaqiriRxConfig(params, validatedSubscriptions, cfg));
 
         const auto initStatus = daqiri::daqiri_init(cfg);
         if (initStatus != daqiri::Status::SUCCESS) {
@@ -189,7 +260,7 @@ Result AtaReceiverImplNativeCuda::create() {
 
     JST_CHECK(scatterPool.create(maxConcurrentBursts, packetsPerBurst));
 
-    JST_CHECK(multicastMembership.create(interfaceAddress, parsedSubscriptions));
+    JST_CHECK(multicastMembership.create(interfaceAddress, validatedSubscriptions));
 
     // Flush receiving queues.
 
@@ -204,6 +275,7 @@ Result AtaReceiverImplNativeCuda::create() {
         errored.store(true);
         packetProcessingThreadRunning.store(false);
         burstCollectorThreadRunning.store(false);
+        readyCondition.notify_all();
     };
 
     packetProcessingThread = std::thread([this, handleThreadFailure]() {
@@ -250,11 +322,19 @@ Result AtaReceiverImplNativeCuda::destroy() {
 }
 
 Result AtaReceiverImplNativeCuda::hasPendingCompute() {
+    std::unique_lock<std::mutex> lock(readyMutex);
+    if (!readyCondition.wait_for(lock, std::chrono::milliseconds(100), [this]() {
+            return !readyOutputTensors.empty() ||
+                   errored.load() ||
+                   !packetProcessingThreadRunning.load();
+        })) {
+        return Result::TIMEOUT;
+    }
+
     if (errored.load()) {
         return Result::ERROR;
     }
 
-    std::lock_guard<std::mutex> lock(readyMutex);
     if (readyOutputTensors.empty()) {
         return Result::YIELD;
     }
@@ -550,7 +630,9 @@ Result AtaReceiverImplNativeCuda::releaseReceivedBlocks() {
         auto block = receiveQueue.front();
         receiveQueue.pop();
 
-        const bool isStale = latestBlockTimeIndex.get() > (block->index + maxConcurrentBlocks);
+        const U64 latestIndex = latestBlockTimeIndex.get();
+        const bool isStale = latestIndex > block->index &&
+                             latestIndex - block->index > maxConcurrentBlocks;
 
         if (block->isComplete()) {
             blockMap.erase(block->index);

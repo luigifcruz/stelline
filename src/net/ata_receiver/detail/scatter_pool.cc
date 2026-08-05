@@ -1,12 +1,26 @@
 #include "scatter_pool.hh"
 
+#include <limits>
+
 #include <jetstream/logger.hh>
 #include <jetstream/macros.hh>
 #include <jetstream/backend/devices/cuda/helpers.hh>
+#include <jetstream/tools/numeric.hh>
 
 namespace Jetstream::Modules {
 
 Result ScatterStagingPool::create(const U64 maxConcurrentBursts, const U64 packetsPerBurst) {
+    U64 pointerArraySizeBytes = 0;
+    if (maxConcurrentBursts == 0 ||
+        maxConcurrentBursts > std::numeric_limits<std::size_t>::max() ||
+        !detail::CheckedMultiply(packetsPerBurst,
+                                 static_cast<U64>(sizeof(void*)),
+                                 pointerArraySizeBytes) ||
+        pointerArraySizeBytes > std::numeric_limits<std::size_t>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Scatter staging dimensions are too large.");
+        return Result::ERROR;
+    }
+
     int lowPriority = 0;
     int highPriority = 0;
     JST_CUDA_CHECK(cudaDeviceGetStreamPriorityRange(&lowPriority, &highPriority), [&] {
@@ -19,11 +33,11 @@ Result ScatterStagingPool::create(const U64 maxConcurrentBursts, const U64 packe
     stagingPool.resize(maxConcurrentBursts);
     for (auto& staging : stagingPool) {
         JST_CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&staging.sources),
-                                      packetsPerBurst * sizeof(void*)), [&] {
+                                      static_cast<std::size_t>(pointerArraySizeBytes)), [&] {
             JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to allocate scatter staging sources: {}", err);
         });
         JST_CUDA_CHECK(cudaMallocHost(reinterpret_cast<void**>(&staging.destinations),
-                                      packetsPerBurst * sizeof(void*)), [&] {
+                                      static_cast<std::size_t>(pointerArraySizeBytes)), [&] {
             JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to allocate scatter staging destinations: {}", err);
         });
         JST_CUDA_CHECK(cudaEventCreateWithFlags(&staging.event, cudaEventDisableTiming), [&] {

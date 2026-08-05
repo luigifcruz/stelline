@@ -1,9 +1,11 @@
 #include "daqiri_config.hh"
 
 #include <string>
+#include <limits>
 
 #include <jetstream/logger.hh>
 #include <jetstream/macros.hh>
+#include <jetstream/tools/numeric.hh>
 
 #include "packet.hh"
 
@@ -21,7 +23,31 @@ Result BuildDaqiriRxConfig(const DaqiriRxConfigParams& params,
                            const std::vector<SubscriptionEndpoint>& subscriptions,
                            daqiri::NetworkConfig& cfg) {
     const auto subscriptionCount = subscriptions.size();
-    const auto totalNumBufs = static_cast<size_t>(params.packetsPerBurst * params.maxConcurrentBursts);
+    if (subscriptionCount == 0 ||
+        subscriptionCount > std::numeric_limits<U16>::max() ||
+        params.workerCores.empty() ||
+        params.gpuDeviceId > static_cast<U64>(std::numeric_limits<U16>::max()) ||
+        params.masterCore > static_cast<U64>(std::numeric_limits<int>::max()) ||
+        params.packetsPerBurst == 0 ||
+        params.packetsPerBurst > static_cast<U64>(std::numeric_limits<int>::max()) ||
+        params.maxConcurrentBursts == 0) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] Invalid DAQIRI receiver configuration.");
+        return Result::ERROR;
+    }
+
+    U64 totalNumBufsU64 = 0;
+    if (!detail::CheckedMultiply(params.packetsPerBurst,
+                                 params.maxConcurrentBursts,
+                                 totalNumBufsU64) ||
+        totalNumBufsU64 > std::numeric_limits<std::size_t>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] DAQIRI buffer count is too large.");
+        return Result::ERROR;
+    }
+    const auto totalNumBufs = static_cast<size_t>(totalNumBufsU64);
+    if (totalNumBufs < subscriptionCount) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] Total buffer count is too small for the number of subscriptions.");
+        return Result::ERROR;
+    }
 
     cfg.log_level_ = daqiri::LogLevel::TRACE;
     cfg.tx_meta_buffers_ = daqiri::DEFAULT_TX_META_BUFFERS * 8;

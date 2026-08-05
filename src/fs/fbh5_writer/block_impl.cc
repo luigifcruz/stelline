@@ -105,6 +105,6 @@ Result Fbh5WriterImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(Fbh5WriterImpl);
+JST_REGISTER_BLOCK(Fbh5WriterImpl, {"fbh5_writer"});
 
 }  // namespace Jetstream::Blocks

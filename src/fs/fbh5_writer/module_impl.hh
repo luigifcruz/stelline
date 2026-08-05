@@ -37,6 +37,9 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
  protected:
     void updateBandwidth(const U64 deltaBytes);
 
+    Shape validatedExpectedShape;
+    DataType validatedInputDataType = DataType::None;
+
     Shape expectedShape;
     DataType inputDataType = DataType::None;
 
@@ -44,6 +47,7 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     bool faplOpen = false;
 
     filterbank_h5_file_t fbh5File = {};
+    bool openAttempted = false;
     bool fileOpen = false;
     bool dataOpen = false;
     bool maskOpen = false;

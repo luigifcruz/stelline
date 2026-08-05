@@ -3,6 +3,12 @@
 #include "../endpoint.hh"
 
 #include "detail/block.hh"
+#include "detail/packet.hh"
+
+#include <limits>
+
+#include <jetstream/memory/axis.hh>
+#include <jetstream/tools/numeric.hh>
 
 namespace Jetstream::Modules {
 
@@ -31,6 +37,14 @@ bool ValidateBlockShape(const std::vector<U64>& shape,
 }  // namespace
 
 Result AtaReceiverImpl::validate() {
+    validatedSlotShape = {};
+    validatedPacketsPerBlock = 0;
+    validatedPacketDuration = 0;
+    validatedBlockDuration = 0;
+    validatedOutputSizeBytes = 0;
+    validatedOutputPoolSizeBytes = 0;
+    validatedSubscriptions.clear();
+
     const auto& config = *candidate();
 
     if (config.engine != "ibverbs") {
@@ -77,8 +91,9 @@ Result AtaReceiverImpl::validate() {
         return Result::ERROR;
     }
 
-    if (NameToDataType(config.dataType) != DataType::CF32 &&
-        NameToDataType(config.dataType) != DataType::CI8) {
+    const DataType outputDataType = NameToDataType(config.dataType);
+    if (outputDataType != DataType::CF32 &&
+        outputDataType != DataType::CI8) {
         JST_ERROR("[MODULE_ATA_RECEIVER] Unsupported data type '{}'.", config.dataType);
         return Result::ERROR;
     }
@@ -108,12 +123,11 @@ Result AtaReceiverImpl::validate() {
         return Result::ERROR;
     }
 
-    std::vector<SubscriptionEndpoint> parsedSubscriptions;
-    if (ParseSubscriptions(config.subscriptions, parsedSubscriptions) != Result::SUCCESS) {
+    if (ParseSubscriptions(config.subscriptions, validatedSubscriptions) != Result::SUCCESS) {
         return Result::ERROR;
     }
 
-    for (const auto& subscription : parsedSubscriptions) {
+    for (const auto& subscription : validatedSubscriptions) {
         EndpointMatch source;
         if (ParseEndpoint(subscription.source, source) != Result::SUCCESS) {
             return Result::ERROR;
@@ -123,6 +137,70 @@ Result AtaReceiverImpl::validate() {
         if (ParseEndpoint(subscription.destination, destination) != Result::SUCCESS) {
             return Result::ERROR;
         }
+    }
+
+    U64 partialElements = 1;
+    for (const auto value : config.partialBlock) {
+        if (!detail::CheckedMultiply(partialElements, value, partialElements)) {
+            JST_ERROR("[MODULE_ATA_RECEIVER] The 'partialBlock' layout is too large.");
+            return Result::ERROR;
+        }
+    }
+    U64 partialSizeBytes = 0;
+    if (!detail::CheckedMultiply(partialElements,
+                                 static_cast<U64>(sizeof(CI8)),
+                                 partialSizeBytes) ||
+        partialSizeBytes != kPacketDataSize) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] The 'partialBlock' must describe exactly {} bytes of CI8 packet payload.",
+                  kPacketDataSize);
+        return Result::ERROR;
+    }
+
+    validatedSlotShape.resize(kShapeRank);
+    validatedPacketsPerBlock = 1;
+    U64 outputElements = 1;
+    for (U64 axis = 0; axis < kShapeRank; axis++) {
+        validatedSlotShape[axis] = config.totalBlock[axis] /
+                                   config.partialBlock[axis];
+        if (!detail::CheckedMultiply(validatedPacketsPerBlock,
+                                     validatedSlotShape[axis],
+                                     validatedPacketsPerBlock) ||
+            !detail::CheckedMultiply(outputElements,
+                                     config.totalBlock[axis],
+                                     outputElements)) {
+            JST_ERROR("[MODULE_ATA_RECEIVER] Block dimensions are too large.");
+            return Result::ERROR;
+        }
+    }
+
+    validatedPacketDuration = config.partialBlock[kSampleAxis];
+    if (!detail::CheckedMultiply(validatedSlotShape[kSampleAxis],
+                                 validatedPacketDuration,
+                                 validatedBlockDuration)) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] Block duration is too large.");
+        return Result::ERROR;
+    }
+
+    if (!detail::CheckedMultiply(outputElements,
+                                 static_cast<U64>(DataTypeSize(outputDataType)),
+                                 validatedOutputSizeBytes) ||
+        validatedOutputSizeBytes > std::numeric_limits<std::size_t>::max() ||
+        !detail::CheckedMultiply(validatedOutputSizeBytes,
+                                 config.outputPoolSize,
+                                 validatedOutputPoolSizeBytes) ||
+        validatedOutputPoolSizeBytes > std::numeric_limits<std::size_t>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] Output tensor pool is too large.");
+        return Result::ERROR;
+    }
+
+    U64 blockSlotCount = 0;
+    if (validatedPacketsPerBlock > std::numeric_limits<std::size_t>::max() ||
+        !detail::CheckedMultiply(validatedPacketsPerBlock,
+                                 config.maxConcurrentBlocks,
+                                 blockSlotCount) ||
+        blockSlotCount > std::numeric_limits<std::size_t>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] Reception block pool is too large.");
+        return Result::ERROR;
     }
 
     return Result::SUCCESS;
@@ -136,20 +214,10 @@ Result AtaReceiverImpl::define() {
 }
 
 Result AtaReceiverImpl::create() {
-    slotShape = {
-        totalBlock[kAntennaAxis] / partialBlock[kAntennaAxis],
-        totalBlock[kChannelAxis] / partialBlock[kChannelAxis],
-        totalBlock[kSampleAxis] / partialBlock[kSampleAxis],
-        totalBlock[kPolarizationAxis] / partialBlock[kPolarizationAxis],
-    };
-
-    packetsPerBlock = 1;
-    for (const auto& value : slotShape) {
-        packetsPerBlock *= value;
-    }
-
-    packetDuration = partialBlock[kSampleAxis];
-    blockDuration = slotShape[kSampleAxis] * packetDuration;
+    slotShape = validatedSlotShape;
+    packetsPerBlock = validatedPacketsPerBlock;
+    packetDuration = validatedPacketDuration;
+    blockDuration = validatedBlockDuration;
 
     timestampCutoff = 0;
 
@@ -180,6 +248,10 @@ Result AtaReceiverImpl::create() {
     payloadSizes.publish({});
 
     JST_CHECK(outputTensor.create(device(), NameToDataType(dataType), totalBlock));
+    JST_CHECK(SetSignalAxes(outputTensor, {
+        .sample = Index{kSampleAxis},
+        .channel = Index{kChannelAxis},
+    }));
     JST_CHECK(outputTensor.setAttribute("timestamp", static_cast<U64>(0)));
 
     outputs()["output"].produced(name(), "output", outputTensor);
@@ -254,6 +326,7 @@ Result AtaReceiverImpl::reconfigure() {
 void AtaReceiverImpl::stopThreads() {
     packetProcessingThreadRunning.store(false);
     burstCollectorThreadRunning.store(false);
+    readyCondition.notify_all();
 
     if (packetProcessingThread.joinable()) {
         packetProcessingThread.join();
@@ -265,9 +338,12 @@ void AtaReceiverImpl::stopThreads() {
 }
 
 Result AtaReceiverImpl::pushReadyTensor(const std::shared_ptr<Tensor>& tensor, const U64 timestamp) {
-    std::lock_guard<std::mutex> lock(readyMutex);
-    readyOutputTensors.push({tensor, timestamp});
-    readyQueueDepth.publish(readyOutputTensors.size());
+    {
+        std::lock_guard<std::mutex> lock(readyMutex);
+        readyOutputTensors.push({tensor, timestamp});
+        readyQueueDepth.publish(readyOutputTensors.size());
+    }
+    readyCondition.notify_one();
 
     return Result::SUCCESS;
 }

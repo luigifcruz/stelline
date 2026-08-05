@@ -1,4 +1,5 @@
 .cache
+.dist/
 .DS_Store
 build/*
 builddir/*
@@ -21,6 +22,7 @@ build-*
 
 subprojects/*
 !subprojects/packagefiles/
+!subprojects/catch2.wrap
 !subprojects/cyberether.wrap
 !subprojects/daqiri.wrap
 !subprojects/erfa.wrap

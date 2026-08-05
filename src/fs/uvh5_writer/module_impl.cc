@@ -4,8 +4,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 
 #include <hdf5.h>
+
+#include <jetstream/memory/axis.hh>
+#include <jetstream/tools/numeric.hh>
 
 #include "../helpers.hh"
 
@@ -18,6 +22,9 @@ extern "C" {
 namespace Jetstream::Modules {
 
 Result Uvh5WriterImpl::validate() {
+    validatedExpectedShape = {};
+    validatedInputDataType = DataType::None;
+
     const auto& config = *candidate();
 
     if (config.dspChannelizationRate == 0) {
@@ -29,6 +36,62 @@ Result Uvh5WriterImpl::validate() {
         JST_ERROR("[MODULE_UVH5_WRITER] The 'dspIntegrationRate' must be positive.");
         return Result::ERROR;
     }
+
+    if (!inputs().contains("input")) {
+        return Result::SUCCESS;
+    }
+
+    const Tensor& input = inputs().at("input").tensor;
+    if (!input.validShape() || input.size() == 0) {
+        return Result::SUCCESS;
+    }
+
+    if (input.rank() != kExpectedRank) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must have {} dimensions [T, BL, F, P], but received shape {}.",
+                  kExpectedRank,
+                  input.shape());
+        return Result::ERROR;
+    }
+
+    if (input.shape(kTimeAxis) != kExpectedTimeCount) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must have {} time sample per write, but received {}.",
+                  kExpectedTimeCount,
+                  input.shape(kTimeAxis));
+        return Result::ERROR;
+    }
+
+    if (input.shape(kPolarizationAxis) != kExpectedPolarizationCount) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must have {} polarizations, but received {}.",
+                  kExpectedPolarizationCount,
+                  input.shape(kPolarizationAxis));
+        return Result::ERROR;
+    }
+
+    SignalAxes axes;
+    if (ResolveSignalAxes(input, axes) != Result::SUCCESS ||
+        axes.sample != Index{kTimeAxis} ||
+        axes.channel != Index{kFrequencyAxis}) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must define sampleAxis={} and channelAxis={} for [T, BL, F, P].",
+                  kTimeAxis,
+                  kFrequencyAxis);
+        return Result::ERROR;
+    }
+
+    if (config.recording) {
+        if (!input.hasAttribute("timestamp")) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Input tensor missing required 'timestamp' attribute.");
+            return Result::ERROR;
+        }
+
+        const std::any timestampValue = input.attribute("timestamp");
+        if (!std::any_cast<U64>(&timestampValue)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Input 'timestamp' attribute must have type U64.");
+            return Result::ERROR;
+        }
+    }
+
+    validatedExpectedShape = input.shape();
+    validatedInputDataType = input.dtype();
 
     return Result::SUCCESS;
 }
@@ -86,7 +149,8 @@ Result Uvh5WriterImpl::loadMetadata() {
         return Result::INCOMPLETE;
     }
 
-    if (integer.value <= 0) {
+    if (integer.value <= 0 ||
+        integer.value > std::numeric_limits<I32>::max()) {
         JST_ERROR("[MODULE_UVH5_WRITER] Invalid observation antenna count {}.", integer.value);
         return Result::INCOMPLETE;
     }
@@ -109,6 +173,11 @@ Result Uvh5WriterImpl::loadMetadata() {
             if (!environment()->tryGet(key, integer)) {
                 JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
                 return Result::INCOMPLETE;
+            }
+            if (integer.value < 0 ||
+                static_cast<U64>(integer.value) > static_cast<U64>(std::numeric_limits<I32>::max())) {
+                JST_ERROR("[MODULE_UVH5_WRITER] Invalid antenna number {} for '{}'.", integer.value, key);
+                return Result::ERROR;
             }
             antenna.number = static_cast<U64>(integer.value);
         }
@@ -183,6 +252,10 @@ Result Uvh5WriterImpl::loadMetadata() {
         JST_ERROR("[MODULE_UVH5_WRITER] Missing required 'instance.bands.0.band_index' environment value.");
         return Result::INCOMPLETE;
     }
+    if (integer.value < 0) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Invalid instance band index {}.", integer.value);
+        return Result::ERROR;
+    }
     metadata.instanceBandIndex = static_cast<U64>(integer.value);
 
     F64 frequencyStart = 0.0;
@@ -240,13 +313,14 @@ Result Uvh5WriterImpl::loadMetadata() {
 
     metadata.instanceBandCenter = (frequencyStop + frequencyStart) / 2.0;
     metadata.instanceBandwidth = frequencyStop - frequencyStart;
-    if (channelStop <= channelStart) {
+    if (channelStart < 0 || channelStop <= channelStart) {
         JST_ERROR("[MODULE_UVH5_WRITER] Invalid instance channel count derived from '{}' and '{}'.",
                  channelStart,
                  channelStop);
         return Result::INCOMPLETE;
     }
-    metadata.instanceChannelCount = static_cast<U64>(channelStop - channelStart);
+    metadata.instanceChannelCount = static_cast<U64>(channelStop) -
+                                    static_cast<U64>(channelStart);
 
     {
         const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.fengine.synctime",
@@ -255,6 +329,10 @@ Result Uvh5WriterImpl::loadMetadata() {
         if (!environment()->tryGet(key, integer)) {
             JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
             return Result::INCOMPLETE;
+        }
+        if (integer.value < 0) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Invalid packet timestamp offset {}.", integer.value);
+            return Result::ERROR;
         }
         metadata.packetTimestampOffset = static_cast<U64>(integer.value);
     }
@@ -364,43 +442,9 @@ Result Uvh5WriterImpl::refreshDynamicMetadata(const U64& timestamp) {
 }
 
 Result Uvh5WriterImpl::create() {
-    const Tensor& input = inputs().at("input").tensor;
-
-    if (input.rank() != kExpectedRank) {
-        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must have {} dimensions [T, BL, F, P], but received shape {}.",
-                  kExpectedRank,
-                  input.shape());
-        return Result::ERROR;
-    }
-
-    if (!input.contiguous()) {
-        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must be contiguous.");
-        return Result::ERROR;
-    }
-
-    for (const auto& dim : input.shape()) {
-        if (dim == 0) {
-            JST_ERROR("[MODULE_UVH5_WRITER] Input tensor dimensions must be positive.");
-            return Result::ERROR;
-        }
-    }
-
-    if (input.shape(kTimeAxis) != kExpectedTimeCount) {
-        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must have {} time sample per write, but received {}.",
-                  kExpectedTimeCount,
-                  input.shape(kTimeAxis));
-        return Result::ERROR;
-    }
-
-    if (input.shape(kPolarizationAxis) != kExpectedPolarizationCount) {
-        JST_ERROR("[MODULE_UVH5_WRITER] Input tensor must have {} polarizations, but received {}.",
-                  kExpectedPolarizationCount,
-                  input.shape(kPolarizationAxis));
-        return Result::ERROR;
-    }
-
-    expectedShape = input.shape();
-    inputDataType = input.dtype();
+    expectedShape = validatedExpectedShape;
+    inputDataType = validatedInputDataType;
+    openAttempted = false;
 
     bytesWritten.publish(0);
     chunkCounter.publish(0);
@@ -439,37 +483,55 @@ Result Uvh5WriterImpl::create() {
         }
     }
 
-    {
-        std::error_code ec;
-        const bool fileExists = std::filesystem::exists(filePath, ec);
-        if (ec) {
-            JST_ERROR("[MODULE_UVH5_WRITER] Failed to query '{}'.", filepath);
+    std::error_code fileQueryError;
+    const bool fileExists = std::filesystem::exists(filePath, fileQueryError);
+    if (fileQueryError) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Failed to query '{}'.", filepath);
+        return Result::ERROR;
+    }
+    if (fileExists && !overwrite) {
+        JST_ERROR("[MODULE_UVH5_WRITER] File '{}' already exists.", filepath);
+        return Result::ERROR;
+    }
+    if (fileExists) {
+        const bool removed = std::filesystem::remove(filePath, fileQueryError);
+        if (fileQueryError || !removed) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Failed to remove '{}' before overwriting.", filepath);
             return Result::ERROR;
-        }
-
-        if (fileExists) {
-            if (!overwrite) {
-                JST_ERROR("[MODULE_UVH5_WRITER] File '{}' already exists.", filepath);
-                return Result::ERROR;
-            }
-
-            const bool removed = std::filesystem::remove(filePath, ec);
-            if (ec || !removed) {
-                JST_ERROR("[MODULE_UVH5_WRITER] Failed to remove '{}' before overwriting.", filepath);
-                return Result::ERROR;
-            }
         }
     }
 
-    bytesWritten.publish(0);
-
     JST_CHECK(loadMetadata());
 
-    const U64 expectedFrequencyCount = metadata.instanceChannelCount * dspChannelizationRate;
+    U64 expectedFrequencyCount = 0;
+    if (!detail::CheckedMultiply(metadata.instanceChannelCount,
+                                 dspChannelizationRate,
+                                 expectedFrequencyCount) ||
+        expectedFrequencyCount > static_cast<U64>(std::numeric_limits<I32>::max())) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Metadata-derived UVH5 frequency count is too large.");
+        return Result::ERROR;
+    }
     if (expectedShape[kFrequencyAxis] != expectedFrequencyCount) {
         JST_ERROR("[MODULE_UVH5_WRITER] Input frequency dimension {} does not match the metadata-derived UVH5 frequency count {}.",
                   expectedShape[kFrequencyAxis],
                   expectedFrequencyCount);
+        return Result::ERROR;
+    }
+
+    const U64 antennaCountU64 = metadata.antennas.size();
+    U64 antennaProduct = 0;
+    if (!detail::CheckedMultiply(antennaCountU64,
+                                 antennaCountU64 + 1,
+                                 antennaProduct) ||
+        antennaProduct > static_cast<U64>(std::numeric_limits<I32>::max())) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Observation antenna count is too large for UVH5.");
+        return Result::ERROR;
+    }
+    const U64 expectedBaselineCount = antennaProduct / 2;
+    if (expectedShape[kBaselineAxis] != expectedBaselineCount) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Input baseline dimension {} does not match the UVH5 baseline count {}.",
+                  expectedShape[kBaselineAxis],
+                  expectedBaselineCount);
         return Result::ERROR;
     }
 
@@ -479,14 +541,15 @@ Result Uvh5WriterImpl::create() {
     UVH5_header_t* header = &uvh5File.header;
     header->Ntimes = 0;
     header->Nblts = 0;
-    header->Nfreqs = expectedFrequencyCount;
+    header->Nfreqs = static_cast<I32>(expectedFrequencyCount);
     header->Nspws = 1;
 
-    const I32 antennaCount = static_cast<I32>(metadata.antennas.size());
+    const I32 antennaCount = static_cast<I32>(antennaCountU64);
     std::vector<UVH5_antinfo_t> antennaInfo(static_cast<size_t>(antennaCount));
     for (I32 index = 0; index < antennaCount; index++) {
         antennaInfo[static_cast<size_t>(index)].name = const_cast<char*>(metadata.antennas[static_cast<size_t>(index)].name.c_str());
-        antennaInfo[static_cast<size_t>(index)].number = metadata.antennas[static_cast<size_t>(index)].number;
+        antennaInfo[static_cast<size_t>(index)].number =
+            static_cast<I32>(metadata.antennas[static_cast<size_t>(index)].number);
         antennaInfo[static_cast<size_t>(index)].position[0] = metadata.antennas[static_cast<size_t>(index)].position[0];
         antennaInfo[static_cast<size_t>(index)].position[1] = metadata.antennas[static_cast<size_t>(index)].position[1];
         antennaInfo[static_cast<size_t>(index)].position[2] = metadata.antennas[static_cast<size_t>(index)].position[2];
@@ -501,6 +564,7 @@ Result Uvh5WriterImpl::create() {
                            antennaCount,
                            antennaInfo.data(),
                            header);
+    headerAllocated = true;
 
     std::vector<char*> observationAntennas(static_cast<size_t>(antennaCount));
     for (I32 index = 0; index < antennaCount; index++) {
@@ -512,7 +576,8 @@ Result Uvh5WriterImpl::create() {
                              const_cast<char*>(kObservationPolarization),
                              header);
 
-    if (expectedShape[kBaselineAxis] != static_cast<U64>(header->Nbls)) {
+    if (header->Nbls < 0 ||
+        static_cast<U64>(header->Nbls) != expectedBaselineCount) {
         JST_ERROR("[MODULE_UVH5_WRITER] Input baseline dimension {} does not match the UVH5 baseline count {}.",
                   expectedShape[kBaselineAxis],
                   header->Nbls);
@@ -592,9 +657,37 @@ Result Uvh5WriterImpl::create() {
         JST_ERROR("[MODULE_UVH5_WRITER] Failed to configure the HDF5 GDS file access property list. Error {}.", err);
     });
 
-    UVH5open_with_fileaccess(filepath.c_str(), &uvh5File, UVH5TcreateCF32(), faplId);
-    if (H5Iis_valid(uvh5File.file_id) <= 0) {
-        JST_ERROR("[MODULE_UVH5_WRITER] UVH5 open failed for '{}': invalid HDF5 file handle.", filepath);
+    const hid_t dataTypeId = UVH5TcreateCF32();
+    if (dataTypeId < 0) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Failed to create the UVH5 visibility data type.");
+        return Result::ERROR;
+    }
+
+    UVH5open_with_fileaccess(filepath.c_str(), &uvh5File, dataTypeId, faplId);
+    openAttempted = true;
+
+    if (H5Iis_valid(uvh5File.file_id) <= 0 ||
+        H5Iis_valid(uvh5File.header_id) <= 0 ||
+        H5Iis_valid(uvh5File.data_id) <= 0 ||
+        H5Iis_valid(uvh5File.keywords_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_header_Ntimes.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_header_Nblts.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_header_ant_1_array.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_header_ant_2_array.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_header_uvw_array.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_header_time_array.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_header_integration_time.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_phase_center_id_array.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_phase_center_app_ra.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_phase_center_app_dec.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_phase_center_frame_pa.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_data_visdata.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_data_flags.D_id) <= 0 ||
+        H5Iis_valid(uvh5File.DS_data_nsamples.D_id) <= 0 ||
+        !uvh5File.flags ||
+        !uvh5File.nsamples) {
+        JST_ERROR("[MODULE_UVH5_WRITER] UVH5 open failed for '{}': invalid HDF5 file handle.",
+                  filepath);
         return Result::ERROR;
     }
 
@@ -605,33 +698,40 @@ Result Uvh5WriterImpl::create() {
         uvh5File.visdata = nullptr;
     }
 
+    bytesWritten.publish(0);
+
     return Result::SUCCESS;
 }
 
 Result Uvh5WriterImpl::destroy() {
-    if (fileOpen) {
-        uvh5File.visdata = std::malloc(8);
-        if (!uvh5File.visdata) {
-            JST_ERROR("[MODULE_UVH5_WRITER] Failed to allocate the UVH5 close placeholder buffer.");
-            return Result::ERROR;
-        }
+    Result result = Result::SUCCESS;
 
+    if (openAttempted) {
+        uvh5File.visdata = nullptr;
         UVH5close(&uvh5File);
         uvh5File.visdata = nullptr;
         fileOpen = false;
+        openAttempted = false;
+        headerAllocated = false;
+    } else if (headerAllocated) {
+        UVH5Hfree(&uvh5File.header);
+        headerAllocated = false;
     }
 
     if (faplOpen) {
-        JST_HDF5_CHECK(H5Pclose(faplId), [&] {
-            JST_ERROR("[MODULE_UVH5_WRITER] Failed to close the HDF5 file access property list. Error {}.", err);
-        });
+        const herr_t status = H5Pclose(faplId);
+        if (status < 0) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Failed to close the HDF5 file access property list. Error {}.",
+                      status);
+            result = Result::ERROR;
+        }
         faplOpen = false;
         faplId = -1;
     }
 
     uvh5File = {};
 
-    return Result::SUCCESS;
+    return result;
 }
 
 Result Uvh5WriterImpl::reconfigure() {

@@ -3,11 +3,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 
 #include <cufile.h>
 #include <hdf5.h>
 
 #include <jetstream/backend/devices/cuda/helpers.hh>
+#include <jetstream/memory/axis.hh>
 
 #include "../helpers.hh"
 
@@ -21,6 +23,46 @@ extern "C" {
 namespace Jetstream::Modules {
 
 Result Fbh5WriterImpl::validate() {
+    validatedExpectedShape = {};
+    validatedInputDataType = DataType::None;
+
+    if (!inputs().contains("input")) {
+        return Result::SUCCESS;
+    }
+
+    const Tensor& input = inputs().at("input").tensor;
+    if (!input.validShape() || input.size() == 0) {
+        return Result::SUCCESS;
+    }
+
+    if (input.rank() != kExpectedRank) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Input tensor must have {} dimensions [T, B, C, I], but received shape {}.",
+                  kExpectedRank,
+                  input.shape());
+        return Result::ERROR;
+    }
+
+    if (input.shape(kTimeAxis) > std::numeric_limits<std::size_t>::max() ||
+        input.shape(kBeamAxis) > static_cast<U64>(std::numeric_limits<int>::max()) ||
+        input.shape(kChannelAxis) > static_cast<U64>(std::numeric_limits<int>::max()) ||
+        input.shape(kIfAxis) > static_cast<U64>(std::numeric_limits<int>::max())) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Input dimensions exceed the FBH5 format limits.");
+        return Result::ERROR;
+    }
+
+    SignalAxes axes;
+    if (ResolveSignalAxes(input, axes) != Result::SUCCESS ||
+        axes.sample != Index{kTimeAxis} ||
+        axes.channel != Index{kChannelAxis}) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Input tensor must define sampleAxis={} and channelAxis={} for [T, B, C, I].",
+                  kTimeAxis,
+                  kChannelAxis);
+        return Result::ERROR;
+    }
+
+    validatedExpectedShape = input.shape();
+    validatedInputDataType = input.dtype();
+
     return Result::SUCCESS;
 }
 
@@ -31,29 +73,9 @@ Result Fbh5WriterImpl::define() {
 }
 
 Result Fbh5WriterImpl::create() {
-    const Tensor& input = inputs().at("input").tensor;
-
-    if (input.rank() != kExpectedRank) {
-        JST_ERROR("[MODULE_FBH5_WRITER] Input tensor must have {} dimensions [T, B, C, I], but received shape {}.",
-                  kExpectedRank,
-                  input.shape());
-        return Result::ERROR;
-    }
-
-    if (!input.contiguous()) {
-        JST_ERROR("[MODULE_FBH5_WRITER] Input tensor must be contiguous.");
-        return Result::ERROR;
-    }
-
-    for (const auto& dim : input.shape()) {
-        if (dim == 0) {
-            JST_ERROR("[MODULE_FBH5_WRITER] Input tensor dimensions must be positive.");
-            return Result::ERROR;
-        }
-    }
-
-    expectedShape = input.shape();
-    inputDataType = input.dtype();
+    expectedShape = validatedExpectedShape;
+    inputDataType = validatedInputDataType;
+    openAttempted = false;
 
     bytesWritten.publish(0);
     chunkCounter.publish(0);
@@ -92,29 +114,23 @@ Result Fbh5WriterImpl::create() {
         }
     }
 
-    {
-        std::error_code ec;
-        const bool fileExists = std::filesystem::exists(filePath, ec);
-        if (ec) {
-            JST_ERROR("[MODULE_FBH5_WRITER] Failed to query '{}'.", filepath);
+    std::error_code fileQueryError;
+    const bool fileExists = std::filesystem::exists(filePath, fileQueryError);
+    if (fileQueryError) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to query '{}'.", filepath);
+        return Result::ERROR;
+    }
+    if (fileExists && !overwrite) {
+        JST_ERROR("[MODULE_FBH5_WRITER] File '{}' already exists.", filepath);
+        return Result::ERROR;
+    }
+    if (fileExists) {
+        const bool removed = std::filesystem::remove(filePath, fileQueryError);
+        if (fileQueryError || !removed) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to remove '{}' before overwriting.", filepath);
             return Result::ERROR;
         }
-
-        if (fileExists) {
-            if (!overwrite) {
-                JST_ERROR("[MODULE_FBH5_WRITER] File '{}' already exists.", filepath);
-                return Result::ERROR;
-            }
-
-            const bool removed = std::filesystem::remove(filePath, ec);
-            if (ec || !removed) {
-                JST_ERROR("[MODULE_FBH5_WRITER] Failed to remove '{}' before overwriting.", filepath);
-                return Result::ERROR;
-            }
-        }
     }
-
-    bytesWritten.publish(0);
 
     const U64 ntimesPerWrite = expectedShape[kTimeAxis];
     const U64 nbeams = expectedShape[kBeamAxis];
@@ -134,19 +150,19 @@ Result Fbh5WriterImpl::create() {
     header->za_start = 65.4321;
     header->fch1 = 4626.464842353016138;
     header->foff = -0.000002793967724;
-    header->nchans = nchans;
-    header->nbeams = nbeams;
+    header->nchans = static_cast<int>(nchans);
+    header->nbeams = static_cast<int>(nbeams);
     header->ibeam = 1;
     header->nbits = inputDataType == DataType::F32 ? 32 : 0;
     header->tstart = 57856.810798611114;
     header->tsamp = 1.825361100800;
-    header->nifs = nifs;
+    header->nifs = static_cast<int>(nifs);
 
     std::strncpy(header->source_name, kSourceName, sizeof(header->source_name) - 1);
     header->source_name[sizeof(header->source_name) - 1] = '\0';
 
-    fbh5File.nchans_per_write = nchans;
-    fbh5File.ntimes_per_write = ntimesPerWrite;
+    fbh5File.nchans_per_write = static_cast<std::size_t>(nchans);
+    fbh5File.ntimes_per_write = static_cast<std::size_t>(ntimesPerWrite);
 
     faplId = H5Pcreate(H5P_FILE_ACCESS);
     if (faplId < 0) {
@@ -169,10 +185,13 @@ Result Fbh5WriterImpl::create() {
                                                           &fbh5File,
                                                           dataTypeId,
                                                           faplId);
+    openAttempted = true;
 
-    JST_HDF5_CHECK(H5Tclose(dataTypeId), [&] {
-        JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the FBH5 dataset data type. Error {}.", err);
-    });
+    if (!fbh5File.ds_data.name) {
+        JST_HDF5_CHECK(H5Tclose(dataTypeId), [&] {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the unused FBH5 dataset data type. Error {}.", err);
+        });
+    }
 
     JST_HDF5_CHECK(openStatus, [&] {
         JST_ERROR("[MODULE_FBH5_WRITER] Failed to open the FBH5 file. Error {}.", err);
@@ -191,15 +210,22 @@ Result Fbh5WriterImpl::create() {
     fbh5File.mask = mask;
     std::memset(mask, 0, H5DSsize(&fbh5File.ds_mask));
 
+    bytesWritten.publish(0);
+
     return Result::SUCCESS;
 }
 
 Result Fbh5WriterImpl::destroy() {
+    Result result = Result::SUCCESS;
+
     if (bufferRegistered) {
-        JST_CUFILE_CHECK(cuFileBufDeregister(const_cast<void*>(registeredBuffer)), [&] {
+        const CUfileError_t status =
+            cuFileBufDeregister(const_cast<void*>(registeredBuffer));
+        if (status.err != CU_FILE_SUCCESS) {
             JST_ERROR("[MODULE_FBH5_WRITER] Failed to deregister the previously registered input buffer (CUfile error {}).",
-                      err);
-        });
+                      static_cast<int>(status.err));
+            result = Result::ERROR;
+        }
         bufferRegistered = false;
         registeredBuffer = nullptr;
         registeredBufferSize = 0;
@@ -211,38 +237,51 @@ Result Fbh5WriterImpl::destroy() {
         fbh5File.mask = nullptr;
     }
 
-    if (dataOpen) {
-        JST_HDF5_CHECK(H5DSclose(&fbh5File.ds_data), [&] {
-            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the FBH5 data dataset. Error {}.", err);
-        });
+    if (openAttempted && fbh5File.ds_data.name) {
+        const herr_t status = H5DSclose(&fbh5File.ds_data);
+        if (status < 0) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the FBH5 data dataset. Error {}.",
+                      status);
+            result = Result::ERROR;
+        }
         dataOpen = false;
     }
 
-    if (maskOpen) {
-        JST_HDF5_CHECK(H5DSclose(&fbh5File.ds_mask), [&] {
-            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the FBH5 mask dataset. Error {}.", err);
-        });
+    if (openAttempted && fbh5File.ds_mask.name) {
+        const herr_t status = H5DSclose(&fbh5File.ds_mask);
+        if (status < 0) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the FBH5 mask dataset. Error {}.",
+                      status);
+            result = Result::ERROR;
+        }
         maskOpen = false;
     }
 
-    if (fileOpen) {
-        JST_HDF5_CHECK(H5Fclose(fbh5File.file_id), [&] {
-            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the FBH5 file. Error {}.", err);
-        });
+    if (openAttempted && fbh5File.file_id > 0) {
+        const herr_t status = H5Fclose(fbh5File.file_id);
+        if (status < 0) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the FBH5 file. Error {}.",
+                      status);
+            result = Result::ERROR;
+        }
         fileOpen = false;
     }
+    openAttempted = false;
 
     if (faplOpen) {
-        JST_HDF5_CHECK(H5Pclose(faplId), [&] {
-            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the HDF5 file access property list. Error {}.", err);
-        });
+        const herr_t status = H5Pclose(faplId);
+        if (status < 0) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to close the HDF5 file access property list. Error {}.",
+                      status);
+            result = Result::ERROR;
+        }
         faplOpen = false;
         faplId = -1;
     }
 
     fbh5File = {};
 
-    return Result::SUCCESS;
+    return result;
 }
 
 Result Fbh5WriterImpl::reconfigure() {

@@ -39,12 +39,12 @@ Result Uvh5WriterImpl::define() {
     JST_CHECK(defineInterfaceConfig("dspChannelizationRate",
                                     "DSP Channelization Rate",
                                     "DSP channelization factor used to derive the UVH5 frequency grid.",
-                                    "int:"));
+                                    "uint:"));
 
     JST_CHECK(defineInterfaceConfig("dspIntegrationRate",
                                     "DSP Integration Rate",
                                     "DSP integration factor used to derive the UVH5 integration time.",
-                                    "int:"));
+                                    "uint:"));
 
     JST_CHECK(defineInterfaceConfig("overwrite",
                                     "Overwrite",
@@ -117,6 +117,6 @@ Result Uvh5WriterImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(Uvh5WriterImpl);
+JST_REGISTER_BLOCK(Uvh5WriterImpl, {"uvh5_writer"});
 
 }  // namespace Jetstream::Blocks
