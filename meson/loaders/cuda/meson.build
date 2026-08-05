@@ -1,15 +1,25 @@
-deps = [
-    dependency('cuda', version: '>=11', modules: ['cuda', 'culibos', 'cufile'], required: true),
-]
+cuda_deps = []
+cuda_found = false
 
-all_deps_found = true
-foreach x_dep : deps
-    all_deps_found = all_deps_found and x_dep.found()
-endforeach
+if plugin_device_cuda_requested
+    cuda_deps += dependency(
+        'cuda',
+        version: '>=11',
+        modules: ['cuda', 'culibos', 'cufile'],
+        required: not plugin_devices_auto,
+    )
 
-if all_deps_found
-    cfg_lst.set('STELLINE_LOADER_CUDA_AVAILABLE', true)
-    dep_lst += deps
+    cuda_found = true
+    foreach cuda_dep : cuda_deps
+        cuda_found = cuda_found and cuda_dep.found()
+    endforeach
 endif
 
-ldr_lst += {'CUDA': all_deps_found}
+if cuda_found
+    cfg_lst.set('STELLINE_LOADER_CUDA_AVAILABLE', true)
+    cfg_lst.set('STELLINE_DEVICE_CUDA_AVAILABLE', true)
+    dep_lst += cuda_deps
+    plugin_device_cuda_enabled = true
+endif
+
+ldr_lst += {'CUDA': cuda_found}
