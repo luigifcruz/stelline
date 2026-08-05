@@ -13,7 +13,6 @@ constexpr const char* kInternalModuleName = "nexus_bridge";
 }  // namespace
 
 struct NexusBridgeImpl : public Block::Impl, public DynamicConfig<Blocks::NexusBridge> {
-    Result validate() override;
     Result configure() override;
     Result define() override;
     Result create() override;
@@ -22,27 +21,6 @@ struct NexusBridgeImpl : public Block::Impl, public DynamicConfig<Blocks::NexusB
     std::shared_ptr<Modules::NexusBridge> moduleConfig = std::make_shared<Modules::NexusBridge>();
     Modules::NexusBridgeImpl* moduleImpl = nullptr;
 };
-
-Result NexusBridgeImpl::validate() {
-    const auto& config = *candidate();
-
-    if (device() != DeviceType::CPU) {
-        JST_ERROR("[NEXUS_BRIDGE] Block must be created on the CPU device.");
-        return Result::ERROR;
-    }
-
-    if (runtime() != RuntimeType::PYTHON) {
-        JST_ERROR("[NEXUS_BRIDGE] Block must be created with the Python runtime.");
-        return Result::ERROR;
-    }
-
-    if (config.url.empty()) {
-        JST_ERROR("[NEXUS_BRIDGE] Nexus URL must not be empty.");
-        return Result::ERROR;
-    }
-
-    return Result::SUCCESS;
-}
 
 Result NexusBridgeImpl::configure() {
     moduleConfig->url = url;
@@ -100,6 +78,6 @@ Result NexusBridgeImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(NexusBridgeImpl);
+JST_REGISTER_BLOCK(NexusBridgeImpl, {"nexus_bridge"});
 
 }  // namespace Jetstream::Blocks

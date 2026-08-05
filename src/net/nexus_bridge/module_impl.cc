@@ -20,16 +20,6 @@ struct NexusBridgeStatus {
 Result NexusBridgeImpl::validate() {
     const auto& config = *candidate();
 
-    if (device() != DeviceType::CPU) {
-        JST_ERROR("[NEXUS_BRIDGE] Module must be created on the CPU device.");
-        return Result::ERROR;
-    }
-
-    if (runtime() != RuntimeType::PYTHON) {
-        JST_ERROR("[NEXUS_BRIDGE] Module must be created with the Python runtime.");
-        return Result::ERROR;
-    }
-
     if (config.url.empty()) {
         JST_ERROR("[NEXUS_BRIDGE] Nexus URL must not be empty.");
         return Result::ERROR;
