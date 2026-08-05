@@ -11,3 +11,8 @@ if plugin_device_cuda_enabled
     ])
     cuda_lst += files(['detail/kernel.cu'])
 endif
+
+plugin_test_lst += files([
+    'block_tests.cc',
+    'module_tests.cc',
+])

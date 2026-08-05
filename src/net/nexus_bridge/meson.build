@@ -3,3 +3,8 @@ src_lst += files([
     'module_impl.cc',
     'module_impl_python.cc',
 ])
+
+plugin_test_lst += files([
+    'block_tests.cc',
+    'module_tests.cc',
+])
