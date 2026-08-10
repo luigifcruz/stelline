@@ -4,13 +4,13 @@
 #include <cstring>
 #include <filesystem>
 
-#include <cufile.h>
 #include <hdf5.h>
 
-#include <jetstream/backend/devices/cuda/helpers.hh>
+#include <jetstream/memory/axis.hh>
 #include "jetstream/platform.hh"
 
 #include "../helpers.hh"
+#include "../metadata.hh"
 
 extern "C" {
 #include "filterbankc99.h"
@@ -33,6 +33,50 @@ Result Fbh5ReaderImpl::validate() {
 Result Fbh5ReaderImpl::define() {
     JST_CHECK(defineInterfaceOutput("signal"));
     JST_CHECK(defineInterfaceOutput("mask"));
+
+    return Result::SUCCESS;
+}
+
+Result Fbh5ReaderImpl::publishMetadata(const filterbank_header_t* header) {
+    TelescopeInfo info;
+    info.name = std::to_string(header->telescope_id);
+    info.coordinates.latitude = 0.0;
+    info.coordinates.longitude = 0.0;
+    info.coordinates.altitude = 0.0;
+    info.iers.ut1_utc = 0.0;
+
+    ObservationTuning tuning;
+    tuning.name = "Unknown";
+    ObservationBand band;
+    band.frequency_start = header->fch1;
+    band.frequency_stop = header->fch1 + header->nchans*header->foff;
+    band.channel_start = 0;
+    band.channel_stop = header->nchans;
+    tuning.bands.push_back(band);
+
+    // filterbank data is typically a beam, wrap it as a single antenna
+    AntennaDetails ant;
+    ant.name = std::to_string(header->ibeam);
+    ant.number = header->ibeam;
+    ant.diameter = 0.0;
+    ant.position.x = 0.0;
+    ant.position.y = 0.0;
+    ant.position.z = 0.0;
+    ant.pointing.ra = header->src_raj;
+    ant.pointing.dec = header->src_dej;
+    if (header->source_name != NULL && strlen(header->source_name) > 0) {
+        ant.pointing.source_name = header->source_name;
+    } else {
+        ant.pointing.source_name = "Unknown";
+    }
+    
+    ant.tunings.push_back(tuning);
+    info.antennas.push_back(ant);
+
+    if (environment()->set("observatory", info) != Result::SUCCESS) {
+        JST_ERROR("[MODULE_FBH5_READER] Could not publish 'observatory' nested environment value.");
+        return Result::INCOMPLETE;
+    }
 
     return Result::SUCCESS;
 }
@@ -72,6 +116,7 @@ Result Fbh5ReaderImpl::create() {
         JST_ERROR("[MODULE_FBH5_READER] Cannot open file '{}'.", filepath);
         return Result::INCOMPLETE;
     }
+    publishMetadata(&fbh5File.header);
     
     filterbank_h5_change_access_chunking(
         &fbh5File,

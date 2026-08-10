@@ -28,6 +28,7 @@ struct Fbh5ReaderImpl : public Module::Impl, public DynamicConfig<Fbh5Reader> {
     F32 getCurrentBandwidth() const;
 
  protected:
+    Result publishMetadata(const filterbank_header_t* header);
     void updateBandwidth(const U64 deltaBytes);
 
     Tensor buffer;
