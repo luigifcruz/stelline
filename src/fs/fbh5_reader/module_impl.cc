@@ -108,6 +108,7 @@ Result Fbh5ReaderImpl::create() {
         JST_ERROR("[MODULE_FBH5_READER] Signal buffer byte size is incorrect.");
         return Result::ERROR;
     }
+    JST_CHECK(SetSignalAxes(buffer, {.sample = Index{0}, .channel = Index{2}}));
     fbh5File.data = const_cast<void*>(buffer.data());
 
     JST_CHECK(mask.create(device(), DataType::U8, {fbh5File.ds_mask.dimchunks[0], fbh5File.ds_mask.dimchunks[1], fbh5File.ds_mask.dims[2]}));
@@ -115,6 +116,7 @@ Result Fbh5ReaderImpl::create() {
         JST_ERROR("[MODULE_FBH5_READER] Signal mask byte size is incorrect.");
         return Result::ERROR;
     }
+    JST_CHECK(SetSignalAxes(mask, {.sample = Index{0}, .channel = Index{2}}));
     fbh5File.mask = (uint8_t*) mask.data();
     
     return Result::SUCCESS;

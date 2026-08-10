@@ -226,11 +226,12 @@ Result Uvh5ReaderImpl::create() {
                       );
             return Result::ERROR;
     }
-    JST_CHECK(buffer.create(device(), dataType, {batchSize*uvh5File.header.Nbls, uvh5File.DS_data_visdata.dims[1], uvh5File.DS_data_visdata.dims[2]}));
+    JST_CHECK(buffer.create(device(), dataType, {batchSize, uvh5File.header.Nbls, uvh5File.DS_data_visdata.dims[1], uvh5File.DS_data_visdata.dims[2]}));
     if (buffer.sizeBytes() != H5DSsize(&uvh5File.DS_data_visdata)) {
         JST_ERROR("[MODULE_UVH5_READER] Signal buffer size is incorrect. {} != {}", buffer.sizeBytes(), H5DSsize(&uvh5File.DS_data_visdata));
         return Result::ERROR;
     }
+    JST_CHECK(SetSignalAxes(buffer, {.sample = Index{0}, .channel = Index{2}}));
     uvh5File.visdata = buffer.data();
     uvh5File.flags = nullptr;
     uvh5File.nsamples = nullptr;
