@@ -28,7 +28,7 @@ Result Uvh5ReaderImplNativeCpu::create() {
 
 Result Uvh5ReaderImplNativeCpu::computeSubmit() {
     if (!(uvh5File.DS_data_visdata.D_id >= 0) || !playing) {
-        return Result::SUCCESS;
+        return Result::SKIP;
     }
     const U64 currentIndex = getCurrentBatchIndex();
     herr_t status = UVH5read(&uvh5File);

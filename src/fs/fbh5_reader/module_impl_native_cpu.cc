@@ -28,7 +28,7 @@ Result Fbh5ReaderImplNativeCpu::create() {
 
 Result Fbh5ReaderImplNativeCpu::computeSubmit() {
     if (!(fbh5File.ds_data.D_id >= 0) || !playing) {
-        return Result::SUCCESS;
+        return Result::SKIP;
     }
     const U64 currentIndex = getCurrentBatchIndex();
     herr_t status = filterbank_h5_read(&fbh5File);

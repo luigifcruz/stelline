@@ -38,7 +38,7 @@ Result Uvh5ReaderImpl::define() {
     JST_CHECK(defineInterfaceConfig("batchSize",
                                     "Batch Size",
                                     "Number of time-indices to read per processing cycle.",
-                                    "int:samples"));
+                                    "int:time-indices"));
 
     JST_CHECK(defineInterfaceConfig("loop",
                                     "Loop",

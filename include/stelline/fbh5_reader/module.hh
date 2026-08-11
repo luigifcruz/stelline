@@ -9,7 +9,7 @@ namespace Jetstream::Modules {
 
 struct Fbh5Reader : public Module::Config {
     std::string filepath = "./file.fbh5";
-    U64 batchSize = 8192;
+    U64 batchSize = 1;
     bool loop = true;
     bool playing = true;
 

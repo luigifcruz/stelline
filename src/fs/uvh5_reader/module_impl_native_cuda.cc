@@ -42,7 +42,7 @@ Result Uvh5ReaderImplNativeCuda::create() {
 
 Result Uvh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     if (!(uvh5File.DS_data_visdata.D_id >= 0) || !playing) {
-        return Result::SUCCESS;
+        return Result::SKIP;
     }
     
     // We need to synchronize here because the HDF VFD is not asynchronous.

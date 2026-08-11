@@ -117,6 +117,13 @@ Result Fbh5ReaderImpl::create() {
         return Result::INCOMPLETE;
     }
     publishMetadata(&fbh5File.header);
+    if (batchSize > fbh5File.ds_data.dims[0]) {
+        JST_INFO("[MODULE_FBH5_READER] Clamping batchSize from ({}) to the total number of spectra available: {}.",
+            batchSize,
+            fbh5File.ds_data.dims[0]
+        );
+        batchSize = fbh5File.ds_data.dims[0];
+    }
     
     filterbank_h5_change_access_chunking(
         &fbh5File,

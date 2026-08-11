@@ -20,6 +20,7 @@ struct Fbh5ReaderImplNativeCuda : public Fbh5ReaderImpl,
                                   public Scheduler::Context {
  public:
     Result create() final;
+    Result destroy() final;
     Result computeSubmit(const cudaStream_t& stream) override;
  private:
     const void* registeredBuffer = nullptr;
@@ -44,9 +45,25 @@ Result Fbh5ReaderImplNativeCuda::create() {
     return Result::SUCCESS;
 }
 
+Result Fbh5ReaderImplNativeCuda::destroy() {
+    if (bufferRegistered) {
+        JST_CUFILE_CHECK(cuFileBufDeregister(const_cast<void*>(registeredBuffer)), [&] {
+            JST_ERROR("[MODULE_FBH5_READER_NATIVE_CUDA] Failed to deregister the previous input buffer (CUfile error {}).",
+                        err);
+        });
+        bufferRegistered = false;
+        registeredBuffer = nullptr;
+        registeredBufferSize = 0;
+    }
+
+    JST_CHECK(Fbh5ReaderImpl::destroy());
+
+    return Result::SUCCESS;
+}
+
 Result Fbh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     if (!(fbh5File.ds_data.D_id >= 0) || !playing) {
-        return Result::SUCCESS;
+        return Result::SKIP;
     }
     
     // We need to synchronize here because the HDF VFD is not asynchronous.
