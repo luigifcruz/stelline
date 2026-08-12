@@ -128,6 +128,12 @@ Result Uvh5ReaderImpl::create() {
         );
         batchSize = uvh5File.header.Ntimes;
     }
+    if (uvh5File.header.Ntimes % batchSize != 0) {
+        JST_ERROR("[MODULE_UVH5_READER] BatchSize must be an integer factor of the total number of integrations available: {}.",
+            uvh5File.header.Ntimes
+        );
+        return Result::ERROR;
+    }
     
     UVH5change_access_chunking(
         &uvh5File,

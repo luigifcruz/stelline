@@ -124,6 +124,12 @@ Result Fbh5ReaderImpl::create() {
         );
         batchSize = fbh5File.ds_data.dims[0];
     }
+    if (fbh5File.ds_data.dims[0] % batchSize != 0) {
+        JST_ERROR("[MODULE_FBH5_READER] BatchSize must be an integer factor of the total number of spectra available: {}.",
+            fbh5File.ds_data.dims[0]
+        );
+        return Result::ERROR;
+    }
     
     filterbank_h5_change_access_chunking(
         &fbh5File,
