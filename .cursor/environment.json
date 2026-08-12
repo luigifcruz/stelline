@@ -1,0 +1,6 @@
+{
+  "name": "Stelline",
+  "user": "root",
+  "image": "ghcr.io/luigifcruz/cyberether:v1.8.2-ubuntu24-x86_64-cuda",
+  "install": "apt-get update --fix-missing && apt-get install -y --no-install-recommends cmake libdpdk-dev && rm -rf /var/lib/apt/lists/* && git config --global --add safe.directory '*' && rm -rf build && meson setup build -Dbuildtype=release -Ddevices=cuda && meson compile -C build stelline_cep"
+}
