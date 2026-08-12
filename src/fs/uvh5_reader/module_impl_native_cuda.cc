@@ -20,7 +20,12 @@ struct Uvh5ReaderImplNativeCuda : public Uvh5ReaderImpl,
                                   public Scheduler::Context {
  public:
     Result create() final;
+    Result destroy() final;
     Result computeSubmit(const cudaStream_t& stream) override;
+ private:
+    const void* registeredBuffer = nullptr;
+    U64 registeredBufferSize = 0;
+    bool bufferRegistered = false;
 };
 
 Result Uvh5ReaderImplNativeCuda::create() {
@@ -40,6 +45,22 @@ Result Uvh5ReaderImplNativeCuda::create() {
     return Result::SUCCESS;
 }
 
+Result Uvh5ReaderImplNativeCuda::destroy() {
+    if (bufferRegistered) {
+        JST_CUFILE_CHECK(cuFileBufDeregister(const_cast<void*>(registeredBuffer)), [&] {
+            JST_ERROR("[MODULE_UVH5_READER_NATIVE_CUDA] Failed to deregister the previous input buffer (CUfile error {}).",
+                        err);
+        });
+        bufferRegistered = false;
+        registeredBuffer = nullptr;
+        registeredBufferSize = 0;
+    }
+
+    JST_CHECK(Uvh5ReaderImpl::destroy());
+
+    return Result::SUCCESS;
+}
+
 Result Uvh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     if (!(uvh5File.DS_data_visdata.D_id >= 0) || !playing) {
         return Result::SKIP;
@@ -49,6 +70,29 @@ Result Uvh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     JST_CUDA_CHECK(cudaStreamSynchronize(stream), [&] {
         JST_ERROR("[MODULE_UVH5_READER_NATIVE_CUDA] Failed to synchronize CUDA stream before UVH5 read: {}.", err);
     });
+
+    const void* inputPtr = buffer.data();
+    const U64 inputBytes = buffer.sizeBytes();
+    if (!bufferRegistered || registeredBuffer != inputPtr || registeredBufferSize != inputBytes) {
+        if (bufferRegistered) {
+            JST_CUFILE_CHECK(cuFileBufDeregister(const_cast<void*>(registeredBuffer)), [&] {
+                JST_ERROR("[MODULE_UVH5_READER_NATIVE_CUDA] Failed to deregister the previous input buffer (CUfile error {}).",
+                          err);
+            });
+            bufferRegistered = false;
+            registeredBuffer = nullptr;
+            registeredBufferSize = 0;
+        }
+
+        JST_CUFILE_CHECK(cuFileBufRegister(const_cast<void*>(inputPtr), inputBytes, 0), [&] {
+            JST_ERROR("[MODULE_UVH5_READER_NATIVE_CUDA] Failed to register the input buffer with GDS (CUfile error {}).",
+                      err);
+        });
+
+        bufferRegistered = true;
+        registeredBuffer = inputPtr;
+        registeredBufferSize = inputBytes;
+    }
 
     const U64 currentIndex = getCurrentBatchIndex();
     herr_t status = UVH5read(&uvh5File);
