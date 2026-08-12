@@ -1,7 +1,7 @@
 project(
     'stelline',
     ['cpp', 'cuda'],
-    version: '0.5.0',
+    version: '0.5.1',
     meson_version: '>=1.11.0',
     default_options: [
         'cpp_std=c++20',
@@ -22,7 +22,7 @@ if not plugin_is_linux
     error('Stelline only supports Linux targets for now.')
 endif
 
-minimum_jetstream_version = '1.8.2'
+minimum_jetstream_version = '1.9.0'
 
 #
 # Load Python
