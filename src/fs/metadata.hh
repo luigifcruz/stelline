@@ -47,7 +47,7 @@ struct AntennaDetails {
     AntennaPointing pointing;
     std::vector<ObservationTuning> tunings;
 
-    JST_SERDES(number, diameter, position, pointing, tunings);
+    JST_SERDES(name, number, diameter, position, pointing, tunings);
 };
 
 struct ObservationFengine {

@@ -9,11 +9,11 @@ The UVH5 reader is the source of an offline correlation/visibilities post-proces
 
 ## How it works
 
-The block is idle until `playing` is enabled. At that point it starts iterating through the `/Data/visdata` in chunks of `batchSize`*`Nbls`, where `batchSize` effectively selects how many time indices to chunk per step. With the block's device set as CUDA all of this happens via GPUDirect Storage driver. Each compute cycle then steps through the data until it reaches the end at which point it will loop back to the beginning. If `loop` is enabled `playing` will be left enabled and the dataset will repeat, otherwise `playing` will be disabled. Any non-whole chunk that might occur at the end of the dataset is skipped.
+The block is idle until `playing` is enabled. At that point it starts iterating through the `/Data/visdata` in chunks of `batchSize`*`Nbls`, where `batchSize` effectively selects how many time indices to chunk per step. With the block's device set as CUDA all of this happens via GPUDirect Storage driver. The `batchSize` must be an integer factor of the T dimension in the data. Each compute cycle then steps through the data until it reaches the end at which point it will loop back to the beginning. If `loop` is enabled `playing` will be left enabled and the dataset will repeat, otherwise `playing` will be disabled.
 
  Currently the `/Data/flags` and `/Data/nsamples` datasets are not read from the file.
 
-The observational header fields (source name, coordinates, start time, channel frequencies etc) are currently not pushed to the flowgraph environment.
+The observational header fields (source name, coordinates, channel frequencies etc) are pushed to the flowgraph environment under the `observatory` key. This does need revision however and is just a mostly good enough first pass implementation.
 
 ## Configuration
 
@@ -28,9 +28,9 @@ The observational header fields (source name, coordinates, start time, channel f
 
 | Name | Description |
 |---|---|
-| `signal` | Contiguous `{CF32|CF64}` tensor shaped `[baseline-times, channels, polarisation-product]` read from the file. |
+| `signal` | Contiguous `{CF32|CF64}` tensor shaped `[times, baselines, channels, polarisation-product]` read from the file. |
 
-The time factor of the baseline-times dimension is set by the `batchSize` configuration value, everything else is determined by the contents of the file being read.
+The `times` dimension is set by the `batchSize` configuration value, everything else is determined by the contents of the file being read.
 
 ## Metrics
 

@@ -63,13 +63,16 @@ Result Uvh5ReaderImpl::publishMetadata(const UVH5_header_t* header, const bool& 
             if (header->antenna_diameters) {
                 ant.diameter = header->antenna_diameters[index];
             }
+            else {
+                ant.diameter = 0.0;
+            }
             ant.position.x = header->antenna_positions[(3*index)+0];
             ant.position.y = header->antenna_positions[(3*index)+1];
             ant.position.z = header->antenna_positions[(3*index)+2];
             ant.pointing.ra = phase_center.lon;
             ant.pointing.dec = phase_center.lat;
-            if (phase_center.info_source != NULL && strlen(phase_center.info_source) > 0) {
-                ant.pointing.source_name = phase_center.info_source;
+            if (phase_center.name != NULL && strlen(phase_center.name) > 0) {
+                ant.pointing.source_name = phase_center.name;
             } else {
                 ant.pointing.source_name = "Unknown";
             }
@@ -120,6 +123,14 @@ Result Uvh5ReaderImpl::create() {
         JST_ERROR("[MODULE_UVH5_READER] Cannot open file '{}'.", filepath);
         return Result::INCOMPLETE;
     }
+    if (uvh5File.DS_data_visdata.dims[0] != uvh5File.header.Ntimes * uvh5File.header.Nbls) {
+        JST_ERROR("[MODULE_UVH5_READER] Irregular baseline-times dimension found in file: {} != {} * {}.",
+            uvh5File.DS_data_visdata.dims[0],
+            uvh5File.header.Ntimes,
+            uvh5File.header.Nbls
+        );
+        return Result::INCOMPLETE;
+    }
     JST_CHECK(publishMetadata(&uvh5File.header, false));
     if (batchSize > uvh5File.header.Ntimes) {
         JST_INFO("[MODULE_UVH5_READER] Clamping batchSize from ({}) to the total number of integrations available: {}.",
@@ -139,10 +150,13 @@ Result Uvh5ReaderImpl::create() {
         &uvh5File,
         batchSize // nof time-indices
     );
-    JST_INFO("[MODULE_UVH5_READER] Opened '{}' — dim_chunks=[{}/{},{},{}].",
+    JST_INFO("[MODULE_UVH5_READER] Opened '{}' — dim_chunks=[{}/{},{},{},{}].",
              filepath,
-             batchSize*uvh5File.header.Nbls,
-             uvh5File.DS_data_visdata.dims[0], uvh5File.DS_data_visdata.dims[1], uvh5File.DS_data_visdata.dims[2]
+             batchSize,
+             uvh5File.DS_data_visdata.dims[0]/uvh5File.header.Nbls,
+             uvh5File.header.Nbls,
+             uvh5File.DS_data_visdata.dims[1],
+             uvh5File.DS_data_visdata.dims[2]
              );
     batchCount.publish(uvh5File.header.Ntimes/batchSize);
 
@@ -158,10 +172,10 @@ Result Uvh5ReaderImpl::create() {
 
     switch (nbits) {
         case 64:
-            dataType = type_class == H5T_INTEGER ? DataType::I32 : DataType::CF32;
+            dataType = type_class == H5T_INTEGER ? DataType::CI32 : DataType::CF32;
             break;
         case 128:
-            dataType = type_class == H5T_INTEGER ? DataType::I64 : DataType::CF64;
+            dataType = type_class == H5T_INTEGER ? DataType::CI64 : DataType::CF64;
             break;
         default:
             JST_ERROR("[MODULE_UVH5_READER] Unsupported number of bits in '{}': {}.",
