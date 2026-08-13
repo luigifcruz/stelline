@@ -11,7 +11,7 @@ The FBH5 reader is the source of an offline beamformed-data post-processing pipe
 
 The block is idle until `playing` is enabled. At that point it starts iterating through the `/data` in chunks of `batchSize`, producing tensors with shape `{T=batchSize, P=NIFs, F=NFreqs}` where the last 2 dimensions reflect the data shape within the file. The `batchSize` must be an integer factor of the T dimension in the data. The same chunking happens for the `/mask` dataset that accompanies the data. With the block's device set as CUDA all of this happens via GPUDirect Storage driver. Each compute cycle then steps through the data until it reaches the end at which point it will loop back to the beginning. If `loop` is enabled `playing` will be left enabled and the dataset will repeat, otherwise `playing` will be disabled.
 
-The observational header fields (source name, coordinates, channel frequencies etc) are pushed to the flowgraph environment under the `observatory` key. This does need revision however and is just a mostly good enough first pass implementation.
+The observational header fields (source name, coordinates, channel frequencies etc) are pushed to the flowgraph environment under the `observatory` key.
 
 ## Configuration
 

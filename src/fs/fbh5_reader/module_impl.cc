@@ -48,11 +48,13 @@ Result Fbh5ReaderImpl::publishMetadata(const filterbank_header_t* header) {
     ObservationTuning tuning;
     tuning.name = "Unknown";
     ObservationBand band;
-    band.frequency_start = header->fch1;
-    band.frequency_stop = header->fch1 + header->nchans*header->foff;
-    band.channel_start = 0;
-    band.channel_stop = header->nchans;
-    tuning.bands.push_back(band);
+    for (size_t channel = 0; channel < header->nchans; channel++) {
+        band.frequency_start = header->fch1 + (channel-0.5)*header->foff;
+        band.frequency_stop = band.frequency_start + header->foff;
+        band.channel_start = channel;
+        band.channel_stop = channel+1;
+        tuning.bands.push_back(band);
+    }
 
     // filterbank data is typically a beam, wrap it as a single antenna
     AntennaDetails ant;

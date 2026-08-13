@@ -43,12 +43,14 @@ Result Uvh5ReaderImpl::publishMetadata(const UVH5_header_t* header, const bool& 
 
     ObservationTuning tuning;
     tuning.name = "Unknown";
-    ObservationBand band;
-    band.frequency_start = header->freq_array[0]-0.5*header->channel_width[0];
-    band.frequency_stop = header->freq_array[0]+0.5*header->channel_width[0];
-    band.channel_start = 0;
-    band.channel_stop = 1;
-    tuning.bands.push_back(band);
+    for (size_t channel = 0; channel < header->Nfreqs; channel++) {
+        ObservationBand band;
+        band.frequency_start = header->freq_array[channel]-0.5*header->channel_width[channel];
+        band.frequency_stop = header->freq_array[channel]+0.5*header->channel_width[channel];
+        band.channel_start = channel;
+        band.channel_stop = channel+1;
+        tuning.bands.push_back(band);
+    }
     
     if (access_phase_center) {
         // phase_center_id_array is incrementally read,

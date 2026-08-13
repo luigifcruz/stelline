@@ -13,7 +13,7 @@ The block is idle until `playing` is enabled. At that point it starts iterating 
 
  Currently the `/Data/flags` and `/Data/nsamples` datasets are not read from the file.
 
-The observational header fields (source name, coordinates, channel frequencies etc) are pushed to the flowgraph environment under the `observatory` key. This does need revision however and is just a mostly good enough first pass implementation.
+The observational header fields (source name, coordinates, channel frequencies etc) are pushed to the flowgraph environment under the `observatory` key.
 
 ## Configuration
 
