@@ -20,8 +20,9 @@ struct Uvh5Reader : public Block::Config {
         "UVH5 Reader",
         "Source that iterates through an UVH5 file.",
         "# UVH5 Reader\n"
-        "The UVH5 Writer block writes pre-arranged filterbank tensors to an UVH5 file using "
-        "GPUDirect Storage. Output tensor is F32 shaped as [baseline-times, channels, pol-products].\n\n"
+        "The UVH5 Reader block reads correlation tensors from an UVH5 file, using "
+        "GPUDirect Storage on the CUDA device. Output tensor is complex and shaped "
+        "as [time, baselines, channels, pol-products].\n\n"
 
         "## Arguments\n"
         "- **File Path**: Path to the output UVH5 file.\n"
@@ -35,7 +36,7 @@ struct Uvh5Reader : public Block::Config {
         "- Offline analysis of captured signals.\n\n"
 
         "## Implementation\n"
-        "Input Buffer -> UVH5 Module -> HDF5 GDS File\n"
+        "HDF5 (GDS) File -> UVH5 Module -> Output Buffer\n"
         "1. Opens the specified file in binary read mode.\n"
         "2. Reads Batch Size samples of the specified data type per cycle.\n"
         "3. When end of file is reached, either loops back or yields."

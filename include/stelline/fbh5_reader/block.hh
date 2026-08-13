@@ -20,9 +20,9 @@ struct Fbh5Reader : public Block::Config {
         "FBH5 Reader",
         "Source that iterates through an FBH5 file.",
         "# FBH5 Reader\n"
-        "The FBH5 Writer block writes pre-arranged filterbank tensors to an FBH5 file using "
-        "GPUDirect Storage. Output tensor is F32 shaped as [time, beams, channels, "
-        "intermediate frequencies].\n\n"
+        "The FBH5 reader block reads filterbank tensors from an FBH5 file, using "
+        "GPUDirect Storage on the CUDA devise. Output tensor is F32 shaped as "
+        "[time, beams, channels, intermediate frequencies].\n\n"
 
         "## Arguments\n"
         "- **File Path**: Path to the output FBH5 file.\n"
@@ -36,7 +36,7 @@ struct Fbh5Reader : public Block::Config {
         "- Offline analysis of captured signals.\n\n"
 
         "## Implementation\n"
-        "Input Buffer -> FBH5 Module -> HDF5 GDS File\n"
+        "HDF5 (GDS) File -> FBH5 Module -> Output Buffer\n"
         "1. Opens the specified file in binary read mode.\n"
         "2. Reads Batch Size samples of the specified data type per cycle.\n"
         "3. When end of file is reached, either loops back or yields."

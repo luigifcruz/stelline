@@ -123,6 +123,10 @@ Result Uvh5ReaderImpl::create() {
         JST_ERROR("[MODULE_UVH5_READER] Cannot open file '{}'.", filepath);
         return Result::INCOMPLETE;
     }
+    if (uvh5File.DS_data_visdata.dims[0] == 0) {
+        JST_ERROR("[MODULE_UVH5_READER] Zero baseline-times available, file is effectively empty.");
+        return Result::ERROR;
+    }
     if (uvh5File.DS_data_visdata.dims[0] != uvh5File.header.Ntimes * uvh5File.header.Nbls) {
         JST_ERROR("[MODULE_UVH5_READER] Irregular baseline-times dimension found in file: {} != {} * {}.",
             uvh5File.DS_data_visdata.dims[0],
@@ -166,16 +170,16 @@ Result Uvh5ReaderImpl::create() {
         return Result::ERROR;
     }
     int nbits = H5Tget_size(uvh5File.DS_data_visdata.Tmem_id)*8;
-    H5T_class_t type_class = H5Tget_class(
-        H5Tget_member_type(uvh5File.DS_data_visdata.Tmem_id, 0)
-    );
+    hid_t h5t_member = H5Tget_member_type(uvh5File.DS_data_visdata.Tmem_id, 0);
+    H5T_class_t h5t_member_type = H5Tget_class(h5t_member);
+    H5Tclose(h5t_member);
 
     switch (nbits) {
         case 64:
-            dataType = type_class == H5T_INTEGER ? DataType::CI32 : DataType::CF32;
+            dataType = h5t_member_type == H5T_INTEGER ? DataType::CI32 : DataType::CF32;
             break;
         case 128:
-            dataType = type_class == H5T_INTEGER ? DataType::CI64 : DataType::CF64;
+            dataType = h5t_member_type == H5T_INTEGER ? DataType::CI64 : DataType::CF64;
             break;
         default:
             JST_ERROR("[MODULE_UVH5_READER] Unsupported number of bits in '{}': {}.",

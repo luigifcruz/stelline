@@ -64,7 +64,7 @@ Result Fbh5ReaderImpl::publishMetadata(const filterbank_header_t* header) {
     ant.position.z = 0.0;
     ant.pointing.ra = header->src_raj;
     ant.pointing.dec = header->src_dej;
-    if (header->source_name != NULL && strlen(header->source_name) > 0) {
+    if (strlen(header->source_name) > 0) {
         ant.pointing.source_name = header->source_name;
     } else {
         ant.pointing.source_name = "Unknown";
@@ -116,7 +116,11 @@ Result Fbh5ReaderImpl::create() {
         JST_ERROR("[MODULE_FBH5_READER] Cannot open file '{}'.", filepath);
         return Result::INCOMPLETE;
     }
-    publishMetadata(&fbh5File.header);
+    JST_CHECK(publishMetadata(&fbh5File.header));
+    if (fbh5File.ds_data.dims[0] == 0) {
+        JST_ERROR("[MODULE_FBH5_READER] Zero spectra available, file is effectively empty.");
+        return Result::ERROR;
+    }
     if (batchSize > fbh5File.ds_data.dims[0]) {
         JST_INFO("[MODULE_FBH5_READER] Clamping batchSize from ({}) to the total number of spectra available: {}.",
             batchSize,
