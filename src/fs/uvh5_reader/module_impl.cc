@@ -1,0 +1,266 @@
+#include "module_impl.hh"
+
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+
+#include <hdf5.h>
+
+#include <jetstream/memory/axis.hh>
+
+#include "../helpers.hh"
+#include "../metadata.hh"
+
+extern "C" {
+#include "h5dsc99/h5_dataspace.h"
+}
+
+namespace Jetstream::Modules {
+
+Result Uvh5ReaderImpl::validate() {
+    const auto& config = *candidate();
+    if (config.batchSize == 0) {
+        // TODO if zero, just read everything...
+        JST_ERROR("[MODULE_UVH5_READER] The 'batchSize' must be positive.");
+        return Result::ERROR;
+    }
+    return Result::SUCCESS;
+}
+
+Result Uvh5ReaderImpl::define() {
+    JST_CHECK(defineInterfaceOutput("signal"));
+
+    return Result::SUCCESS;
+}
+
+Result Uvh5ReaderImpl::publishMetadata(const UVH5_header_t* header, const bool& access_phase_center) {
+    TelescopeInfo info;
+    info.name = header->telescope_name;
+    info.coordinates.latitude = header->latitude;
+    info.coordinates.longitude = header->longitude;
+    info.coordinates.altitude = header->altitude;
+    info.iers.ut1_utc = header->dut1;
+
+    ObservationTuning tuning;
+    tuning.name = "Unknown";
+    for (size_t channel = 0; channel < header->Nfreqs; channel++) {
+        ObservationBand band;
+        band.frequency_start = header->freq_array[channel]-0.5*header->channel_width[channel];
+        band.frequency_stop = header->freq_array[channel]+0.5*header->channel_width[channel];
+        band.channel_start = channel;
+        band.channel_stop = channel+1;
+        tuning.bands.push_back(band);
+    }
+    
+    if (access_phase_center) {
+        // phase_center_id_array is incrementally read,
+        // index 0 is always appropriate
+        int catalog_index = header->phase_center_id_array[0];
+        UVH5_phase_center_t phase_center = header->phase_center_catalog[catalog_index];
+        for (size_t index = 0; index < header->Nants_telescope; index++) {
+            AntennaDetails ant;
+    
+            ant.name = header->antenna_names[index];
+            ant.number = header->antenna_numbers[index];
+            if (header->antenna_diameters) {
+                ant.diameter = header->antenna_diameters[index];
+            }
+            else {
+                ant.diameter = 0.0;
+            }
+            ant.position.x = header->antenna_positions[(3*index)+0];
+            ant.position.y = header->antenna_positions[(3*index)+1];
+            ant.position.z = header->antenna_positions[(3*index)+2];
+            ant.pointing.ra = phase_center.lon;
+            ant.pointing.dec = phase_center.lat;
+            if (phase_center.name != NULL && strlen(phase_center.name) > 0) {
+                ant.pointing.source_name = phase_center.name;
+            } else {
+                ant.pointing.source_name = "Unknown";
+            }
+            
+            ant.tunings.push_back(tuning);
+            info.antennas.push_back(ant);
+        }
+    }
+
+    if (environment()->set("observatory", info) != Result::SUCCESS) {
+        JST_ERROR("[MODULE_UVH5_READER] Could not publish 'observatory' nested environment value.");
+        return Result::INCOMPLETE;
+    }
+
+    return Result::SUCCESS;
+}
+
+Result Uvh5ReaderImpl::create() {
+    outputs()["signal"].produced(name(), "signal", buffer);
+    batchCount.publish(0);
+    currentBatchIndex.publish(0);
+    currentBandwidth.publish(0.0f);
+    bytesSinceLastMeasurement = 0;
+    lastMeasurementTime = std::chrono::steady_clock::now();
+
+    if (filepath.empty()) {
+        JST_ERROR("[MODULE_UVH5_READER] File path is empty.");
+        return Result::INCOMPLETE;
+    }
+
+    std::filesystem::path filePathNorm = std::filesystem::u8path(filepath);
+
+    if (!std::filesystem::exists(filePathNorm)) {
+        JST_ERROR("[MODULE_UVH5_READER] File '{}' does not exist.", filepath);
+        return Result::INCOMPLETE;
+    }
+
+    
+    // Suppress HDF5 automatic error printing — we handle errors manually.
+    H5Eset_auto(H5E_DEFAULT, nullptr, nullptr);
+
+    // Open the file read-only with the default (POSIX) VFD — no GDS required.
+    uvh5File = UVH5access_file(
+        filePathNorm.c_str(),
+        faplId
+    );
+    if (uvh5File.file_id == H5I_INVALID_HID) {
+        JST_ERROR("[MODULE_UVH5_READER] Cannot open file '{}'.", filepath);
+        return Result::INCOMPLETE;
+    }
+    if (uvh5File.DS_data_visdata.dims[0] == 0) {
+        JST_ERROR("[MODULE_UVH5_READER] Zero baseline-times available, file is effectively empty.");
+        return Result::ERROR;
+    }
+    if (uvh5File.DS_data_visdata.dims[0] != uvh5File.header.Ntimes * uvh5File.header.Nbls) {
+        JST_ERROR("[MODULE_UVH5_READER] Irregular baseline-times dimension found in file: {} != {} * {}.",
+            uvh5File.DS_data_visdata.dims[0],
+            uvh5File.header.Ntimes,
+            uvh5File.header.Nbls
+        );
+        return Result::INCOMPLETE;
+    }
+    JST_CHECK(publishMetadata(&uvh5File.header, false));
+    if (batchSize > uvh5File.header.Ntimes) {
+        JST_INFO("[MODULE_UVH5_READER] Clamping batchSize from ({}) to the total number of integrations available: {}.",
+            batchSize,
+            uvh5File.header.Ntimes
+        );
+        batchSize = uvh5File.header.Ntimes;
+    }
+    if (uvh5File.header.Ntimes % batchSize != 0) {
+        JST_ERROR("[MODULE_UVH5_READER] BatchSize must be an integer factor of the total number of integrations available: {}.",
+            uvh5File.header.Ntimes
+        );
+        return Result::ERROR;
+    }
+    
+    UVH5change_access_chunking(
+        &uvh5File,
+        batchSize // nof time-indices
+    );
+    JST_INFO("[MODULE_UVH5_READER] Opened '{}' — dim_chunks=[{}/{},{},{},{}].",
+             filepath,
+             batchSize,
+             uvh5File.DS_data_visdata.dims[0]/uvh5File.header.Nbls,
+             uvh5File.header.Nbls,
+             uvh5File.DS_data_visdata.dims[1],
+             uvh5File.DS_data_visdata.dims[2]
+             );
+    batchCount.publish(uvh5File.header.Ntimes/batchSize);
+
+    DataType dataType;
+    if (H5Tget_class(uvh5File.DS_data_visdata.Tmem_id) != H5T_COMPOUND || H5Tget_nmembers(uvh5File.DS_data_visdata.Tmem_id) != 2) {
+        JST_ERROR("[MODULE_UVH5_READER] Visdata data type is not compound with 2 members.");
+        return Result::ERROR;
+    }
+    int nbits = H5Tget_size(uvh5File.DS_data_visdata.Tmem_id)*8;
+    hid_t h5t_member = H5Tget_member_type(uvh5File.DS_data_visdata.Tmem_id, 0);
+    H5T_class_t h5t_member_type = H5Tget_class(h5t_member);
+    H5Tclose(h5t_member);
+
+    switch (nbits) {
+        case 64:
+            dataType = h5t_member_type == H5T_INTEGER ? DataType::CI32 : DataType::CF32;
+            break;
+        case 128:
+            dataType = h5t_member_type == H5T_INTEGER ? DataType::CI64 : DataType::CF64;
+            break;
+        default:
+            JST_ERROR("[MODULE_UVH5_READER] Unsupported number of bits in '{}': {}.",
+                      filepath,
+                      nbits
+                      );
+            return Result::ERROR;
+    }
+    JST_CHECK(buffer.create(device(), dataType, {batchSize, uvh5File.header.Nbls, uvh5File.DS_data_visdata.dims[1], uvh5File.DS_data_visdata.dims[2]}));
+    if (buffer.sizeBytes() != H5DSsize(&uvh5File.DS_data_visdata)) {
+        JST_ERROR("[MODULE_UVH5_READER] Signal buffer size is incorrect. {} != {}", buffer.sizeBytes(), H5DSsize(&uvh5File.DS_data_visdata));
+        return Result::ERROR;
+    }
+    JST_CHECK(SetSignalAxes(buffer, {.sample = Index{0}, .channel = Index{2}}));
+    uvh5File.visdata = buffer.data();
+    uvh5File.flags = nullptr;
+    uvh5File.nsamples = nullptr;
+
+    return Result::SUCCESS;
+}
+
+Result Uvh5ReaderImpl::destroy() {
+    if (uvh5File.DS_data_visdata.D_id >= 0) {
+        uvh5File.visdata = nullptr;
+        UVH5close(&uvh5File);
+    }
+    if (faplOpen) {
+        JST_HDF5_CHECK(H5Pclose(faplId), [&] {
+            JST_ERROR("[MODULE_UVH5_READER] Failed to close the HDF5 file access property list. Error {}.", err);
+        });
+        faplOpen = false;
+        faplId = H5P_DEFAULT;
+    }
+
+    currentBandwidth.publish(0.0f);
+    bytesSinceLastMeasurement = 0;
+
+    uvh5File = {0};
+    return Result::SUCCESS;
+}
+
+Result Uvh5ReaderImpl::reconfigure() {
+    // the faplId is different between CPU and CUDA implementations
+    return Result::RECREATE;
+}
+
+U64 Uvh5ReaderImpl::getCurrentBatchIndex() const {
+    return currentBatchIndex.get();
+}
+
+U64 Uvh5ReaderImpl::getBatchCount() const {
+    return batchCount.get();
+}
+
+F32 Uvh5ReaderImpl::getCurrentBandwidth() const {
+    return currentBandwidth.get();
+}
+
+void Uvh5ReaderImpl::updateBandwidth(const U64 deltaBytes) {
+    constexpr double kBandwidthMeasurementPeriodSeconds = 0.10;
+    constexpr double kBandwidthEmaAlpha = 0.3;
+
+    bytesSinceLastMeasurement += deltaBytes;
+
+    const auto now = std::chrono::steady_clock::now();
+    const double elapsedSeconds = std::chrono::duration<double>(now - lastMeasurementTime).count();
+    if (elapsedSeconds < kBandwidthMeasurementPeriodSeconds) {
+        return;
+    }
+
+    const double instantBandwidth = static_cast<double>(bytesSinceLastMeasurement) /
+                                    static_cast<double>(JST_MB) /
+                                    elapsedSeconds;
+    const double smoothedBandwidth = kBandwidthEmaAlpha * instantBandwidth +
+                                     (1.0 - kBandwidthEmaAlpha) * currentBandwidth.get();
+    currentBandwidth.publish(static_cast<F32>(smoothedBandwidth));
+
+    bytesSinceLastMeasurement = 0;
+    lastMeasurementTime = now;
+}
+
+}  // namespace Jetstream::Modules
