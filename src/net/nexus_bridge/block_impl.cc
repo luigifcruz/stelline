@@ -37,7 +37,7 @@ Result NexusBridgeImpl::define() {
     JST_CHECK(defineInterfaceMetric("connected",
                                     "Connected",
                                     "Whether the bridge has received a Nexus metadata snapshot.",
-                                    "private-stelline-metrics-global-number",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->connected.get() : U64(0)));
         }));
@@ -45,7 +45,7 @@ Result NexusBridgeImpl::define() {
     JST_CHECK(defineInterfaceMetric("variablesLoaded",
                                     "Variables Loaded",
                                     "Number of Nexus metadata variables currently mirrored into the flowgraph environment.",
-                                    "private-stelline-metrics-global-number",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->variablesLoaded.get() : U64(0)));
         }));
