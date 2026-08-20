@@ -137,7 +137,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("blocksEmitted",
                                     "Blocks Emitted",
                                     "Total blocks successfully output from the module.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getEmittedBlocks() : U64(0)));
         }));
@@ -145,7 +145,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("packetsReceived",
                                     "Packets Received",
                                     "Total received packets accepted into blocks.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getReceivedPackets() : U64(0)));
         }));
@@ -153,7 +153,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("packetsEvicted",
                                     "Packets Evicted",
                                     "Packets discarded by offset or cutoff filtering.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getEvictedPackets() : U64(0)));
         }));
@@ -161,7 +161,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("packetsLost",
                                     "Packets Lost",
                                     "Packets dropped because no block could be allocated.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getLostPackets() : U64(0)));
         }));
@@ -169,7 +169,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("idleQueue",
                                     "Idle Queue",
                                     "Current idle queue depth.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getIdleQueue() : U64(0)));
         }));
@@ -177,7 +177,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("receiveQueue",
                                     "Receive Queue",
                                     "Current receive queue depth.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getReceiveQueue() : U64(0)));
         }));
@@ -185,7 +185,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("computeQueue",
                                     "Compute Queue",
                                     "Current compute queue depth.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getComputeQueue() : U64(0)));
         }));
@@ -193,7 +193,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("readyQueue",
                                     "Ready Queue",
                                     "Current ready queue depth.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getReadyQueue() : U64(0)));
         }));
@@ -209,7 +209,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("avgBurstReleaseTimeUs",
                                     "Burst Release Time",
                                     "Average burst release time in microseconds.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getAverageBurstReleaseTimeUs() : U64(0)));
         }));
@@ -217,7 +217,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("memPoolAvailable",
                                     "Memory Pool Available",
                                     "Current reusable output tensor pool availability.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getMemPoolAvailable() : U64(0)));
         }));
@@ -225,7 +225,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("memPoolReferenced",
                                     "Memory Pool Referenced",
                                     "Current reusable output tensor pool references.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getMemPoolReferenced() : U64(0)));
         }));
@@ -233,7 +233,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("blockMapLatestTimeIndex",
                                     "Block Map Latest Time Index",
                                     "Latest known block time index.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getBlockMapLatestTimeIndex() : U64(0)));
         }));
@@ -241,7 +241,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("blockMapUsed",
                                     "Block Map Used",
                                     "Current number of active block map entries.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getBlockMapUsed() : U64(0)));
         }));
@@ -249,7 +249,7 @@ Result AtaReceiverImpl::define() {
     JST_CHECK(defineInterfaceMetric("blockMapCapacity",
                                     "Block Map Capacity",
                                     "Maximum number of concurrent block map entries.",
-                                    "private-stelline-metrics-string",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getBlockMapCapacity() : U64(0)));
         }));
