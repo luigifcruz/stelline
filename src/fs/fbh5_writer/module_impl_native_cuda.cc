@@ -89,6 +89,16 @@ Result Fbh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     const U64 inputBytes = input.sizeBytes();
 
     if (!bufferRegistered || registeredBuffer != inputPtr || registeredBufferSize != inputBytes) {
+        cudaPointerAttributes attributes = {};
+        JST_CUDA_CHECK(cudaPointerGetAttributes(&attributes, inputPtr), [&] {
+            JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Failed to inspect the input buffer before GDS registration: {}.",
+                      err);
+        });
+        if (attributes.type == cudaMemoryTypeManaged) {
+            JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] GDS registration requires device memory, but the input buffer uses managed memory. Configure the upstream CUDA output to use non-host-accessible memory.");
+            return Result::ERROR;
+        }
+
         if (bufferRegistered) {
             JST_CUFILE_CHECK(cuFileBufDeregister(const_cast<void*>(registeredBuffer)), [&] {
                 JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Failed to deregister the previous input buffer (CUfile error {}).",

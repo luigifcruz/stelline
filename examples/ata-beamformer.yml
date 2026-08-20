@@ -107,7 +107,7 @@ graph:
     dataType: F32
     config:
       outputDevice: cuda
-      hostAccessible: true
+      hostAccessible: false
     input:
       buffer: '${graph.permutation_2.output.buffer}'
     meta:
