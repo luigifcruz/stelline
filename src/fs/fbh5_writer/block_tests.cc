@@ -1,8 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+
 #include <jetstream/domains/core/ones_tensor/block.hh>
 #include <jetstream/flowgraph.hh>
 #include <jetstream/flowgraph_view.hh>
+#include <jetstream/logger.hh>
 #include <jetstream/memory/axis.hh>
 #include <jetstream/registry.hh>
 #include <jetstream/runtime_context_native_cpu.hh>
@@ -64,6 +67,53 @@ TEST_CASE("FBH5 writer block creates its inert child module",
     REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
     REQUIRE(writer.state == Block::State::Created);
     REQUIRE(writer.outputs.empty());
+
+    REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+}
+
+TEST_CASE("FBH5 writer block reports its incomplete reason",
+          "[stelline][fbh5_writer][block][lifecycle][diagnostic]") {
+    Flowgraph flowgraph;
+    REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+
+    Blocks::OnesTensor sourceConfig;
+    sourceConfig.shape = {1, 2, 3, 1};
+    sourceConfig.dataType = "F32";
+    REQUIRE(flowgraph.blockCreate("source", sourceConfig, {}) == Result::SUCCESS);
+
+    Flowgraph::View::BlockData source;
+    REQUIRE(flowgraph.view().block("source", source) == Result::SUCCESS);
+    Tensor sourceOutput = source.outputs.at("buffer").tensor;
+    REQUIRE(SetSignalAxes(sourceOutput, {
+        .sample = Index{0},
+        .channel = Index{2},
+    }) == Result::SUCCESS);
+
+    TensorMap inputs;
+    inputs["input"].requested("source", "buffer");
+
+    const std::filesystem::path missingParent = "stelline_test_missing_fbh5_parent";
+    REQUIRE_FALSE(std::filesystem::exists(missingParent));
+
+    Blocks::Fbh5Writer writerConfig;
+    writerConfig.filepath = (missingParent / "file.fbh5").string();
+    writerConfig.recording = true;
+
+    JST_LOG_LAST_ERROR() = "stale error";
+    REQUIRE(flowgraph.blockCreate("writer",
+                                  writerConfig,
+                                  inputs,
+                                  DeviceType::CPU,
+                                  RuntimeType::NATIVE,
+                                  kTestProvider) == Result::SUCCESS);
+
+    Flowgraph::View::BlockData writer;
+    REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+    REQUIRE(writer.state == Block::State::Incomplete);
+    REQUIRE(writer.diagnostic ==
+            "[MODULE_FBH5_WRITER] Parent directory 'stelline_test_missing_fbh5_parent' does not exist.");
 
     REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
     REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);

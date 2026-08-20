@@ -101,7 +101,7 @@ Result Fbh5WriterImpl::create() {
     }
 
     if (filepath.empty()) {
-        JST_WARN("[MODULE_FBH5_WRITER] File path is empty.");
+        JST_ERROR("[MODULE_FBH5_WRITER] File path is empty.");
         return Result::INCOMPLETE;
     }
 
@@ -109,7 +109,7 @@ Result Fbh5WriterImpl::create() {
     if (!parentPath.empty()) {
         std::error_code ec;
         if (!std::filesystem::exists(parentPath, ec)) {
-            JST_WARN("[MODULE_FBH5_WRITER] Parent directory '{}' does not exist.", parentPath.string());
+            JST_ERROR("[MODULE_FBH5_WRITER] Parent directory '{}' does not exist.", parentPath.string());
             return Result::INCOMPLETE;
         }
     }
