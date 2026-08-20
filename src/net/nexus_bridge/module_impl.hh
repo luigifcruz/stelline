@@ -19,6 +19,7 @@ struct NexusBridgeImpl : public Module::Impl, public DynamicConfig<NexusBridge> 
 
     mutable Tools::Snapshot<U64> connected{0};
     mutable Tools::Snapshot<U64> variablesLoaded{0};
+    mutable Tools::Snapshot<U64> metricsMonitored{0};
 
  protected:
     void refreshStatus() const;

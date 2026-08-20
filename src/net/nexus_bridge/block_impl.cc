@@ -50,6 +50,14 @@ Result NexusBridgeImpl::define() {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->variablesLoaded.get() : U64(0)));
         }));
 
+    JST_CHECK(defineInterfaceMetric("metricsMonitored",
+                                    "Metrics Monitored",
+                                    "Number of block metrics currently selected for Nexus telemetry.",
+                                    "private-stelline-metrics-number",
+        [this]() -> std::any {
+            return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->metricsMonitored.get() : U64(0)));
+        }));
+
     JST_CHECK(defineInterfaceMetric("connectedDisplay",
                                     "Connected",
                                     "Whether the bridge has received a Nexus metadata snapshot.",
@@ -65,6 +73,14 @@ Result NexusBridgeImpl::define() {
                                     "label",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->variablesLoaded.get() : U64(0)));
+        }));
+
+    JST_CHECK(defineInterfaceMetric("metricsMonitoredDisplay",
+                                    "Metrics Monitored",
+                                    "Number of block metrics currently selected for Nexus telemetry.",
+                                    "label",
+        [this]() -> std::any {
+            return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->metricsMonitored.get() : U64(0)));
         }));
 
     return Result::SUCCESS;

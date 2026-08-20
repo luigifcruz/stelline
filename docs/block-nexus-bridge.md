@@ -9,9 +9,11 @@ The Nexus Bridge connects a flowgraph to Nexus, the metadata service of the Stel
 
 ## How it works
 
-On creation the block starts a background watcher thread that subscribes to the `observatory:getMetadata` query on the configured Nexus deployment, a Convex application. The subscription is push-based, so the watcher receives a fresh snapshot whenever the observatory state changes, computes the delta against the previous snapshot, and places it on a queue. If the connection drops or the Convex client is unavailable, the watcher marks the bridge disconnected and retries on an interval.
+On creation the block starts a background watcher thread that subscribes to the `observatory:getMetadata` query on the configured Nexus deployment, a Convex application. When `NEXUS_INSTANCE_ID` is set, the subscription includes it so Nexus can add metadata for that instance and its observation. Without an instance ID, the bridge continues to receive general observatory metadata. The subscription is push-based, so the watcher receives a fresh snapshot whenever the relevant state changes, computes the delta against the previous snapshot, and places it on a queue. If the connection drops or the Convex client is unavailable, the watcher marks the bridge disconnected and retries on an interval.
 
 The block itself is throttled, so it wakes periodically rather than spinning. Each cycle it drains the queued deltas and applies them to the flowgraph environment: changed entries are written under their original Nexus key, and entries that disappeared from Nexus are removed. Every mirrored entry keeps the Nexus triple of value, type tag (`text`, `integer`, or `real`), and validity flag. The compute path never blocks on the network, since all communication happens on the watcher thread.
+
+The bridge also samples the block metrics exposed through CyberEther's Python runtime every five seconds. It sends non-empty snapshots to Nexus on a separate publisher thread, so telemetry uploads never block flowgraph computation.
 
 ## Configuration
 
@@ -25,13 +27,19 @@ Changing the URL at runtime recreates the block and restarts the subscription.
 
 The block is a pure producer of the flowgraph environment. It mirrors every key published by the Nexus deployment verbatim, including the `observatory.*`, `observation.*`, and `instance.*` families consumed by the writer blocks, and additionally publishes its own status:
 
+| Variable | Description |
+|---|---|
+| `NEXUS_INSTANCE_ID` | Optional Nexus instance used to request contextual observation and band metadata. Nexus-managed workloads set this automatically. |
+
+Published flowgraph environment keys:
+
 | Key | Description |
 |---|---|
-| `nexus.bridge` | Bridge status with `connected`, `variables_loaded`, `url`, and `last_error` fields. |
+| `nexus.bridge` | Bridge status with `connected`, `variables_loaded`, `metrics_monitored`, `url`, and `last_error` fields. |
 
 ## Metrics
 
-The node reports **Connected**, which flips once the first snapshot arrives, and **Variables Loaded**, the number of entries currently mirrored. Both are also readable by other blocks through the `nexus.bridge` status key, and `last_error` in that key carries the reason for the most recent disconnect.
+The node reports **Connected**, which flips once the first snapshot arrives, **Variables Loaded**, the number of entries currently mirrored, and **Metrics Monitored**, the number of block metrics accepted into Nexus telemetry snapshots. These values are also readable by other blocks through the `nexus.bridge` status key, and `last_error` in that key carries the reason for the most recent disconnect.
 
 ## Telemetry
 
@@ -41,6 +49,7 @@ The metrics below are reported to Nexus.
 |---|---|
 | `connected` | Whether the bridge has received a Nexus metadata snapshot. |
 | `variablesLoaded` | Number of Nexus metadata variables currently mirrored into the flowgraph environment. |
+| `metricsMonitored` | Number of block metrics currently selected for Nexus telemetry. |
 
 ## Requirements
 
