@@ -245,31 +245,51 @@ $ cat /proc/cmdline
 
 Required for `Transport` modules.
 
-<!-- TODO: Write why this is important. -->
+The ATA Receiver uses hugepages for packet-header buffers registered with the ConnectX receive queues. These mappings reduce address translation overhead and provide predictable memory during high packet-rate ingest. An exhausted pool makes DAQIRI fall back to regular pages, which can reduce throughput and increase latency variation.
 
-```
-$ sudo mkdir /mnt/huge
-$ sudo mount -t hugetlbfs nodev /mnt/huge
-$ sudo sh -c "echo nodev /mnt/huge hugetlbfs pagesize=1GB 0 0 >> /etc/fstab"
-```
+Use a pool of 256 pages with a 2 MiB page size. This reserves 512 MiB, which supports four simultaneous receivers with capacity left for additional mappings.
 
-```
-default_hugepagesz=1G hugepagesz=1G hugepages=8
+Add the following arguments to `GRUB_CMDLINE_LINUX_DEFAULT`:
+
+```text
+default_hugepagesz=2M hugepagesz=2M hugepages=256
 ```
 
-After the reboot, run the following command to check if Hugepages was configured correctly. The output should show that all Hugepages are free and available.
+Configure the hugetlbfs mount to use the same page size:
 
+```shell
+$ sudo mkdir -p /mnt/huge
+$ sudo vim /etc/fstab
+nodev /mnt/huge hugetlbfs pagesize=2M 0 0
+$ sudo update-grub
+$ sudo reboot
 ```
-$ grep -i hugepages /proc/meminfo
-AnonHugePages:         0 kB
-ShmemHugePages:        0 kB
-FileHugePages:         0 kB
-HugePages_Total:       8
-HugePages_Free:        8
+
+After rebooting, verify the total pool and page size:
+
+```shell
+$ grep -E 'HugePages_Total|HugePages_Free|HugePages_Rsvd|Hugepagesize' /proc/meminfo
+HugePages_Total:     256
+HugePages_Free:      256
 HugePages_Rsvd:        0
-HugePages_Surp:        0
-Hugepagesize:    1048576 kB
+Hugepagesize:       2048 kB
+$ findmnt /mnt/huge -o TARGET,FSTYPE,OPTIONS
+TARGET    FSTYPE    OPTIONS
+/mnt/huge hugetlbfs rw,relatime,pagesize=2M
 ```
+
+The free-page count can be lower if a receiver or another service has already started. On NUMA systems, also confirm that each node has enough pages for its local receivers:
+
+```shell
+$ for node in /sys/devices/system/node/node*; do
+    printf '%s total=%s free=%s\n' \
+      "$(basename "$node")" \
+      "$(cat "$node/hugepages/hugepages-2048kB/nr_hugepages")" \
+      "$(cat "$node/hugepages/hugepages-2048kB/free_hugepages")"
+  done
+```
+
+Hugepages are selected when the receiver starts. If its log contains `MAP_HUGETLB allocation ... failed; falling back to regular pages`, correct the pool and restart the observation; a running receiver does not retry failed hugepage mappings.
 
 ### Miscellaneous Performance
 
