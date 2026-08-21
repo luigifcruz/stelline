@@ -111,4 +111,4 @@ The metrics below are reported to Nexus.
 
 ## Requirements
 
-Reception requires an NVIDIA ConnectX NIC with Mellanox OFED and hugepages configured on the host. See [host dependencies](/docs/host-dependencies) for the setup and [considerations](/docs/considerations) for the hardware background.
+Reception requires an NVIDIA ConnectX NIC with Mellanox OFED and hugepages configured on the host. Multi-port ConnectX-7 systems also require relaxed PCIe write ordering. See [host dependencies](/docs/host-dependencies) for the software setup, [system configuration](/docs/system-configuration#connectx-7-pcie-write-ordering) for the required firmware setting, and [considerations](/docs/considerations) for the hardware background.

@@ -102,6 +102,54 @@ Now ACS should be disabled by default for every PCIe device on boot.
 
 <!-- TODO: Write Multithreading section. -->
 
+## ConnectX-7 PCIe Write Ordering
+
+Required when a multi-port ConnectX-7 writes directly to separate GPUs.
+
+The firmware on the validated ConnectX-7 cards reported `PCI_WR_ORDERING=per_mkey(0)`. On the validated AMD platform, this causes head-of-line blocking when the two functions of one physical card concurrently write to GPU memory registered under different MKeys. A single port can run at full rate while enabling the second port limits both receivers and causes physical ingress drops and pause frames.
+
+Configure every ConnectX-7 PCI function to force PCIe relaxed ordering. The setting is stored per function, so configuring only the first function of a dual-port card is not sufficient.
+
+First, start the Mellanox Software Tools service and list the device names:
+
+```shell
+$ sudo mst start
+$ sudo mst status -v
+```
+
+Set `PCI_WR_ORDERING=1` on every ConnectX-7 function reported by `mst status`. For example, a system with two dual-port cards requires all four commands below:
+
+```shell
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf0 set PCI_WR_ORDERING=1
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf0.1 set PCI_WR_ORDERING=1
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf1 set PCI_WR_ORDERING=1
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf1.1 set PCI_WR_ORDERING=1
+```
+
+The command should report `force_relax(1)` as the new value. This is a persistent firmware setting and does not become active until the host reboots. Stop active observations before rebooting.
+
+```shell
+$ sudo reboot
+```
+
+After the reboot, verify every function and unload the temporary MST drivers:
+
+```shell
+$ sudo mst start
+$ for device in /dev/mst/mt4129_pciconf*; do
+    sudo mlxconfig -d "$device" q PCI_WR_ORDERING
+  done
+$ sudo mst stop
+```
+
+Every query must report:
+
+```text
+PCI_WR_ORDERING                             force_relax(1)
+```
+
+On the validated four-port system, a minimal ATA Receiver and CUDA duplicate flowgraph delivered approximately 30 Gb/s per port with about 1.2 million physical drops per second under `per_mkey(0)`. With `force_relax(1)`, all four ports concurrently delivered 89.4 Gb/s each, 357.8 Gb/s aggregate, with zero physical drops, pause frames, or receive-buffer threshold events.
+
 ## Kernel Configuration
 
 Some modules require kernel-level tuning to reach optimal performance, particularly in low-latency or high-throughput environments. This section outlines the relevant kernel arguments and explains when and why to use them.
