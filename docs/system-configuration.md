@@ -63,15 +63,17 @@ Create a service calling the script automatically on boot in `/etc/systemd/syste
 
 ```
 [Unit]
-Description=ACS disable
-After=default.target
+Description=Disable PCIe ACS for GPU P2P
+After=systemd-modules-load.service
+Before=nvidia-persistenced.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/acs-disable
+RemainAfterExit=yes
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 ```
 
 Enable the service.
