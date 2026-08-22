@@ -184,6 +184,7 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     if (rv % 10 != 0) {
         JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] radiointerferometry position-angle calculation failed: rv={}",
                   rv);
+        return Result::ERROR;
     }
 
     uvh5File.nsamples[0] = input.size();

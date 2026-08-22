@@ -1,10 +1,10 @@
 ---
-version: 1.0.0
+version: 2
 
 title: ATA Correlator
 summary: Simple correlator example for the Allen Telescope Array (ATA).
 graph:
-  ata_receiver:
+  - name: ata_receiver
     module: ata_receiver
     device: cuda
     runtime: native
@@ -30,7 +30,7 @@ graph:
         width: 274
         y: 10
         x: 42
-  duplicate_1:
+  - name: duplicate_1
     module: duplicate
     device: cuda
     runtime: native
@@ -44,7 +44,7 @@ graph:
         width: 120
         y: 364
         x: 963
-  correlator:
+  - name: correlator
     module: correlator
     device: cuda
     runtime: native
@@ -65,7 +65,7 @@ graph:
         width: 158.51848
         y: 240.5185
         x: 375.07407
-  slice:
+  - name: slice
     module: slice
     device: cpu
     runtime: native
@@ -82,7 +82,7 @@ graph:
         width: 120
         y: 490
         x: 557
-  permutation_1:
+  - name: permutation_1
     module: permutation
     device: cuda
     runtime: native
@@ -98,7 +98,7 @@ graph:
         width: 140
         y: 211
         x: 579.4074
-  arithmetic:
+  - name: arithmetic
     module: arithmetic
     device: cpu
     runtime: native
@@ -116,7 +116,7 @@ graph:
         width: 140
         y: 462
         x: 795
-  duplicate:
+  - name: duplicate
     module: duplicate
     device: cuda
     runtime: native
@@ -133,7 +133,7 @@ graph:
         width: 132.59256
         y: 183.18518
         x: 774.6666
-  file_writer:
+  - name: file_writer
     module: file_writer
     device: cpu
     runtime: native
@@ -152,7 +152,7 @@ graph:
         width: 140
         y: 419.19995
         x: 1285
-  arithmetic_1:
+  - name: arithmetic_1
     module: arithmetic
     device: cpu
     runtime: native
@@ -170,7 +170,7 @@ graph:
         width: 140
         y: 729.80005
         x: 934
-  multiply_constant:
+  - name: multiply_constant
     module: multiply_constant
     device: cpu
     runtime: native
@@ -186,7 +186,7 @@ graph:
         width: 140
         y: 519.80005
         x: 1018
-  amplitude:
+  - name: amplitude
     module: amplitude
     device: cpu
     runtime: native
@@ -200,7 +200,7 @@ graph:
         width: 120
         y: 719
         x: 1157
-  range:
+  - name: range
     module: range
     device: cpu
     runtime: native
@@ -217,7 +217,7 @@ graph:
         width: 140
         y: 700
         x: 383
-  lineplot:
+  - name: lineplot
     module: lineplot
     device: cpu
     runtime: native
@@ -243,7 +243,7 @@ graph:
         width: 140
         y: 795
         x: 726
-  waterfall:
+  - name: waterfall
     module: waterfall
     device: cpu
     runtime: native
@@ -266,7 +266,7 @@ graph:
         width: 124
         y: 780
         x: 555
-  uvh5_writer:
+  - name: uvh5_writer
     module: uvh5_writer
     device: cuda
     runtime: native

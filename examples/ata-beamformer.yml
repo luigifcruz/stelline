@@ -1,10 +1,10 @@
 ---
-version: 1.0.0
+version: 2
 
 title: ATA Beamformer
 summary: Simple beamformer example for the Allen Telescope Array (ATA).
 graph:
-  ones_tensor:
+  - name: ones_tensor
     module: ones_tensor
     device: cuda
     runtime: native
@@ -19,7 +19,7 @@ graph:
         width: 195
         y: 419
         x: 384
-  ata_receiver:
+  - name: ata_receiver
     module: ata_receiver
     device: cuda
     runtime: native
@@ -45,7 +45,7 @@ graph:
         width: 274
         y: 13
         x: 36
-  beamformer:
+  - name: beamformer
     module: beamformer
     device: cuda
     runtime: native
@@ -64,7 +64,7 @@ graph:
         width: 140
         y: 345
         x: 649
-  detector:
+  - name: detector
     module: detector
     device: cuda
     runtime: native
@@ -83,7 +83,7 @@ graph:
         width: 140
         y: 344
         x: 845
-  permutation_2:
+  - name: permutation_2
     module: permutation
     device: cuda
     runtime: native
@@ -99,7 +99,7 @@ graph:
         width: 140
         y: 346
         x: 1035
-  duplicate_1:
+  - name: duplicate_1
     module: duplicate
     device: cuda
     runtime: native
@@ -107,7 +107,7 @@ graph:
     dataType: F32
     config:
       outputDevice: cuda
-      hostAccessible: true
+      hostAccessible: false
     input:
       buffer: '${graph.permutation_2.output.buffer}'
     meta:
@@ -116,7 +116,7 @@ graph:
         width: 140
         y: 341
         x: 1234
-  fbh5_writer:
+  - name: fbh5_writer
     module: fbh5_writer
     device: cuda
     runtime: native

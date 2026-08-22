@@ -47,7 +47,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("bandwidth",
                                     "Bandwidth",
                                     "Write bandwidth in megabytes per second.",
-                                    "private-stelline-metrics",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{:.2f}", moduleImpl ? moduleImpl->getBandwidthMBps() : 0.0));
         }));
@@ -63,7 +63,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("totalDataWritten",
                                     "Total Data Written",
                                     "Total written FBH5 payload in megabytes.",
-                                    "private-stelline-metrics",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{:.0f}", moduleImpl ? moduleImpl->getTotalDataWrittenMb() : 0.0));
         }));
@@ -79,7 +79,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("chunksWritten",
                                     "Chunks Written",
                                     "Total number of written FBH5 chunks.",
-                                    "private-stelline-metrics",
+                                    "private-stelline-metrics-number",
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getChunkCounter() : U64(0)));
         }));

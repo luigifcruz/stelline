@@ -63,15 +63,17 @@ Create a service calling the script automatically on boot in `/etc/systemd/syste
 
 ```
 [Unit]
-Description=ACS disable
-After=default.target
+Description=Disable PCIe ACS for GPU P2P
+After=systemd-modules-load.service
+Before=nvidia-persistenced.service
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/acs-disable
+RemainAfterExit=yes
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
 ```
 
 Enable the service.
@@ -101,6 +103,54 @@ ACSCtl: SrcValid- TransBlk- ReqRedir- CmpltRedir- UpstreamFwd- EgressCtrl- Direc
 Now ACS should be disabled by default for every PCIe device on boot.
 
 <!-- TODO: Write Multithreading section. -->
+
+## ConnectX-7 PCIe Write Ordering
+
+Required when a multi-port ConnectX-7 writes directly to separate GPUs.
+
+The firmware on the validated ConnectX-7 cards reported `PCI_WR_ORDERING=per_mkey(0)`. On the validated AMD platform, this causes head-of-line blocking when the two functions of one physical card concurrently write to GPU memory registered under different MKeys. A single port can run at full rate while enabling the second port limits both receivers and causes physical ingress drops and pause frames.
+
+Configure every ConnectX-7 PCI function to force PCIe relaxed ordering. The setting is stored per function, so configuring only the first function of a dual-port card is not sufficient.
+
+First, start the Mellanox Software Tools service and list the device names:
+
+```shell
+$ sudo mst start
+$ sudo mst status -v
+```
+
+Set `PCI_WR_ORDERING=1` on every ConnectX-7 function reported by `mst status`. For example, a system with two dual-port cards requires all four commands below:
+
+```shell
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf0 set PCI_WR_ORDERING=1
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf0.1 set PCI_WR_ORDERING=1
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf1 set PCI_WR_ORDERING=1
+$ sudo mlxconfig -y -d /dev/mst/mt4129_pciconf1.1 set PCI_WR_ORDERING=1
+```
+
+The command should report `force_relax(1)` as the new value. This is a persistent firmware setting and does not become active until the host reboots. Stop active observations before rebooting.
+
+```shell
+$ sudo reboot
+```
+
+After the reboot, verify every function and unload the temporary MST drivers:
+
+```shell
+$ sudo mst start
+$ for device in /dev/mst/mt4129_pciconf*; do
+    sudo mlxconfig -d "$device" q PCI_WR_ORDERING
+  done
+$ sudo mst stop
+```
+
+Every query must report:
+
+```text
+PCI_WR_ORDERING                             force_relax(1)
+```
+
+On the validated four-port system, a minimal ATA Receiver and CUDA duplicate flowgraph delivered approximately 30 Gb/s per port with about 1.2 million physical drops per second under `per_mkey(0)`. With `force_relax(1)`, all four ports concurrently delivered 89.4 Gb/s each, 357.8 Gb/s aggregate, with zero physical drops, pause frames, or receive-buffer threshold events.
 
 ## Kernel Configuration
 
@@ -160,20 +210,20 @@ Required for `Transport` and `I/O` modules.
 For servers with an **AMD CPU**, use the following flags.
 
 ```
-amd_iommu=off iommu=pt
+amd_iommu=off
 ```
 
 If your server is equiped with an **Intel CPU**, use the following flags.
 
 ```
-intel_iommu=off iommu=pt
+intel_iommu=off
 ```
 
-After rebooting, verify if IOMMU is off by running the command below.
+After rebooting, confirm the kernel argument was supplied and verify that no IOMMU groups exist. The second command should produce no output.
 
 ```
 $ cat /proc/cmdline
-... amd_iommu=off iommu=pt ...
+$ ls -A /sys/kernel/iommu_groups
 ```
 
 ### Disable PCIe Realloc
@@ -197,31 +247,51 @@ $ cat /proc/cmdline
 
 Required for `Transport` modules.
 
-<!-- TODO: Write why this is important. -->
+The ATA Receiver uses hugepages for packet-header buffers registered with the ConnectX receive queues. These mappings reduce address translation overhead and provide predictable memory during high packet-rate ingest. An exhausted pool makes DAQIRI fall back to regular pages, which can reduce throughput and increase latency variation.
 
-```
-$ sudo mkdir /mnt/huge
-$ sudo mount -t hugetlbfs nodev /mnt/huge
-$ sudo sh -c "echo nodev /mnt/huge hugetlbfs pagesize=1GB 0 0 >> /etc/fstab"
-```
+Use a pool of 256 pages with a 2 MiB page size. This reserves 512 MiB, which supports four simultaneous receivers with capacity left for additional mappings.
 
-```
-default_hugepagesz=1G hugepagesz=1G hugepages=8
+Add the following arguments to `GRUB_CMDLINE_LINUX_DEFAULT`:
+
+```text
+default_hugepagesz=2M hugepagesz=2M hugepages=256
 ```
 
-After the reboot, run the following command to check if Hugepages was configured correctly. The output should show that all Hugepages are free and available.
+Configure the hugetlbfs mount to use the same page size:
 
+```shell
+$ sudo mkdir -p /mnt/huge
+$ sudo vim /etc/fstab
+nodev /mnt/huge hugetlbfs pagesize=2M 0 0
+$ sudo update-grub
+$ sudo reboot
 ```
-$ grep -i hugepages /proc/meminfo
-AnonHugePages:         0 kB
-ShmemHugePages:        0 kB
-FileHugePages:         0 kB
-HugePages_Total:       8
-HugePages_Free:        8
+
+After rebooting, verify the total pool and page size:
+
+```shell
+$ grep -E 'HugePages_Total|HugePages_Free|HugePages_Rsvd|Hugepagesize' /proc/meminfo
+HugePages_Total:     256
+HugePages_Free:      256
 HugePages_Rsvd:        0
-HugePages_Surp:        0
-Hugepagesize:    1048576 kB
+Hugepagesize:       2048 kB
+$ findmnt /mnt/huge -o TARGET,FSTYPE,OPTIONS
+TARGET    FSTYPE    OPTIONS
+/mnt/huge hugetlbfs rw,relatime,pagesize=2M
 ```
+
+The free-page count can be lower if a receiver or another service has already started. On NUMA systems, also confirm that each node has enough pages for its local receivers:
+
+```shell
+$ for node in /sys/devices/system/node/node*; do
+    printf '%s total=%s free=%s\n' \
+      "$(basename "$node")" \
+      "$(cat "$node/hugepages/hugepages-2048kB/nr_hugepages")" \
+      "$(cat "$node/hugepages/hugepages-2048kB/free_hugepages")"
+  done
+```
+
+Hugepages are selected when the receiver starts. If its log contains `MAP_HUGETLB allocation ... failed; falling back to regular pages`, correct the pool and restart the observation; a running receiver does not retry failed hugepage mappings.
 
 ### Miscellaneous Performance
 
