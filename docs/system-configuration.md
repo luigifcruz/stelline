@@ -210,20 +210,20 @@ Required for `Transport` and `I/O` modules.
 For servers with an **AMD CPU**, use the following flags.
 
 ```
-amd_iommu=off iommu=pt
+amd_iommu=off
 ```
 
 If your server is equiped with an **Intel CPU**, use the following flags.
 
 ```
-intel_iommu=off iommu=pt
+intel_iommu=off
 ```
 
-After rebooting, verify if IOMMU is off by running the command below.
+After rebooting, confirm the kernel argument was supplied and verify that no IOMMU groups exist. The second command should produce no output.
 
 ```
 $ cat /proc/cmdline
-... amd_iommu=off iommu=pt ...
+$ ls -A /sys/kernel/iommu_groups
 ```
 
 ### Disable PCIe Realloc

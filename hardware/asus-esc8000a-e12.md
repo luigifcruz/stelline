@@ -1326,7 +1326,7 @@ GRUB_DEFAULT=0
 GRUB_TIMEOUT_STYLE=hidden
 GRUB_TIMEOUT=0
 GRUB_DISTRIBUTOR=`( . /etc/os-release; echo ${NAME:-Ubuntu} ) 2>/dev/null || echo Ubuntu`
-GRUB_CMDLINE_LINUX_DEFAULT="amd_iommu=off iommu=pt pci=realloc=off default_hugepagesz=1G hugepagesz=1G hugepages=8 isolcpus=0-3,32-35 nohz_full=0-3,32-35 rcu_nocbs=0-3,32-35 irqaffinity=4-31,36-63 rcu_nocb_poll tsc=reliable audit=0 nosoftlockup"
+GRUB_CMDLINE_LINUX_DEFAULT="amd_iommu=off pci=realloc=off default_hugepagesz=1G hugepagesz=1G hugepages=8 isolcpus=0-3,32-35 nohz_full=0-3,32-35 rcu_nocbs=0-3,32-35 irqaffinity=4-31,36-63 rcu_nocb_poll tsc=reliable audit=0 nosoftlockup"
 GRUB_CMDLINE_LINUX=""
 
 # If your computer has multiple operating systems installed, then you
