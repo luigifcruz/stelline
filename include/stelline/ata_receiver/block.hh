@@ -26,6 +26,7 @@ struct AtaReceiver : public Block::Config {
 
     JST_BLOCK_TYPE(ata_receiver);
     JST_BLOCK_DOMAIN("Stelline");
+    JST_BLOCK_NODE_SIZE(L);
     JST_BLOCK_PARAMS(engine, interfaceAddress, gpuDeviceId, masterCore, workerCores,
                      subscriptions, totalBlock, partialBlock, offsetBlock, dataType,
                      packetsPerBurst, maxConcurrentBursts, maxConcurrentBlocks,
