@@ -1,6 +1,6 @@
 ---
 title: System Configuration
-description: BIOS, kernel, and NIC settings required for high-throughput ingest.
+description: Required BIOS, kernel, and NIC settings for high-throughput ingest.
 order: 21
 category: System Setup
 ---
@@ -40,7 +40,7 @@ If there is any mismatch between these two values, it's an indication that somet
 
 ### ACS
 
-BIOS >> Advanced >> NB Configuration >> ACS Enable >> Disabled
+In the BIOS, navigate to Advanced > NB Configuration > ACS Enable > Disabled.
 
 It's recommended to check the ACS state after booting up because some motherboards don't respect the BIOS settings. To automate this process on boot, create a file `/usr/local/sbin/acs-disable`:
 

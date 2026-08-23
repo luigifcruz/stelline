@@ -77,7 +77,7 @@ Re-read per input timestamp:
 | `observatory.antenna.<name>.pointing.source_name` | Phase center source name. |
 | `observation.iers.pm_x_arcsec` | Polar motion, x component. |
 | `observation.iers.pm_y_arcsec` | Polar motion, y component. |
-| `observation.iers.ut1_utc` | UT1 minus UTC offset. |
+| `observation.iers.ut1_utc` | The offset from UTC to UT1. |
 
 The pointing keys are read from the first antenna of the observation. In a live deployment all of these come from the [Nexus Bridge](/docs/block-nexus-bridge).
 

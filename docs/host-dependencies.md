@@ -179,7 +179,7 @@ Make sure "Mellanox OFED" is installed and IOMMU is disabled before proceeding w
 
 First, install the kernel drivers of GPUDirect Storage. A reboot is necessary after this step.
 
-IMPORTANT: Do not install version `2.25.6` of `nvidia-fs`. This is known to be buggy causing memory mapping issues as described [here](https://github.com/NVIDIA/gds-nvidia-fs/issues/60).
+Important: Do not install version `2.25.6` of `nvidia-fs`. This is known to be buggy causing memory mapping issues as described [here](https://github.com/NVIDIA/gds-nvidia-fs/issues/60).
 
 ```
 $ sudo apt-get install nvidia-fs nvidia-gds

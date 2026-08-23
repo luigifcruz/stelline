@@ -185,7 +185,7 @@ class _NexusBridge:
         client = convex_client(url)
         query_args = {"instanceId": INSTANCE_ID} if INSTANCE_ID else {}
         subscription = client.subscribe(METADATA_QUERY, query_args)
-        print(f"subscribed to {METADATA_QUERY} at {url}")
+        print(f"Subscribed to {METADATA_QUERY} at {url}")
         async for snapshot in subscription:
             if self._stop_event.is_set():
                 return
@@ -204,7 +204,7 @@ class _NexusBridge:
 
     def _record_metadata_error(self, exc, variable_count):
         error = f"{type(exc).__name__}: {exc}"
-        print(f"watcher error: {error}")
+        print(f"Watcher error: {error}")
         self._record_status(
             connected=False,
             variable_count=variable_count,
@@ -227,7 +227,7 @@ class _NexusBridge:
         for key in removed:
             ctx.env.pop(key, None)
         if changed or removed:
-            print(f"applied {len(changed)} changed, {len(removed)} removed")
+            print(f"Applied {len(changed)} changed, {len(removed)} removed.")
 
     # Bridge status
 
@@ -298,7 +298,7 @@ class _NexusBridge:
                 })
             except Exception as exc:
                 client = None
-                print(f"metrics publisher error: {type(exc).__name__}: {exc}")
+                print(f"Metrics publisher error: {type(exc).__name__}: {exc}")
 
     def _queue_metrics_snapshot(self, ctx):
         now = time.monotonic()

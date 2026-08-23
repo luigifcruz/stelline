@@ -21,7 +21,7 @@ namespace Jetstream::Modules {
 
 Result Fbh5ReaderImpl::validate() {
     const auto& config = *candidate();
-    
+
     if (config.batchSize == 0) {
         // TODO if zero, just read everything...
         JST_ERROR("[MODULE_FBH5_READER] The 'batchSize' must be positive.");
@@ -71,7 +71,7 @@ Result Fbh5ReaderImpl::publishMetadata(const filterbank_header_t* header) {
     } else {
         ant.pointing.source_name = "Unknown";
     }
-    
+
     ant.tunings.push_back(tuning);
     info.antennas.push_back(ant);
 
@@ -105,7 +105,7 @@ Result Fbh5ReaderImpl::create() {
         return Result::INCOMPLETE;
     }
 
-    
+
     // Suppress HDF5 automatic error printing — we handle errors manually.
     H5Eset_auto(H5E_DEFAULT, nullptr, nullptr);
 
@@ -136,14 +136,14 @@ Result Fbh5ReaderImpl::create() {
         );
         return Result::ERROR;
     }
-    
+
     filterbank_h5_change_access_chunking(
         &fbh5File,
         batchSize, // nof time indices
         0, // shorthand for all IF
         0 // shorthand for all chans
     );
-    
+
     JST_INFO("[MODULE_FBH5_READER] Opened '{}' — dim_chunks=[{}/{},{},{}].",
              filepath,
              batchSize,
@@ -182,12 +182,11 @@ Result Fbh5ReaderImpl::create() {
     }
     JST_CHECK(SetSignalAxes(mask, {.sample = Index{0}, .channel = Index{2}}));
     fbh5File.mask = (uint8_t*) mask.data();
-    
+
     return Result::SUCCESS;
 }
 
 Result Fbh5ReaderImpl::destroy() {
-    JST_INFO("[MODULE_FBH5_READER] destroy.");
     if (fbh5File.ds_data.D_id >= 0) {
         filterbank_h5_close(&fbh5File);
     }
