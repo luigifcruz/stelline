@@ -172,11 +172,9 @@ graph:
     provider: generic
     dataType: F32
     config:
-      thickness: 1
-      numberOfHorizontalLines: 5
-      numberOfVerticalLines: 11
-      decimation: 5
       averaging: 26
+      rangeMin: -141.99167
+      rangeMax: -23.911285
     input:
       signal: '${graph.spectrum_engine.output.buffer}'
     meta:

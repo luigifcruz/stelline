@@ -13,7 +13,7 @@ On creation the block starts a background watcher thread that subscribes to the 
 
 The block itself is throttled, so it wakes periodically rather than spinning. Each cycle it drains the queued deltas and applies them to the flowgraph environment: changed entries are written under their original Nexus key, and entries that disappeared from Nexus are removed. Every mirrored entry keeps the Nexus triple of value, type tag (`text`, `integer`, or `real`), and validity flag. The compute path never blocks on the network, since all communication happens on the watcher thread.
 
-The bridge also samples the block metrics exposed through CyberEther's Python runtime every five seconds. It sends non-empty snapshots to Nexus on a separate publisher thread, so telemetry uploads never block flowgraph computation.
+The bridge also samples the block metrics exposed through CyberEther's Python runtime every five seconds. It selects descriptors with type `stelline-metrics-number` or `stelline-metrics-string`. These metrics use `visibility: internal` to stay hidden in the node while remaining available to Python. It sends non-empty snapshots to Nexus on a separate publisher thread, so telemetry uploads never block flowgraph computation.
 
 ## Configuration
 

@@ -62,14 +62,22 @@ TEST_CASE("Nexus bridge preserves an invalid URL for sparse recovery",
     std::vector<Flowgraph::View::MetricEntry> metrics;
     REQUIRE(flowgraph.view().metrics("nexus", metrics) == Result::SUCCESS);
     bool foundMetricsMonitored = false;
+    bool foundTelemetry = false;
     for (const auto& metric : metrics) {
+        if (metric.name == "metricsMonitored") {
+            foundTelemetry = true;
+            REQUIRE(Parser::Get<std::string>(metric.format, "type") == "stelline-metrics-number");
+            REQUIRE(Parser::Get<std::string>(metric.format, "visibility") == "internal");
+            REQUIRE(std::any_cast<std::string>(metric.value) == "0");
+        }
         if (metric.name == "metricsMonitoredDisplay") {
             foundMetricsMonitored = true;
-            REQUIRE(metric.format == "label");
+            REQUIRE(Parser::Get<std::string>(metric.format, "type") == "label");
             REQUIRE(std::any_cast<std::string>(metric.value) == "0");
         }
     }
     REQUIRE(foundMetricsMonitored);
+    REQUIRE(foundTelemetry);
 
     REQUIRE(flowgraph.blockDestroy("nexus", false) == Result::SUCCESS);
     REQUIRE(flowgraph.destroy() == Result::SUCCESS);

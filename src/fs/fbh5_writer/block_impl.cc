@@ -32,22 +32,22 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceConfig("filepath",
                                     "File Path",
                                     "Destination FBH5 filepath.",
-                                    "filesave:fbh5,h5"));
+                                    {{"type", "filesave"}, {"extensions", Parser::MakeSequence({"fbh5", "h5"})}}));
 
     JST_CHECK(defineInterfaceConfig("overwrite",
                                     "Overwrite",
                                     "Whether to overwrite the file if it already exists.",
-                                    "bool"));
+                                    {{"type", "bool"}}));
 
     JST_CHECK(defineInterfaceConfig("recording",
                                     "Recording",
                                     "Start or stop recording to the file.",
-                                    "bool"));
+                                    {{"type", "bool"}}));
 
     JST_CHECK(defineInterfaceMetric("bandwidth",
                                     "Bandwidth",
                                     "Write bandwidth in megabytes per second.",
-                                    "private-stelline-metrics-number",
+                                    {{"type", "stelline-metrics-number"}, {"visibility", "internal"}},
         [this]() -> std::any {
             return std::any(jst::fmt::format("{:.2f}", moduleImpl ? moduleImpl->getBandwidthMBps() : 0.0));
         }));
@@ -55,7 +55,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("bandwidthDisplay",
                                     "Bandwidth",
                                     "Write bandwidth in megabytes per second.",
-                                    "label",
+                                    {{"type", "label"}},
         [this]() -> std::any {
             return std::any(jst::fmt::format("{:.2f} MB/s", moduleImpl ? moduleImpl->getBandwidthMBps() : 0.0));
         }));
@@ -63,7 +63,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("totalDataWritten",
                                     "Total Data Written",
                                     "Total written FBH5 payload in megabytes.",
-                                    "private-stelline-metrics-number",
+                                    {{"type", "stelline-metrics-number"}, {"visibility", "internal"}},
         [this]() -> std::any {
             return std::any(jst::fmt::format("{:.0f}", moduleImpl ? moduleImpl->getTotalDataWrittenMb() : 0.0));
         }));
@@ -71,7 +71,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("totalDataWrittenDisplay",
                                     "Total Data Written",
                                     "Total written FBH5 payload in megabytes.",
-                                    "label",
+                                    {{"type", "label"}},
         [this]() -> std::any {
             return std::any(jst::fmt::format("{:.0f} MB", moduleImpl ? moduleImpl->getTotalDataWrittenMb() : 0.0));
         }));
@@ -79,7 +79,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("chunksWritten",
                                     "Chunks Written",
                                     "Total number of written FBH5 chunks.",
-                                    "private-stelline-metrics-number",
+                                    {{"type", "stelline-metrics-number"}, {"visibility", "internal"}},
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getChunkCounter() : U64(0)));
         }));
@@ -87,7 +87,7 @@ Result Fbh5WriterImpl::define() {
     JST_CHECK(defineInterfaceMetric("chunksWrittenDisplay",
                                     "Chunks Written",
                                     "Total number of written FBH5 chunks.",
-                                    "label",
+                                    {{"type", "label"}},
         [this]() -> std::any {
             return std::any(jst::fmt::format("{}", moduleImpl ? moduleImpl->getChunkCounter() : U64(0)));
         }));

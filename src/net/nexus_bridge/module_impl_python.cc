@@ -26,7 +26,7 @@ DEFAULT_CONVEX_URL = (
 METADATA_RETRY_SECONDS = float(os.getenv("NEXUS_OTL_WATCH_RETRY_SECONDS", "5"))
 INSTANCE_ID = os.getenv("NEXUS_INSTANCE_ID", "").strip()
 METRICS_INTERVAL_SECONDS = 5.0
-METRICS_FORMAT_PREFIX = "private-stelline-metrics-"
+METRICS_FORMAT_PREFIX = "stelline-metrics-"
 STATUS_ENV_KEY = "nexus.bridge"
 
 def _convex_url():
@@ -83,7 +83,10 @@ def _normalize_metric(entry):
 
     value = entry.get("value")
     metric_format = entry.get("format")
-    if metric_format == f"{METRICS_FORMAT_PREFIX}number":
+    if not isinstance(metric_format, dict):
+        return None
+    metric_type = metric_format.get("type")
+    if metric_type == f"{METRICS_FORMAT_PREFIX}number":
         if isinstance(value, bool):
             return None
         try:
@@ -93,7 +96,7 @@ def _normalize_metric(entry):
         if not math.isfinite(number):
             return None
         return {"type": "number", "value": number}
-    if metric_format == f"{METRICS_FORMAT_PREFIX}string" and isinstance(value, str):
+    if metric_type == f"{METRICS_FORMAT_PREFIX}string" and isinstance(value, str):
         return {"type": "text", "value": value}
     return None
 
@@ -349,11 +352,18 @@ struct NexusBridgeImplPython : public NexusBridgeImpl,
     Result create() final;
     Result destroy() final;
     Result reconfigure() final;
+    Result loadCompute() final;
     Result computeSubmit() final;
 };
 
 Result NexusBridgeImplPython::create() {
     JST_CHECK(NexusBridgeImpl::create());
+    JST_CHECK(loadCompute());
+
+    return Result::SUCCESS;
+}
+
+Result NexusBridgeImplPython::loadCompute() {
     JST_CHECK(createCompute(kNexusBridgePythonCode,
                             {{"NEXUS_URL", jst::fmt::format("\"{}\"", url)}},
                             {},
