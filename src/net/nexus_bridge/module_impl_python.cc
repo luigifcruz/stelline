@@ -10,6 +10,10 @@ namespace Jetstream::Modules {
 namespace {
 
 constexpr const char* kNexusBridgePythonCode = R"NEXUSPY(
+# /// script
+# dependencies = ["convex"]
+# ///
+
 import asyncio
 import math
 import os

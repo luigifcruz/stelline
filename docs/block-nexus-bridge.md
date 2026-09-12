@@ -53,8 +53,4 @@ The metrics below are reported to Nexus.
 
 ## Requirements
 
-The block depends on the [Convex](https://pypi.org/project/convex/) Python package to subscribe to the Nexus deployment. Install it on the host with pip:
-
-```bash
-python -m pip install convex
-```
+The block declares the [Convex](https://pypi.org/project/convex/) Python package through PEP 723 inline metadata. CyberEther manages this dependency using the selected Python runtime and its configured dependency policy. See [declaring Python dependencies](https://cyberether.org/docs/python-block#declaring-dependencies) for details.
