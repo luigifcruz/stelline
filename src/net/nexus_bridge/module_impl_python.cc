@@ -29,6 +29,7 @@ DEFAULT_CONVEX_URL = (
 )
 METADATA_RETRY_SECONDS = float(os.getenv("NEXUS_OTL_WATCH_RETRY_SECONDS", "5"))
 INSTANCE_ID = os.getenv("NEXUS_INSTANCE_ID", "").strip()
+INSTANCE_CREDENTIALS = os.getenv("NEXUS_INSTANCE_CREDENTIALS", "").strip()
 METRICS_INTERVAL_SECONDS = 5.0
 METRICS_FORMAT_PREFIX = "stelline-metrics-"
 STATUS_ENV_KEY = "nexus.bridge"
@@ -37,6 +38,14 @@ def _convex_url():
     raw = DEFAULT_CONVEX_URL
     parsed = urlparse(raw.strip())
     return urlunparse((parsed.scheme, parsed.netloc, "", "", "", "")).rstrip("/")
+
+
+def _authenticated_client(convex_client, url):
+    if not INSTANCE_CREDENTIALS:
+        raise ValueError("NEXUS_INSTANCE_CREDENTIALS is required")
+    client = convex_client(url)
+    client.set_auth(INSTANCE_CREDENTIALS)
+    return client
 
 
 def _drain(source):
@@ -189,7 +198,7 @@ class _NexusBridge:
             self._stop_event.wait(METADATA_RETRY_SECONDS)
 
     async def _stream_metadata(self, convex_client, convex_int64, url, known):
-        client = convex_client(url)
+        client = _authenticated_client(convex_client, url)
         query_args = {"instanceId": INSTANCE_ID} if INSTANCE_ID else {}
         subscription = client.subscribe(METADATA_QUERY, query_args)
         print(f"Subscribed to {METADATA_QUERY} at {url}")
@@ -297,7 +306,7 @@ class _NexusBridge:
                 from convex import ConvexClient
 
                 if client is None:
-                    client = ConvexClient(_convex_url())
+                    client = _authenticated_client(ConvexClient, _convex_url())
                 client.mutation(INSTANCE_METRICS_MUTATION, {
                     "instanceId": INSTANCE_ID,
                     "timestamp": snapshot["timestamp"],

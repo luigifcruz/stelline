@@ -9,7 +9,7 @@ The Nexus Bridge connects a flowgraph to Nexus, the metadata service of the Stel
 
 ## How it works
 
-On creation the block starts a background watcher thread that subscribes to the `observatory:getMetadata` query on the configured Nexus deployment, a Convex application. When `NEXUS_INSTANCE_ID` is set, the subscription includes it so Nexus can add metadata for that instance and its observation. Without an instance ID, the bridge continues to receive general observatory metadata. The subscription is push-based, so the watcher receives a fresh snapshot whenever the relevant state changes, computes the delta against the previous snapshot, and places it on a queue. If the connection drops or the Convex client is unavailable, the watcher marks the bridge disconnected and retries on an interval.
+On creation the block starts a background watcher thread that authenticates and subscribes to the `queries/observatory:getMetadata` query on the configured Nexus deployment, a Convex application. The subscription includes `NEXUS_INSTANCE_ID` so Nexus can verify the owning Replicant and add metadata for that instance and its observation. The subscription is push-based, so the watcher receives a fresh snapshot whenever the relevant state changes, computes the delta against the previous snapshot, and places it on a queue. If authentication fails, the connection drops, or the Convex client is unavailable, the watcher marks the bridge disconnected and retries on an interval.
 
 The block itself is throttled, so it wakes periodically rather than spinning. Each cycle it drains the queued deltas and applies them to the flowgraph environment: changed entries are written under their original Nexus key, and entries that disappeared from Nexus are removed. Every mirrored entry keeps the Nexus triple of value, type tag (`text`, `integer`, or `real`), and validity flag. The compute path never blocks on the network, since all communication happens on the watcher thread.
 
@@ -25,11 +25,17 @@ Changing the URL at runtime recreates the block and restarts the subscription.
 
 ## Environment variables
 
-The block is a pure producer of the flowgraph environment. It mirrors every key published by the Nexus deployment verbatim, including the `observatory.*`, `observation.*`, and `instance.*` families consumed by the writer blocks, and additionally publishes its own status:
+The bridge reads these process environment variables:
 
 | Variable | Description |
 |---|---|
-| `NEXUS_INSTANCE_ID` | Optional Nexus instance used to request contextual observation and band metadata. Nexus-managed workloads set this automatically. |
+| `NEXUS_INSTANCE_ID` | Instance used to request contextual metadata and publish metrics. Required for instance-scoped tokens; Nexus-managed Docker workloads set this automatically. |
+| `NEXUS_INSTANCE_CREDENTIALS` | Bearer JWT, without the `Bearer ` prefix. Nexus issues it for this instance through the observation's scheduled end plus ten minutes, and the Replicant injects it at Docker container launch. |
+| `NEXUS_OTL_WATCH_RETRY_SECONDS` | Delay between metadata connection retries, in seconds. Defaults to `5`. |
+
+The bridge passes the token directly to `ConvexClient.set_auth()` before subscribing or publishing. A missing token appears in `last_error`. The token is not copied into the flowgraph environment. Nexus-managed multi-day observations require no token renewal: the bearer lasts for the scheduled observation, and Nexus rejects it when the instance stops or the observation is cancelled or completed. Configure and deploy Nexus's instance-token signer before upgrading the Replicant and the workload image containing the updated Stelline plugin, then start a new observation.
+
+The block mirrors every metadata key published by Nexus verbatim, including the `observatory.*`, `observation.*`, and `instance.*` families consumed by the writer blocks, and additionally publishes its own status.
 
 Published flowgraph environment keys:
 

@@ -1,27 +1,36 @@
+import asyncio
 import os
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
+
+
+def load_bridge(**environment):
+    source_path = (
+        Path(__file__).resolve().parents[1]
+        / "src/net/nexus_bridge/module_impl_python.cc"
+    )
+    source = source_path.read_text().split('R"NEXUSPY(', 1)[1].split(')NEXUSPY"', 1)[0]
+    source = source.replace("<<<NEXUS_URL>>>", repr("https://nexus.invalid"))
+    bridge = {}
+    with (
+        patch.dict(os.environ, {
+            "NEXUS_INSTANCE_ID": "", "NEXUS_INSTANCE_CREDENTIALS": "", **environment,
+        }),
+        patch("threading.Thread.start"),
+        patch("threading.Thread.join"),
+    ):
+        exec(compile(source, str(source_path), "exec"), bridge)
+        bridge["cleanup"]()
+    return bridge
 
 
 class NexusMetricsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        source_path = (
-            Path(__file__).resolve().parents[1]
-            / "src/net/nexus_bridge/module_impl_python.cc"
-        )
-        source = source_path.read_text().split('R"NEXUSPY(', 1)[1].split(')NEXUSPY"', 1)[0]
-        source = source.replace("<<<NEXUS_URL>>>", repr("https://nexus.invalid"))
-        cls.bridge = {}
-        with (
-            patch.dict(os.environ, {"NEXUS_INSTANCE_ID": ""}),
-            patch("threading.Thread.start"),
-            patch("threading.Thread.join"),
-        ):
-            exec(compile(source, str(source_path), "exec"), cls.bridge)
-            cls.bridge["cleanup"]()
+        cls.bridge = load_bridge()
 
     @staticmethod
     def metric(value, metric_type="stelline-metrics-number"):
@@ -78,6 +87,55 @@ class NexusMetricsTests(unittest.TestCase):
                 "allAntennas": {"type": "text", "value": "[1, 2]"},
             },
         })
+
+
+class NexusAuthenticationTests(unittest.TestCase):
+    def setUp(self):
+        self.module = load_bridge(
+            NEXUS_INSTANCE_ID="instance-1", NEXUS_INSTANCE_CREDENTIALS="bearer-token",
+        )
+
+    def test_metadata_authenticates_with_the_bearer_before_subscribing(self):
+        bridge = self.module["_NexusBridge"]()
+        factory = Mock()
+
+        async def snapshots():
+            yield {"data": [{"key": "observation.sync_timestamp", "value": 123, "type": "u64"}]}
+
+        factory.return_value.subscribe.return_value = snapshots()
+        known = {}
+        asyncio.run(bridge._stream_metadata(factory, type("ConvexInt64", (), {}), "https://nexus.invalid", known))
+        self.assertEqual(factory.return_value.mock_calls, [
+            call.set_auth("bearer-token"),
+            call.subscribe("queries/observatory:getMetadata", {"instanceId": "instance-1"}),
+        ])
+        self.assertTrue(bridge._connected)
+        self.assertIn("observation.sync_timestamp", known)
+        ctx = SimpleNamespace(env={})
+        bridge._apply_metadata_updates(ctx)
+        self.assertNotIn("bearer-token", repr(ctx.env))
+
+    def test_missing_bearer_fails_before_creating_a_client(self):
+        self.module["INSTANCE_CREDENTIALS"] = ""
+        factory = Mock()
+        bridge = self.module["_NexusBridge"]()
+        with self.assertRaisesRegex(ValueError, "NEXUS_INSTANCE_CREDENTIALS is required"):
+            asyncio.run(bridge._stream_metadata(factory, object, "https://nexus.invalid", {}))
+        factory.assert_not_called()
+
+    def test_metrics_authenticates_with_the_same_bearer_before_publishing(self):
+        bridge = self.module["_NexusBridge"]()
+        factory = Mock()
+        factory.return_value.mutation.side_effect = lambda *_: bridge._stop_event.set()
+        snapshot = {"timestamp": 1000, "metrics": {"block": {"count": {"type": "number", "value": 1}}}}
+        bridge._pending_metrics_snapshots.put(snapshot)
+
+        with patch.dict(sys.modules, {"convex": SimpleNamespace(ConvexClient=factory)}):
+            bridge._metrics_publisher_loop()
+        self.assertEqual(factory.return_value.mock_calls, [
+            call.set_auth("bearer-token"),
+            call.mutation("mutations/metrics:publishInstanceMetrics", {"instanceId": "instance-1", **snapshot}),
+        ])
 
 
 if __name__ == "__main__":
