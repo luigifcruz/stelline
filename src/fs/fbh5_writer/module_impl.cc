@@ -164,6 +164,10 @@ Result Fbh5WriterImpl::create() {
     fbh5File.nchans_per_write = static_cast<std::size_t>(nchans);
     fbh5File.ntimes_per_write = static_cast<std::size_t>(ntimesPerWrite);
 
+    // Keep both datasets unfiltered so GDS can write raw chunks.
+    fbh5File.ds_data.filter_flag = H5_FILTER_FLAG_NONE;
+    fbh5File.ds_mask.filter_flag = H5_FILTER_FLAG_NONE;
+
     faplId = H5Pcreate(H5P_FILE_ACCESS);
     if (faplId < 0) {
         JST_ERROR("[MODULE_FBH5_WRITER] Failed to create the HDF5 file access property list.");
