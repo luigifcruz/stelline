@@ -1,6 +1,5 @@
 ---
 version: 2
-
 title: ATA Spectrogram
 summary: Simple lineplot plot for the Allen Telescope Array (ATA).
 graph:
@@ -9,183 +8,196 @@ graph:
     device: cuda
     runtime: native
     provider: generic
-    outputDataType: CI8
     config:
-      outputPoolSize: 8
-      packetsPerBurst: 8192
-      dataType: CI8
-      totalBlock: '[28, 192, 8192, 2]'
-      subscriptions: "- 10.11.1.201:10000 -> 239.1.1.1:50000\n- 10.11.1.202:10000 -> 239.1.1.1:50000\n- 10.11.1.203:10000 -> 239.1.1.1:50000\n- 10.11.1.204:10000 -> 239.1.1.1:50000\n- 10.11.1.231:10000 -> 239.1.1.1:50000\n- 10.11.1.232:10000 -> 239.1.1.1:50000\n- 10.11.1.233:10000 -> 239.1.1.1:50000\n- 10.11.1.234:10000 -> 239.1.1.1:50000\n"
-      offsetBlock: '[0, 352, 0, 0]'
-      workerCores: '[1]'
-      masterCore: 0
-      maxConcurrentBursts: 64
-      gpuDeviceId: 0
-      maxConcurrentBlocks: 16
-      partialBlock: '[1, 96, 16, 2]'
+      engine: ibverbs
       interfaceAddress: '0000:01:00.0'
+      gpuDeviceId: 0
+      masterCore: 0
+      workerCores: '[1]'
+      subscriptions: |
+        - 10.11.1.201:10000 -> 239.1.1.1:50000
+        - 10.11.1.202:10000 -> 239.1.1.1:50000
+        - 10.11.1.203:10000 -> 239.1.1.1:50000
+        - 10.11.1.204:10000 -> 239.1.1.1:50000
+        - 10.11.1.231:10000 -> 239.1.1.1:50000
+        - 10.11.1.232:10000 -> 239.1.1.1:50000
+        - 10.11.1.233:10000 -> 239.1.1.1:50000
+        - 10.11.1.234:10000 -> 239.1.1.1:50000
+      totalBlock: '[28, 192, 8192, 2]'
+      partialBlock: '[1, 96, 16, 2]'
+      offsetBlock: '[0, 352, 0, 0]'
+      dataType: CF32
+      packetsPerBurst: 8192
+      maxConcurrentBursts: 64
+      maxConcurrentBlocks: 32
+      outputPoolSize: 32
     meta:
       node:
-        height: 898
+        x: 36.666668
+        y: 111.333336
         width: 260
-        y: 40
-        x: 28
-  - name: duplicate_host
-    module: duplicate
+        height: 0
+        configCollapsed: false
+  - name: slice_pol0
+    module: slice
     device: cuda
     runtime: native
     provider: generic
-    dataType: CI8
     config:
-      outputDevice: cpu
-      hostAccessible: true
+      slice: '[:1, :, :2048, :]'
+      contiguous: false
     input:
       buffer: '${graph.ata_receiver.output.output}'
     meta:
       node:
-        height: 99.55554
+        x: 357.92593
+        y: 113.111084
         width: 120
-        y: 450.4445
-        x: 359.2963
-  - name: slice_pol0
-    module: slice
-    device: cpu
+        height: 0
+        configCollapsed: false
+  - name: channelizer
+    module: channelizer
+    device: cuda
     runtime: native
     provider: generic
-    dataType: CI8
-    config:
-      contiguous: false
-      slice: '[0, :, :, 0]'
-    input:
-      buffer: '${graph.duplicate_host.output.buffer}'
-    meta:
-      node:
-        height: 132.55554
-        width: 120
-        y: 410.44443
-        x: 517.2593
-  - name: permutation
-    module: permutation
-    device: cpu
-    runtime: native
-    provider: generic
-    dataType: CI8
-    config:
-      permutation: '[1, 0]'
     input:
       buffer: '${graph.slice_pol0.output.buffer}'
     meta:
       node:
-        height: 99.33334
-        width: 120
-        y: 371.66666
-        x: 678.7407
-  - name: cast
-    module: cast
-    device: cpu
+        x: 519.3333
+        y: 108
+        width: 140
+        height: 0
+        configCollapsed: false
+  - name: slice
+    module: slice
+    device: cuda
     runtime: native
     provider: generic
-    inputDataType: CI8
-    outputDataType: CF32
     config:
-      outputType: CF32
+      slice: '[0, ::64, 0, 0]'
+      contiguous: true
     input:
-      buffer: '${graph.permutation.output.buffer}'
+      buffer: '${graph.channelizer.output.buffer}'
     meta:
       node:
-        height: 100
-        width: 120
-        y: 340
-        x: 836
-  - name: fft
-    module: fft
-    device: cpu
+        x: 711.3333
+        y: 104.666664
+        width: 140
+        height: 0
+        configCollapsed: false
+  - name: duplicate
+    module: duplicate
+    device: cuda
     runtime: native
     provider: generic
-    dataType: CF32
     config:
-      forward: true
+      hostAccessible: true
+      outputDevice: cpu
     input:
-      signal: '${graph.cast.output.buffer}'
+      buffer: '${graph.slice.output.buffer}'
     meta:
       node:
-        height: 99.0741
+        x: 898
+        y: 98.666664
+        width: 140
+        height: 0
+        configCollapsed: false
+  - name: amplitude
+    module: amplitude
+    device: cpu
+    runtime: native
+    provider: generic
+    input:
+      signal: '${graph.duplicate.output.buffer}'
+    meta:
+      node:
+        x: 1098
+        y: 96
         width: 120
-        y: 291.9259
-        x: 993.0371
-  - name: invert
-    module: invert
+        height: 0
+        configCollapsed: false
+  - name: range
+    module: range
     device: cpu
     runtime: native
     provider: generic
-    dataType: CF32
-    input:
-      signal: '${graph.fft.output.signal}'
-    meta:
-      node:
-        height: 66.74072
-        width: 103.70367
-        y: 256.25928
-        x: 1146.4445
-  - name: reshape
-    module: reshape
-    device: cpu
-    runtime: native
-    provider: generic
-    dataType: CF32
     config:
-      contiguous: false
-      shape: '[1572864]'
+      min: 20
+      max: 50
     input:
-      buffer: '${graph.invert.output.signal}'
+      signal: '${graph.amplitude.output.signal}'
     meta:
       node:
-        height: 132.18518
-        width: 120
-        y: 220.81482
-        x: 1287.9629
-  - name: spectrum_engine
-    module: spectrum_engine
-    device: cpu
-    runtime: native
-    provider: generic
-    inputDataType: CF32
-    outputDataType: F32
-    config:
-      rangeMax: -23.911285
-      rangeMin: -141.99167
-      enableScale: true
-      enableAgc: false
-      axis: 0
-    input:
-      buffer: '${graph.reshape.output.buffer}'
-    meta:
-      node:
-        height: 231.37036
-        width: 120
-        y: 184.62964
-        x: 1443.3702
-  - name: lineplot
+        x: 1269.3334
+        y: 97.333336
+        width: 140
+        height: 0
+        configCollapsed: false
+  - name: lineplot_1
     module: lineplot
     device: cpu
     runtime: native
     provider: generic
-    dataType: F32
     config:
-      averaging: 26
-      rangeMin: -141.99167
-      rangeMax: -23.911285
+      averaging: 48
+      maxHold: false
+      fill: true
+      rangeMin: -100
+      rangeMax: 0
+      xLabel: Frequency (MHz)
+      yLabel: Amplitude (dBFS)
     input:
-      signal: '${graph.spectrum_engine.output.buffer}'
+      signal: '${graph.range.output.signal}'
     meta:
-      surface_default:
-        detached: false
-        detachedHeight: 249
-        detachedWidth: 941
-        attachedHeight: 221
-        attachedWidth: 272
       node:
-        height: 340
-        width: 272.1482
-        y: 154.1852
-        x: 1601.7036
+        x: 1514.6666
+        y: 91.333336
+        width: 945.3333
+        height: 350
+        configCollapsed: false
+      surface_default:
+        attachedHeight: 260
+        detachedWidth: 1593
+        detachedHeight: 952
+        detached: false
+        detachedConfigOpen: false
+  - name: waterfall
+    module: waterfall
+    device: cpu
+    runtime: native
+    provider: generic
+    config:
+      height: 1024
+      averaging: 3
+      xLabel: Frequency (MHz)
+      yLabel: Time
+    input:
+      signal: '${graph.range.output.signal}'
+    meta:
+      node:
+        x: 1513.3334
+        y: 504.66666
+        width: 956
+        height: 297
+        configCollapsed: false
+      surface_default:
+        attachedHeight: 207
+        detachedWidth: 2157
+        detachedHeight: 1166
+        detached: false
+        detachedConfigOpen: false
+  - name: nexus_bridge
+    module: nexus_bridge
+    device: cpu
+    runtime: python
+    provider: generic
+    config:
+      url: 'https://nexus.stelline.space'
+    meta:
+      node:
+        x: 364.66666
+        y: 924.6667
+        width: 220
+        height: 0
+        configCollapsed: false
