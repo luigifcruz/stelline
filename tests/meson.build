@@ -60,3 +60,10 @@ alias_target(
     'stelline-tests',
     plugin_test_targets,
 )
+
+test(
+    'net-nexus_bridge-python',
+    py,
+    args: files('nexus_bridge_python.py'),
+    suite: 'stelline',
+)

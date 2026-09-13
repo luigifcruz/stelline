@@ -139,6 +139,8 @@ $ sudo reboot
 
 After rebooting, the installation can be verified by running `ibv_devinfo`. Information about the install network interfaces should be printed. This only verifies the network drivers installation. To validate the NVMe RDMA modules go to the "GPUDirect Storage" section.
 
+For multi-port GPUDirect ingest, OFED installation alone is not sufficient. Configure `PCI_WR_ORDERING` on every ConnectX-7 function as described in [System Configuration](/docs/system-configuration#connectx-7-pcie-write-ordering).
+
 ```
 $ ibv_devinfo
 hca_id: mlx5_1
@@ -177,7 +179,7 @@ Make sure "Mellanox OFED" is installed and IOMMU is disabled before proceeding w
 
 First, install the kernel drivers of GPUDirect Storage. A reboot is necessary after this step.
 
-IMPORTANT: Do not install version `2.25.6` of `nvidia-fs`. This is known to be buggy causing memory mapping issues as described [here](https://github.com/NVIDIA/gds-nvidia-fs/issues/60).
+Important: Do not install version `2.25.6` of `nvidia-fs`. This is known to be buggy causing memory mapping issues as described [here](https://github.com/NVIDIA/gds-nvidia-fs/issues/60).
 
 ```
 $ sudo apt-get install nvidia-fs nvidia-gds

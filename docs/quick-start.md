@@ -15,9 +15,10 @@ Open CyberEther and load `stelline.cep` through the plugin manager. The Stelline
 
 The plugin bundle ships with example flowgraphs:
 
-- `ata-spectrogram.yml` displays a live spectrum from packet ingest.
-- `ata-beamformer.yml` runs a beamforming pipeline.
-- `ata-correlator.yml` runs a correlator with UVH5 output.
+- Use `ata-spectrogram.yml` to display a live spectrum from packet ingest.
+- Use `ata-beamformer.yml` to run a beamforming pipeline.
+- Use `ata-correlator.yml` to run a correlator with UVH5 output.
+
 ## 3. Run it
 
 Start the flowgraph and watch the block metrics. The [ATA Receiver](/docs/block-ata-receiver) exposes throughput, packet loss, and queue depths directly on the node, so a healthy ingest is visible at a glance.

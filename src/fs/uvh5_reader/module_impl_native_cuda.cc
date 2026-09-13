@@ -97,11 +97,11 @@ Result Uvh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     const U64 currentIndex = getCurrentBatchIndex();
     herr_t status = UVH5read(&uvh5File);
     if (status < 0) {
-        JST_ERROR("[MODULE_UVH5_READER_NATIVE_CPU] Read failed at offset batch #{} (data index {}).", currentIndex, uvh5File.DS_data_visdata.hyperslab_start[0]);
+        JST_ERROR("[MODULE_UVH5_READER_NATIVE_CUDA] Read failed at offset batch #{} (data index {}).", currentIndex, uvh5File.DS_data_visdata.hyperslab_start[0]);
         return Result::ERROR;
     }
     else if (status == 1) {
-        JST_DEBUG("[MODULE_UVH5_READER_NATIVE_CPU] Looping back to start of '{}'.", filepath);
+        JST_DEBUG("[MODULE_UVH5_READER_NATIVE_CUDA] Looping back to start of '{}'.", filepath);
         if (!loop) {
             playing = false;
         }

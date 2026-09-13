@@ -1,136 +1,158 @@
 ---
-version: 1.0.0
-
+version: 2
 title: ATA Beamformer
 summary: Simple beamformer example for the Allen Telescope Array (ATA).
 graph:
-  ones_tensor:
+  - name: nexus_bridge
+    module: nexus_bridge
+    device: cpu
+    runtime: python
+    provider: generic
+    config:
+      url: 'https://nexus.stelline.space'
+    meta:
+      node:
+        x: 382
+        y: 821
+        width: 274
+        height: 0
+        configCollapsed: false
+  - name: ones_tensor
     module: ones_tensor
     device: cuda
     runtime: native
     provider: generic
-    outputDataType: CF32
     config:
-      dataType: CF32
       shape: '[1, 28, 192, 1, 2]'
+      dataType: CF32
     meta:
       node:
-        height: 111
-        width: 195
-        y: 419
         x: 384
-  ata_receiver:
+        y: 419
+        width: 195
+        height: 0
+        configCollapsed: false
+  - name: ata_receiver
     module: ata_receiver
     device: cuda
     runtime: native
     provider: generic
-    outputDataType: CF32
     config:
-      outputPoolSize: 8
-      packetsPerBurst: 8192
-      dataType: CF32
-      totalBlock: '[28, 192, 8192, 2]'
-      subscriptions: "- 10.11.1.201:10000 -> 239.1.1.1:50000\n- 10.11.1.202:10000 -> 239.1.1.1:50000\n- 10.11.1.203:10000 -> 239.1.1.1:50000\n- 10.11.1.204:10000 -> 239.1.1.1:50000\n- 10.11.1.231:10000 -> 239.1.1.1:50000\n- 10.11.1.232:10000 -> 239.1.1.1:50000\n- 10.11.1.233:10000 -> 239.1.1.1:50000\n- 10.11.1.234:10000 -> 239.1.1.1:50000\n"
-      offsetBlock: '[0, 352, 0, 0]'
-      workerCores: '[1]'
-      masterCore: 0
-      maxConcurrentBursts: 64
-      gpuDeviceId: 0
-      maxConcurrentBlocks: 16
-      partialBlock: '[1, 96, 16, 2]'
+      engine: ibverbs
       interfaceAddress: '0000:01:00.0'
+      gpuDeviceId: 0
+      masterCore: 0
+      workerCores: '[1]'
+      subscriptions: |
+        - 10.11.1.201:10000 -> 239.1.1.1:50000
+        - 10.11.1.202:10000 -> 239.1.1.1:50000
+        - 10.11.1.203:10000 -> 239.1.1.1:50000
+        - 10.11.1.204:10000 -> 239.1.1.1:50000
+        - 10.11.1.231:10000 -> 239.1.1.1:50000
+        - 10.11.1.232:10000 -> 239.1.1.1:50000
+        - 10.11.1.233:10000 -> 239.1.1.1:50000
+        - 10.11.1.234:10000 -> 239.1.1.1:50000
+      totalBlock: '[28, 192, 8192, 2]'
+      partialBlock: '[1, 96, 16, 2]'
+      offsetBlock: '[0, 352, 0, 0]'
+      dataType: CI8
+      packetsPerBurst: 8192
+      maxConcurrentBursts: 64
+      maxConcurrentBlocks: 16
+      outputPoolSize: 16
     meta:
       node:
-        height: 898
-        width: 274
-        y: 13
         x: 36
-  beamformer:
+        y: 13
+        width: 274
+        height: 0
+        configCollapsed: false
+  - name: beamformer
     module: beamformer
     device: cuda
     runtime: native
     provider: generic
-    dataType: CF32
     config:
-      blockSize: 512
-      enableIncoherentBeamSqrt: false
       enableIncoherentBeam: false
+      enableIncoherentBeamSqrt: false
+      blockSize: 512
     input:
-      buffer: '${graph.ata_receiver.output.output}'
       phasors: '${graph.ones_tensor.output.buffer}'
+      buffer: '${graph.ata_receiver.output.output}'
     meta:
       node:
-        height: 188
-        width: 140
-        y: 345
         x: 649
-  detector:
+        y: 345
+        width: 140
+        height: 0
+        configCollapsed: false
+  - name: detector
     module: detector
     device: cuda
     runtime: native
     provider: generic
-    inputDataType: CF32
-    outputDataType: F32
     config:
-      blockSize: 512
-      numberOfOutputPolarizations: 4
       integrationRate: 1
+      numberOfOutputPolarizations: 4
+      blockSize: 512
     input:
       buffer: '${graph.beamformer.output.buffer}'
     meta:
       node:
-        height: 166
-        width: 140
-        y: 344
         x: 845
-  permutation_2:
+        y: 344
+        width: 140
+        height: 0
+        configCollapsed: false
+  - name: permutation_2
     module: permutation
     device: cuda
     runtime: native
     provider: generic
-    dataType: F32
     config:
       permutation: '[2, 0, 1, 3]'
+      contiguous: false
     input:
       buffer: '${graph.detector.output.buffer}'
     meta:
       node:
-        height: 100
-        width: 140
-        y: 346
         x: 1035
-  duplicate_1:
+        y: 346
+        width: 140
+        height: 0
+        configCollapsed: false
+  - name: duplicate
     module: duplicate
     device: cuda
     runtime: native
     provider: generic
-    dataType: F32
     config:
+      hostAccessible: false
       outputDevice: cuda
-      hostAccessible: true
     input:
       buffer: '${graph.permutation_2.output.buffer}'
     meta:
       node:
-        height: 133
+        x: 1238.6666
+        y: 342.66666
         width: 140
-        y: 341
-        x: 1234
-  fbh5_writer:
+        height: 0
+        configCollapsed: false
+  - name: fbh5_writer
     module: fbh5_writer
     device: cuda
     runtime: native
     provider: generic
-    dataType: F32
     config:
-      recording: true
-      overwrite: false
       filepath: /mnt/raid1/file.fbh5
+      overwrite: true
+      recording: true
     input:
-      input: '${graph.duplicate_1.output.buffer}'
+      input: '${graph.duplicate.output.buffer}'
     meta:
       node:
-        height: 263
+        x: 1445
+        y: 330.33334
         width: 140
-        y: 337
-        x: 1435
+        height: 0
+        configCollapsed: false

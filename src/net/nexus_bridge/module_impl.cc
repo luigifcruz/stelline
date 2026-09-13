@@ -11,8 +11,9 @@ constexpr const char* kStatusEnvironmentKey = "nexus.bridge";
 struct NexusBridgeStatus {
     bool connected = false;
     I64 variables_loaded = 0;
+    I64 metrics_monitored = 0;
 
-    JST_SERDES(connected, variables_loaded);
+    JST_SERDES(connected, variables_loaded, metrics_monitored);
 };
 
 }  // namespace
@@ -37,6 +38,7 @@ Result NexusBridgeImpl::define() {
 Result NexusBridgeImpl::create() {
     connected.publish(0);
     variablesLoaded.publish(0);
+    metricsMonitored.publish(0);
 
     return Result::SUCCESS;
 }
@@ -44,6 +46,7 @@ Result NexusBridgeImpl::create() {
 Result NexusBridgeImpl::destroy() {
     connected.publish(0);
     variablesLoaded.publish(0);
+    metricsMonitored.publish(0);
 
     return Result::SUCCESS;
 }
@@ -57,11 +60,13 @@ void NexusBridgeImpl::refreshStatus() const {
     if (!environment()->tryGet(kStatusEnvironmentKey, status)) {
         connected.publish(0);
         variablesLoaded.publish(0);
+        metricsMonitored.publish(0);
         return;
     }
 
     connected.publish(status.connected ? U64(1) : U64(0));
     variablesLoaded.publish(status.variables_loaded > 0 ? static_cast<U64>(status.variables_loaded) : U64(0));
+    metricsMonitored.publish(status.metrics_monitored > 0 ? static_cast<U64>(status.metrics_monitored) : U64(0));
 }
 
 }  // namespace Jetstream::Modules

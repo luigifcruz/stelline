@@ -3,7 +3,7 @@ directory = h5dsc99
 url = https://github.com/MydonSolutions/h5dsc99.git
 revision = v0.5.0
 depth = 1
-diff_files = h5dsc99/hdf5_dep.diff
+diff_files = h5dsc99/hdf5_dep.diff, h5dsc99/no_filter.diff
 
 [provide]
 h5dsc99 = lib_h5dsc99_dep

@@ -1,0 +1,11 @@
+--- a/src/h5_dataspace.c
++++ b/src/h5_dataspace.c
+@@ -68,7 +68,7 @@
+ 		H5Pset_chunk(dataspace->P_id, dataspace->rank, dataspace->dimchunks);
+ 		dataspace->C_id = H5Screate_simple(dataspace->rank, dataspace->dimchunks, NULL);
+ 		// filters can only be used with chunked data
+-		if(dataspace->filter_flag >= H5_FILTER_FLAG_NONE){
++		if(dataspace->filter_flag >= H5_FILTER_FLAG_DEFLATE_0){
+ 			if(dataspace->filter_flag <= H5_FILTER_FLAG_DEFLATE_9){
+ 				H5Pset_deflate(dataspace->P_id, dataspace->filter_flag);
+ 			}

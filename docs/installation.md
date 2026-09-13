@@ -11,7 +11,7 @@ Stelline plugins ship as CyberEther plugin bundles. The recommended way to insta
 
 Installing a plugin takes three steps:
 
-1. Download and install CyberEther from the [official website](https://cyberether.org).
+1. Download and install CyberEther 1.10.1 or newer from the [official website](https://cyberether.org).
 2. Download the plugin bundles you want [here](https://stelline.space), such as Stelline or Blade.
 3. Add the bundle through the CyberEther plugin manager, as described in [installing plugins](https://cyberether.org/docs/installing-plugins).
 

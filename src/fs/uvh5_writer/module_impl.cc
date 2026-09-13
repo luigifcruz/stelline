@@ -663,6 +663,11 @@ Result Uvh5WriterImpl::create() {
         return Result::ERROR;
     }
 
+    // Keep visibility and nsamples data unfiltered so GDS can write GPU buffers directly.
+    uvh5File.DS_data_visdata.filter_flag = H5_FILTER_FLAG_NONE;
+    uvh5File.DS_data_nsamples.filter_flag = H5_FILTER_FLAG_NONE;
+    // TODO: Evaluate flags compression overhead, file size, and cached compressed-chunk reuse.
+
     UVH5open_with_fileaccess(filepath.c_str(), &uvh5File, dataTypeId, faplId);
     openAttempted = true;
 

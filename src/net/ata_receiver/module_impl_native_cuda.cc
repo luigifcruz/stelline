@@ -107,6 +107,7 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
     Result releaseReceivedBlocks();
     Result releaseComputedBlocks();
     Result updateBlockQueueDepths();
+    Result reportThreadFailure();
 
     void publishStreamStats();
 
@@ -117,6 +118,9 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
     bool daqiriActive = false;
 
     MulticastMembership multicastMembership;
+
+    std::mutex threadFailureMutex;
+    std::string threadFailureDiagnostic;
 };
 
 Result AtaReceiverImplNativeCuda::validate() {
@@ -194,6 +198,10 @@ Result AtaReceiverImplNativeCuda::createInternal() {
     // Initialize variables.
 
     errored.store(false);
+    {
+        std::lock_guard<std::mutex> lock(threadFailureMutex);
+        threadFailureDiagnostic.clear();
+    }
     streamStats = {};
 
     // Set CUDA device.
@@ -271,7 +279,14 @@ Result AtaReceiverImplNativeCuda::createInternal() {
     packetProcessingThreadRunning.store(true);
     burstCollectorThreadRunning.store(true);
 
-    const auto handleThreadFailure = [this]() {
+    const auto handleThreadFailure = [this](std::string diagnostic) {
+        if (diagnostic.empty()) {
+            diagnostic = "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed.";
+        }
+        {
+            std::lock_guard<std::mutex> lock(threadFailureMutex);
+            threadFailureDiagnostic = std::move(diagnostic);
+        }
         errored.store(true);
         packetProcessingThreadRunning.store(false);
         burstCollectorThreadRunning.store(false);
@@ -282,10 +297,16 @@ Result AtaReceiverImplNativeCuda::createInternal() {
         try {
             JST_CHECK_THROW(receiveLoop());
         } catch (const Result&) {
-            handleThreadFailure();
+            handleThreadFailure(JST_LOG_LAST_ERROR());
         } catch (const std::exception& error) {
-            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] {}", error.what());
-            handleThreadFailure();
+            const auto diagnostic = jst::fmt::format("[MODULE_ATA_RECEIVER_NATIVE_CUDA] {}", error.what());
+            JST_ERROR("{}", diagnostic);
+            handleThreadFailure(diagnostic);
+        } catch (...) {
+            const std::string diagnostic =
+                "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed with an unknown error.";
+            JST_ERROR("{}", diagnostic);
+            handleThreadFailure(diagnostic);
         }
     });
 
@@ -293,10 +314,16 @@ Result AtaReceiverImplNativeCuda::createInternal() {
         try {
             JST_CHECK_THROW(burstCollectorLoop());
         } catch (const Result&) {
-            handleThreadFailure();
+            handleThreadFailure(JST_LOG_LAST_ERROR());
         } catch (const std::exception& error) {
-            JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] {}", error.what());
-            handleThreadFailure();
+            const auto diagnostic = jst::fmt::format("[MODULE_ATA_RECEIVER_NATIVE_CUDA] {}", error.what());
+            JST_ERROR("{}", diagnostic);
+            handleThreadFailure(diagnostic);
+        } catch (...) {
+            const std::string diagnostic =
+                "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed with an unknown error.";
+            JST_ERROR("{}", diagnostic);
+            handleThreadFailure(diagnostic);
         }
     });
 
@@ -332,7 +359,7 @@ Result AtaReceiverImplNativeCuda::hasPendingCompute() {
     }
 
     if (errored.load()) {
-        return Result::ERROR;
+        return reportThreadFailure();
     }
 
     if (readyOutputTensors.empty()) {
@@ -344,7 +371,7 @@ Result AtaReceiverImplNativeCuda::hasPendingCompute() {
 
 Result AtaReceiverImplNativeCuda::computeSubmit(const cudaStream_t&) {
     if (errored.load()) {
-        return Result::ERROR;
+        return reportThreadFailure();
     }
 
     AtaReceiverReadyTensor ready;
@@ -363,6 +390,19 @@ Result AtaReceiverImplNativeCuda::computeSubmit(const cudaStream_t&) {
     emittedBlocks.publish(emittedBlocks.get() + 1);
 
     return Result::SUCCESS;
+}
+
+Result AtaReceiverImplNativeCuda::reportThreadFailure() {
+    std::string diagnostic;
+    {
+        std::lock_guard<std::mutex> lock(threadFailureMutex);
+        diagnostic = threadFailureDiagnostic;
+    }
+    if (diagnostic.empty()) {
+        diagnostic = "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed.";
+    }
+    JST_ERROR("{}", diagnostic);
+    return Result::ERROR;
 }
 
 Result AtaReceiverImplNativeCuda::receiveLoop() {

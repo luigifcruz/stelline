@@ -37,27 +37,27 @@ Result Fbh5ReaderImpl::define() {
     JST_CHECK(defineInterfaceConfig("filepath",
                                     "File Path",
                                     "Destination FBH5 filepath.",
-                                    "filepicker:fbh5,h5"));
+                                    {{"type", "filepicker"}, {"extensions", Parser::MakeSequence({"fbh5", "h5"})}}));
 
     JST_CHECK(defineInterfaceConfig("batchSize",
                                     "Batch Size",
                                     "Number of time-indices to read per processing cycle.",
-                                    "uint:time-indices"));
+                                    {{"type", "uint"}, {"unit", "time-indices"}}));
 
     JST_CHECK(defineInterfaceConfig("loop",
                                     "Loop",
                                     "Whether to loop back to the start when reaching the end of the file.",
-                                    "bool"));
+                                    {{"type", "bool"}}));
 
     JST_CHECK(defineInterfaceConfig("playing",
                                     "Playing",
                                     "Start or stop reading from the file.",
-                                    "bool"));
+                                    {{"type", "bool"}}));
 
     JST_CHECK(defineInterfaceMetric("progress",
                                     "Position",
                                     "Current file position.",
-                                    "progressbar",
+                                    {{"type", "progressbar"}},
         [this]() -> std::any {
             if (!moduleImpl) {
                 return std::pair<std::string, F32>{"0.0%", 0.0f};
@@ -74,7 +74,7 @@ Result Fbh5ReaderImpl::define() {
     JST_CHECK(defineInterfaceMetric("currentBandwidth",
                                     "Bandwidth",
                                     "Smoothed recent file read rate.",
-                                    "label",
+                                    {{"type", "label"}},
         [this]() -> std::any {
             if (!moduleImpl) {
                 return std::string("N/A");

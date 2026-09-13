@@ -20,9 +20,9 @@ Packets older than the eviction cutoff are dropped and counted, which makes late
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `interfaceAddress` | string | | Address of the network interface that joins the multicast groups. |
-| `gpuDeviceId` | integer | `0` | CUDA device that receives the payloads and runs the gather kernel. |
-| `masterCore` | integer | `0` | CPU core pinned to the receiver control thread. |
-| `workerCores` | list of integers | | CPU cores pinned to the packet reception workers. At least one is required. |
+| `gpuDeviceId` | integer | `0` | The CUDA device that receives the payloads and runs the gather kernel. |
+| `masterCore` | integer | `0` | The CPU core pinned to the receiver control thread. |
+| `workerCores` | list of integers | | The CPU cores pinned to the packet reception workers. At least one is required. |
 | `subscriptions` | string | | Multicast subscriptions, one per line (see below). |
 | `totalBlock` | list of integers | `[1, 1, 1024, 1]` | Output tensor shape as `[antennas, channels, samples, polarizations]`. |
 | `partialBlock` | list of integers | `[1, 1, 1024, 1]` | Fragment shape carried by a single packet. |
@@ -111,4 +111,4 @@ The metrics below are reported to Nexus.
 
 ## Requirements
 
-Reception requires an NVIDIA ConnectX NIC with Mellanox OFED and hugepages configured on the host. See [host dependencies](/docs/host-dependencies) for the setup and [considerations](/docs/considerations) for the hardware background.
+Reception requires an NVIDIA ConnectX NIC with Mellanox OFED and hugepages configured on the host. Multi-port ConnectX-7 systems also require relaxed PCIe write ordering. See [host dependencies](/docs/host-dependencies) for the software setup, [huge-page configuration](/docs/system-configuration#huge-pages), [ConnectX-7 PCIe write ordering](/docs/system-configuration#connectx-7-pcie-write-ordering), and [considerations](/docs/considerations) for the hardware background.

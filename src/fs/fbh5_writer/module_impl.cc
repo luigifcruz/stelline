@@ -101,7 +101,7 @@ Result Fbh5WriterImpl::create() {
     }
 
     if (filepath.empty()) {
-        JST_WARN("[MODULE_FBH5_WRITER] File path is empty.");
+        JST_ERROR("[MODULE_FBH5_WRITER] File path is empty.");
         return Result::INCOMPLETE;
     }
 
@@ -109,7 +109,7 @@ Result Fbh5WriterImpl::create() {
     if (!parentPath.empty()) {
         std::error_code ec;
         if (!std::filesystem::exists(parentPath, ec)) {
-            JST_WARN("[MODULE_FBH5_WRITER] Parent directory '{}' does not exist.", parentPath.string());
+            JST_ERROR("[MODULE_FBH5_WRITER] Parent directory '{}' does not exist.", parentPath.string());
             return Result::INCOMPLETE;
         }
     }
@@ -163,6 +163,10 @@ Result Fbh5WriterImpl::create() {
 
     fbh5File.nchans_per_write = static_cast<std::size_t>(nchans);
     fbh5File.ntimes_per_write = static_cast<std::size_t>(ntimesPerWrite);
+
+    // Keep both datasets unfiltered so GDS can write raw chunks.
+    fbh5File.ds_data.filter_flag = H5_FILTER_FLAG_NONE;
+    fbh5File.ds_mask.filter_flag = H5_FILTER_FLAG_NONE;
 
     faplId = H5Pcreate(H5P_FILE_ACCESS);
     if (faplId < 0) {

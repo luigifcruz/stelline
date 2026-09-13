@@ -9,9 +9,11 @@ The Nexus Bridge connects a flowgraph to Nexus, the metadata service of the Stel
 
 ## How it works
 
-On creation the block starts a background watcher thread that subscribes to the `observatory:getMetadata` query on the configured Nexus deployment, a Convex application. The subscription is push-based, so the watcher receives a fresh snapshot whenever the observatory state changes, computes the delta against the previous snapshot, and places it on a queue. If the connection drops or the Convex client is unavailable, the watcher marks the bridge disconnected and retries on an interval.
+On creation the block starts a background watcher thread that authenticates and subscribes to the `queries/observatory:getMetadata` query on the configured Nexus deployment, a Convex application. The subscription includes `NEXUS_INSTANCE_ID` so Nexus can verify the owning Replicant and add metadata for that instance and its observation. The subscription is push-based, so the watcher receives a fresh snapshot whenever the relevant state changes, computes the delta against the previous snapshot, and places it on a queue. If authentication fails, the connection drops, or the Convex client is unavailable, the watcher marks the bridge disconnected and retries on an interval.
 
 The block itself is throttled, so it wakes periodically rather than spinning. Each cycle it drains the queued deltas and applies them to the flowgraph environment: changed entries are written under their original Nexus key, and entries that disappeared from Nexus are removed. Every mirrored entry keeps the Nexus triple of value, type tag (`text`, `integer`, or `real`), and validity flag. The compute path never blocks on the network, since all communication happens on the watcher thread.
+
+The bridge also samples the block metrics exposed through CyberEther's Python runtime every five seconds. It selects descriptors with type `stelline-metrics-number` or `stelline-metrics-string`. These metrics use `visibility: internal` to stay hidden in the node while remaining available to Python. It sends non-empty snapshots to Nexus on a separate publisher thread, so telemetry uploads never block flowgraph computation.
 
 ## Configuration
 
@@ -23,15 +25,27 @@ Changing the URL at runtime recreates the block and restarts the subscription.
 
 ## Environment variables
 
-The block is a pure producer of the flowgraph environment. It mirrors every key published by the Nexus deployment verbatim, including the `observatory.*`, `observation.*`, and `instance.*` families consumed by the writer blocks, and additionally publishes its own status:
+The bridge reads these process environment variables:
+
+| Variable | Description |
+|---|---|
+| `NEXUS_INSTANCE_ID` | Instance used to request contextual metadata and publish metrics. Required for instance-scoped tokens; Nexus-managed Docker workloads set this automatically. |
+| `NEXUS_INSTANCE_CREDENTIALS` | Bearer JWT, without the `Bearer ` prefix. Nexus issues it for this instance through the observation's scheduled end plus ten minutes, and the Replicant injects it at Docker container launch. |
+| `NEXUS_OTL_WATCH_RETRY_SECONDS` | Delay between metadata connection retries, in seconds. Defaults to `5`. |
+
+The bridge passes the token directly to `ConvexClient.set_auth()` before subscribing or publishing. A missing token appears in `last_error`. The token is not copied into the flowgraph environment. Nexus-managed multi-day observations require no token renewal: the bearer lasts for the scheduled observation, and Nexus rejects it when the instance stops or the observation is cancelled or completed. Configure and deploy Nexus's instance-token signer before upgrading the Replicant and the workload image containing the updated Stelline plugin, then start a new observation.
+
+The block mirrors every metadata key published by Nexus verbatim, including the `observatory.*`, `observation.*`, and `instance.*` families consumed by the writer blocks, and additionally publishes its own status.
+
+Published flowgraph environment keys:
 
 | Key | Description |
 |---|---|
-| `nexus.bridge` | Bridge status with `connected`, `variables_loaded`, `url`, and `last_error` fields. |
+| `nexus.bridge` | Bridge status with `connected`, `variables_loaded`, `metrics_monitored`, `url`, and `last_error` fields. |
 
 ## Metrics
 
-The node reports **Connected**, which flips once the first snapshot arrives, and **Variables Loaded**, the number of entries currently mirrored. Both are also readable by other blocks through the `nexus.bridge` status key, and `last_error` in that key carries the reason for the most recent disconnect.
+The node reports **Connected**, which flips once the first snapshot arrives, **Variables Loaded**, the number of entries currently mirrored, and **Metrics Monitored**, the number of block metrics accepted into Nexus telemetry snapshots. These values are also readable by other blocks through the `nexus.bridge` status key, and `last_error` in that key carries the reason for the most recent disconnect.
 
 ## Telemetry
 
@@ -41,11 +55,8 @@ The metrics below are reported to Nexus.
 |---|---|
 | `connected` | Whether the bridge has received a Nexus metadata snapshot. |
 | `variablesLoaded` | Number of Nexus metadata variables currently mirrored into the flowgraph environment. |
+| `metricsMonitored` | Number of block metrics currently selected for Nexus telemetry. |
 
 ## Requirements
 
-The block depends on the [Convex](https://pypi.org/project/convex/) Python package to subscribe to the Nexus deployment. Install it on the host with pip:
-
-```bash
-python -m pip install convex
-```
+The block declares the [Convex](https://pypi.org/project/convex/) Python package through PEP 723 inline metadata. CyberEther manages this dependency using the selected Python runtime and its configured dependency policy. See [declaring Python dependencies](https://cyberether.org/docs/python-block#declaring-dependencies) for details.
