@@ -19,6 +19,7 @@ struct DaqiriRxConfigParams {
     std::vector<U64> workerCores;
     U64 packetsPerBurst = 0;
     U64 maxConcurrentBursts = 0;
+    U64 packetSizeBytes = 0;
     daqiri::MemoryKind dataMemoryKind = daqiri::MemoryKind::DEVICE;
 };
 

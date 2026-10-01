@@ -3,7 +3,6 @@
 #include "../endpoint.hh"
 
 #include "detail/block.hh"
-#include "detail/packet.hh"
 
 #include <limits>
 
@@ -40,6 +39,7 @@ Result AtaReceiverImpl::validate() {
     validatedSlotShape = {};
     validatedPacketsPerBlock = 0;
     validatedPacketDuration = 0;
+    validatedPacketSizeBytes = 0;
     validatedBlockDuration = 0;
     validatedOutputSizeBytes = 0;
     validatedOutputPoolSizeBytes = 0;
@@ -146,13 +146,11 @@ Result AtaReceiverImpl::validate() {
             return Result::ERROR;
         }
     }
-    U64 partialSizeBytes = 0;
     if (!detail::CheckedMultiply(partialElements,
                                  static_cast<U64>(sizeof(CI8)),
-                                 partialSizeBytes) ||
-        partialSizeBytes != kPacketDataSize) {
-        JST_ERROR("[MODULE_ATA_RECEIVER] The 'partialBlock' must describe exactly {} bytes of CI8 packet payload.",
-                  kPacketDataSize);
+                                 validatedPacketSizeBytes) ||
+        validatedPacketSizeBytes > std::numeric_limits<std::size_t>::max()) {
+        JST_ERROR("[MODULE_ATA_RECEIVER] The 'partialBlock' packet payload is too large.");
         return Result::ERROR;
     }
 
@@ -217,6 +215,7 @@ Result AtaReceiverImpl::create() {
     slotShape = validatedSlotShape;
     packetsPerBlock = validatedPacketsPerBlock;
     packetDuration = validatedPacketDuration;
+    packetSizeBytes = validatedPacketSizeBytes;
     blockDuration = validatedBlockDuration;
 
     timestampCutoff = 0;

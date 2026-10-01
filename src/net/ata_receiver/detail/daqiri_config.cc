@@ -30,7 +30,9 @@ Result BuildDaqiriRxConfig(const DaqiriRxConfigParams& params,
         params.masterCore > static_cast<U64>(std::numeric_limits<int>::max()) ||
         params.packetsPerBurst == 0 ||
         params.packetsPerBurst > static_cast<U64>(std::numeric_limits<int>::max()) ||
-        params.maxConcurrentBursts == 0) {
+        params.maxConcurrentBursts == 0 ||
+        params.packetSizeBytes == 0 ||
+        params.packetSizeBytes > std::numeric_limits<std::size_t>::max()) {
         JST_ERROR("[MODULE_ATA_RECEIVER] Invalid DAQIRI receiver configuration.");
         return Result::ERROR;
     }
@@ -90,7 +92,7 @@ Result BuildDaqiriRxConfig(const DaqiriRxConfigParams& params,
         dataMemoryCfg.name_ = dataMrName;
         dataMemoryCfg.kind_ = params.dataMemoryKind;
         dataMemoryCfg.affinity_ = params.gpuDeviceId;
-        dataMemoryCfg.buf_size_ = kPacketDataSize;
+        dataMemoryCfg.buf_size_ = params.packetSizeBytes;
         dataMemoryCfg.num_bufs_ = queueNumBufs;
         dataMemoryCfg.access_ = daqiri::MEM_ACCESS_LOCAL;
         dataMemoryCfg.owned_ = true;
