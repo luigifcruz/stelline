@@ -84,6 +84,7 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
      Shape validatedSlotShape;
      U64 validatedPacketsPerBlock = 0;
      U64 validatedPacketDuration = 0;
+     U64 validatedPacketSizeBytes = 0;
      U64 validatedBlockDuration = 0;
      U64 validatedOutputSizeBytes = 0;
      U64 validatedOutputPoolSizeBytes = 0;
@@ -92,6 +93,7 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
      std::vector<U64> slotShape;
      U64 packetsPerBlock = 0;
      U64 packetDuration = 0;
+     U64 packetSizeBytes = 0;
      U64 blockDuration = 0;
      U64 timestampCutoff = 0;
 

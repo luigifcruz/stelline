@@ -9,7 +9,7 @@ The ATA Receiver is the ingest point of a Stelline pipeline. It captures Allen T
 
 ## How it works
 
-The ATA distributes voltage data as UDP multicast streams. Each packet carries a 16-byte application header with the antenna ID, the first channel number, the channel count, and a timestamp in F-engine sample units, followed by a fixed 6144-byte payload. One packet therefore holds a small fragment of the full antenna and channel space, described by the `partialBlock` shape.
+The ATA distributes voltage data as UDP multicast streams. Each packet carries a 16-byte application header with the antenna ID, the first channel number, the channel count, and a timestamp in F-engine sample units, followed by a CI8 payload. One packet holds a small fragment of the full antenna and channel space, described by the `partialBlock` shape. The payload size is the product of the `partialBlock` dimensions multiplied by two bytes per complex sample, regardless of the output data type. Receive buffers are sized from this configured payload size.
 
 The receiver joins the multicast groups listed in `subscriptions` on the configured interface and spreads reception across the worker cores. Incoming packets are validated against the header fields, filtered by `offsetBlock`, and slotted into an in-flight block keyed by their timestamp. Once every fragment of a block has arrived, or the block is forced out by newer data, a CUDA kernel gathers the fragments into a contiguous output tensor with the `totalBlock` shape. Finished tensors are recycled through a fixed-size output pool, so a slow consumer shows up as pool exhaustion instead of unbounded memory growth.
 

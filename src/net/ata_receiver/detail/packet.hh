@@ -7,7 +7,6 @@
 
 namespace Jetstream::Modules {
 
-constexpr U64 kPacketDataSize = 6144;
 constexpr U64 kPacketHeaderSize = 16;
 constexpr U64 kPacketHeaderOffset = 42;
 

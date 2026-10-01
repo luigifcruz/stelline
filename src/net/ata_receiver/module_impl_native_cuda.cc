@@ -37,6 +37,8 @@ namespace {
 
 class ThroughputMeter {
  public:
+    explicit ThroughputMeter(const U64 packetSizeBytes) : packetSizeBytes(packetSizeBytes) {}
+
     bool sample(const U64 totalPackets, const F64 previousGbps, F64& gbps) {
         const auto now = std::chrono::steady_clock::now();
         const F64 elapsedSeconds = std::chrono::duration<F64>(now - lastUpdate).count();
@@ -48,7 +50,7 @@ class ThroughputMeter {
                                      ? totalPackets - lastPackets
                                      : 0;
         const F64 instantGbps = static_cast<F64>(deltaPackets) *
-                                static_cast<F64>(kPacketDataSize) *
+                                static_cast<F64>(packetSizeBytes) *
                                 8.0 / elapsedSeconds / 1.0e9;
 
         constexpr F64 kEmaAlpha = 0.3;
@@ -60,6 +62,7 @@ class ThroughputMeter {
     }
 
  private:
+    const U64 packetSizeBytes;
     U64 lastPackets = 0;
     std::chrono::steady_clock::time_point lastUpdate = std::chrono::steady_clock::now();
 };
@@ -166,7 +169,7 @@ Result AtaReceiverImplNativeCuda::validate() {
                                  stagingPoolSizeBytes) ||
         stagingPoolSizeBytes > std::numeric_limits<std::size_t>::max() ||
         !detail::CheckedMultiply(totalBuffers,
-                                 kPacketDataSize,
+                                 validatedPacketSizeBytes,
                                  daqiriDataSizeBytes) ||
         daqiriDataSizeBytes > std::numeric_limits<std::size_t>::max()) {
         JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] DAQIRI or scatter staging allocation is too large.");
@@ -229,6 +232,7 @@ Result AtaReceiverImplNativeCuda::createInternal() {
         params.workerCores = workerCores;
         params.packetsPerBurst = packetsPerBurst;
         params.maxConcurrentBursts = maxConcurrentBursts;
+        params.packetSizeBytes = packetSizeBytes;
         params.dataMemoryKind = unifiedMemory ? daqiri::MemoryKind::HOST_PINNED
                                               : daqiri::MemoryKind::DEVICE;
 
@@ -410,7 +414,7 @@ Result AtaReceiverImplNativeCuda::receiveLoop() {
         JST_ERROR("[MODULE_ATA_RECEIVER_NATIVE_CUDA] Failed to set CUDA device for ATA receive thread: {}", err);
     });
 
-    ThroughputMeter throughputMeter;
+    ThroughputMeter throughputMeter(packetSizeBytes);
 
     daqiri::allow_all_traffic(0);
 
