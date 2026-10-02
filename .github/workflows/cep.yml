@@ -88,7 +88,7 @@ jobs:
               trap '\''chown -R "${workspace_owner}" /workspace/.dist /workspace/build /workspace/subprojects 2>/dev/null || true'\'' EXIT
               export DEBIAN_FRONTEND=noninteractive
               apt-get update --fix-missing
-              apt-get install -y --no-install-recommends cmake libdpdk-dev
+              apt-get install -y --no-install-recommends cmake libibverbs-dev
               rm -rf /var/lib/apt/lists/*
               git config --global --add safe.directory /workspace
               rm -rf build
