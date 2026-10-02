@@ -1,0 +1,8 @@
+[wrap-git]
+directory = radiointerferometryc99
+url = https://github.com/MydonSolutions/radiointerferometryc99.git
+revision = f8f7aa8ca2b9ba13a958c23f21a0faf04cc93ebc
+depth = 1
+
+[provide]
+radiointerferometryc99 = lib_radiointerferometry_dep
