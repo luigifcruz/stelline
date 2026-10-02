@@ -29,5 +29,6 @@ subprojects/*
 !subprojects/filterbankc99.wrap
 !subprojects/h5dsc99.wrap
 !subprojects/hdf5.wrap
+!subprojects/radiointerferometryc99.wrap
 !subprojects/uvh5c99.wrap
 !subprojects/vfd-gds.wrap
