@@ -11,11 +11,13 @@ Stelline plugins ship as CyberEther plugin bundles. The recommended way to insta
 
 Installing a plugin takes three steps:
 
-1. Download and install CyberEther 1.12.0 or newer from the [official website](https://cyberether.org).
-2. Download the plugin bundles you want [here](https://stelline.space), such as Stelline or Blade.
+1. Download and install CyberEther 1.16.0 or newer from the [official website](https://cyberether.org).
+2. Download the Stelline plugin bundle [here](https://stelline.space).
 3. Add the bundle through the CyberEther plugin manager, as described in [installing plugins](https://cyberether.org/docs/installing-plugins).
 
 That's it. The bundle contains the plugin library, the manifest, and the example flowgraphs, so the blocks and examples appear in the flowgraph editor right away. Note that some blocks need extra host setup to actually run, as described in [host dependencies](/docs/host-dependencies).
+
+Stelline now includes all eight DSP blocks previously shipped in BLADE. If upgrading from BLADE, remove its bundle before loading Stelline to avoid duplicate registrations. Existing DSP block identifiers and configurations are unchanged.
 
 ## Container Images
 
@@ -54,7 +56,7 @@ The flags map to concrete block requirements. The `--gpus=all` and ICD mount giv
 
 ## Build From Source
 
-Every Stelline plugin is a standard Meson project. To build the central plugin, clone its repository and compile:
+Every Stelline plugin is a standard Meson project. Building from source requires CUDA 12.0 or newer. To build the central plugin, clone its repository and compile:
 
 ```bash
 git clone https://github.com/luigifcruz/stelline

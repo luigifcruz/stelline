@@ -1,0 +1,8 @@
+subdir('beamformer')
+subdir('channelizer')
+subdir('correlator')
+subdir('detector')
+subdir('integrator')
+subdir('phasor')
+subdir('polarizer')
+subdir('stacker')

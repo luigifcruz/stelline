@@ -13,7 +13,7 @@ The stack is delivered as CyberEther plugins, each contributing its own set of b
 
 ### Stelline
 
-The Stelline plugin is the foundation of the stack. It captures voltage packets from the network directly into GPU memory, writes finished data products to disk in standard radio astronomy formats, and mirrors the Nexus metadata service into the flowgraph so recordings stay fully described. Both ends of the data path are hardware offloaded, with RDMA on the capture side and GPUDirect Storage on the write side, keeping the host CPU out of the loop. Its blocks combine freely with CyberEther's [built-in blocks](https://cyberether.org/docs/blocks).
+The Stelline plugin captures voltage packets from the network directly into GPU memory, processes them with the DSP blocks formerly delivered by BLADE, writes finished data products to disk in standard radio astronomy formats, and mirrors the Nexus metadata service into the flowgraph so recordings stay fully described. Both ends of the GPU data path are hardware offloaded, with RDMA on the capture side and GPUDirect Storage on the write side. These DSP blocks also include CPU implementations, with the Phasor running on CPU. Its blocks combine freely with CyberEther's [built-in blocks](https://cyberether.org/docs/blocks).
 
 | Block | Kind | Description |
 |---|---|---|
@@ -21,10 +21,18 @@ The Stelline plugin is the foundation of the stack. It captures voltage packets 
 | [UVH5 Writer](/docs/block-uvh5-writer) | Storage | Writes correlated visibilities to UVH5 (HDF5) using GPUDirect Storage. |
 | [FBH5 Writer](/docs/block-fbh5-writer) | Storage | Writes filterbank spectra to FBH5 (HDF5) using GPUDirect Storage. |
 | [Nexus Bridge](/docs/block-nexus-bridge) | Network | Streams Nexus metadata into the flowgraph environment. |
+| [Channelizer](/docs/block-channelizer) | DSP | Splits coarse-frequency voltages into centered fine-frequency channels. |
+| [Beamformer](/docs/block-beamformer) | DSP | Forms coherent and optional incoherent beams from antenna voltages and phasors. |
+| [Phasor](/docs/block-phasor) | DSP | Generates calibrated beamforming weights from telescope metadata. |
+| [Correlator](/docs/block-correlator) | DSP | Cross-correlates antenna voltages into baseline visibilities. |
+| [Polarizer](/docs/block-polarizer) | DSP | Converts or extracts voltage polarization components. |
+| [Detector](/docs/block-detector) | DSP | Detects and integrates voltage power products. |
+| [Integrator](/docs/block-integrator) | DSP | Sums samples within or across input buffers. |
+| [Stacker](/docs/block-stacker) | DSP | Tiles successive input buffers along a tensor axis. |
 
-### Blade
+### Migrating from BLADE
 
-Blade is the digital signal processing engine of the stack, with GPU beamforming and correlation kernels developed for the Allen Telescope Array. It is delivered as its own plugin, contributing the compute blocks that sit between the receiver and the writers. Its documentation will join this site soon.
+The BLADE plugin is being retired, and its eight DSP blocks are now part of Stelline. Their block identifiers, configuration fields, and tensor interfaces are unchanged, so existing flowgraphs can use the Stelline bundle without renaming blocks. Remove the BLADE bundle before loading Stelline to avoid duplicate block registrations. For C++ integrations, replace `<blade/...>` includes with `<stelline/...>`. The `Jetstream::Blocks` and `Jetstream::Modules` types are unchanged.
 
 ## Requirements
 

@@ -4,8 +4,8 @@ cuda_found = false
 if plugin_device_cuda_requested
     cuda_deps += dependency(
         'cuda',
-        version: '>=11',
-        modules: ['cuda', 'culibos', 'cufile'],
+        version: '>=12.0',
+        modules: ['cuda', 'culibos', 'cufile', 'nvrtc', 'cufft'],
         required: not plugin_devices_auto,
     )
 

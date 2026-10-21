@@ -1,0 +1,32 @@
+---
+title: Polarizer
+description: Reorients the polarizations.
+order: 54
+category: Stelline
+---
+
+The Polarizer converts a dual linear-polarization complex signal into a circular basis or extracts a single linear component. The circular conversion forms the left beam as X plus jY and the right beam as X minus jY, which is the standard convention for observing circularly polarized sources with a linear feed.
+
+## How it works
+
+When the input and output bases match, the block bypasses processing and exposes the input directly. Otherwise the CPU implementation uses a contiguous loop and the CUDA implementation selects one of three runtime-compiled kernels. The circular conversion multiplies the Y polarization by a ninety degree phasor and writes the sum and difference with the X polarization as the left and right circular components. Single-component conversion gathers every X or Y sample into a tensor with one polarization. Every other axis passes through unchanged.
+
+## Configuration
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `inputPolarization` | string | `xy` | Polarization basis of the input signal. Only `xy` is supported. |
+| `outputPolarization` | string | `lr` | Output basis: `lr` for circular, `xy` to bypass, or `x` or `y` for a single linear component. |
+| `blockSize` | integer | `512` | Number of CUDA threads per block. Ignored on CPU. |
+
+## Input
+
+| Name | Description |
+|---|---|
+| `buffer` | Contiguous `CF32` tensor shaped `[antennas, channels, samples, polarizations]` with exactly two polarizations. |
+
+## Output
+
+| Name | Description |
+|---|---|
+| `buffer` | A `CF32` tensor with the same shape as the input for `lr` and `xy`, or with a single polarization for `x` and `y`. |

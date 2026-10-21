@@ -4,5 +4,5 @@ option(
     type: 'array',
     value: ['auto'],
     choices: ['auto', 'cuda'],
-    description: 'Device implementations to build. auto enables every available supported device.',
+    description: 'Select GPU implementations to build. The auto setting enables every available supported GPU device. The build always includes CPU DSP implementations.',
 )

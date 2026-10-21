@@ -4,3 +4,4 @@ src_lst += files([
 
 subdir('net')
 subdir('fs')
+subdir('dsp')

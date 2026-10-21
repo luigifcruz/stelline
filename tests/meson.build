@@ -56,6 +56,29 @@ foreach test_source : plugin_test_lst
     )
 endforeach
 
+plugin_flowgraph_tests = executable(
+    'stelline-dsp-flowgraph-tests',
+    'flowgraphs/base.cc',
+    dependencies: plugin_test_dependencies,
+    link_with: plugin_test_main,
+    link_language: 'cpp',
+    cpp_args: [
+        '-DSTELLINE_TEST_FLOWGRAPH_DIR="@0@"'.format(
+            meson.current_source_dir() / 'flowgraphs'
+        ),
+    ],
+    link_args: plugin_test_link_args,
+)
+plugin_test_targets += [plugin_flowgraph_tests]
+
+test(
+    'dsp-flowgraphs',
+    plugin_flowgraph_tests,
+    suite: 'stelline',
+    is_parallel: false,
+    timeout: 180,
+)
+
 alias_target(
     'stelline-tests',
     plugin_test_targets,

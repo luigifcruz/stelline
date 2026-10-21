@@ -1,7 +1,7 @@
 project(
     'stelline',
     ['cpp', 'cuda'],
-    version: '0.6.3',
+    version: '0.7.0',
     meson_version: '>=1.11.0',
     default_options: [
         'cpp_std=c++20',
@@ -22,7 +22,7 @@ if not plugin_is_linux
     error('Stelline only supports Linux targets for now.')
 endif
 
-minimum_jetstream_version = '1.12.0'
+minimum_jetstream_version = '1.16.0'
 
 #
 # Load Python
@@ -56,6 +56,9 @@ endif
 
 plugin_device_cuda_requested = plugin_devices_auto or 'cuda' in plugin_requested_devices
 plugin_device_cuda_enabled = false
+
+plugin_device_cpu_enabled = true
+cfg_lst.set('STELLINE_DEVICE_CPU_AVAILABLE', true)
 
 #
 # Handle Configuration Data
@@ -175,5 +178,6 @@ summary({
 
 summary({
     'Selection': ','.join(plugin_requested_devices),
+    'CPU': plugin_device_cpu_enabled,
     'CUDA': plugin_device_cuda_enabled,
 }, section: 'Devices', bool_yn: true)
