@@ -2,8 +2,6 @@
 
 #include <cuda/std/complex>
 
-// TODO: Make it faster.
-
 namespace Jetstream::Modules {
 
 namespace {
@@ -29,7 +27,7 @@ __global__ void AtaScatterKernel(const void* const* inputs,
                                  U64 numberOfPackets,
                                  AtaReceiverBlockGeometry totalShape,
                                  AtaReceiverBlockGeometry partialShape) {
-    const U64 idx = static_cast<U64>(blockIdx.x) * blockDim.x + threadIdx.x;
+    const U64 idx = blockIdx.x;
     if (idx >= numberOfPackets) {
         return;
     }
@@ -46,22 +44,25 @@ __global__ void AtaScatterKernel(const void* const* inputs,
     const auto* src = reinterpret_cast<const cuda::std::complex<int8_t>*>(inputs[idx]);
     auto* dst = reinterpret_cast<DstType*>(outputs[idx]);
 
-    for (U64 antenna = 0; antenna < pAntennas; antenna++) {
-        for (U64 channel = 0; channel < pChannels; channel++) {
-            for (U64 sample = 0; sample < pSamples; sample++) {
-                for (U64 polarization = 0; polarization < pPolarizations; polarization++) {
-                    const U64 srcOffset = antenna * pChannels * pSamples * pPolarizations +
-                                          channel * pSamples * pPolarizations +
-                                          sample * pPolarizations +
-                                          polarization;
-                    const U64 dstOffset = antenna * tChannels * tSamples * tPolarizations +
-                                          channel * tSamples * tPolarizations +
-                                          sample * tPolarizations +
-                                          polarization;
+    const U64 inputChannelStride = pSamples * pPolarizations;
+    const U64 inputAntennaStride = pChannels * inputChannelStride;
+    const U64 outputChannelStride = tSamples * tPolarizations;
+    const U64 outputAntennaStride = tChannels * outputChannelStride;
 
-                    dst[dstOffset] = convertSample<DstType>(src[srcOffset]);
-                }
+    for (U64 antenna = 0; antenna < pAntennas; antenna++) {
+        for (U64 element = threadIdx.x; element < inputAntennaStride; element += blockDim.x) {
+            const U64 channel = element / inputChannelStride;
+            const U64 withinChannel = element % inputChannelStride;
+            U64 outputWithinChannel = withinChannel;
+            if (pPolarizations != tPolarizations) {
+                outputWithinChannel = (withinChannel / pPolarizations) * tPolarizations +
+                                      withinChannel % pPolarizations;
             }
+
+            const U64 srcOffset = antenna * inputAntennaStride + element;
+            const U64 dstOffset = antenna * outputAntennaStride +
+                                  channel * outputChannelStride + outputWithinChannel;
+            dst[dstOffset] = convertSample<DstType>(src[srcOffset]);
         }
     }
 }
@@ -76,7 +77,7 @@ cudaError_t LaunchAtaScatterKernel(const void* const* inputs,
                                    const std::string& outputType,
                                    cudaStream_t stream) {
     const dim3 threadsPerBlock(256, 1, 1);
-    const dim3 blocksPerGrid((numberOfPackets + threadsPerBlock.x - 1) / threadsPerBlock.x, 1, 1);
+    const dim3 blocksPerGrid(numberOfPackets, 1, 1);
 
     if (outputType == "CI8") {
         AtaScatterKernel<cuda::std::complex<int8_t>><<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
