@@ -16,8 +16,7 @@ extern "C" {
 namespace Jetstream::Modules {
 
 struct Uvh5ReaderImplNativeCuda : public Uvh5ReaderImpl,
-                                  public NativeCudaRuntimeContext,
-                                  public Scheduler::Context {
+                                  public NativeCudaRuntimeContext {
  public:
     Result create() final;
     Result destroy() final;
@@ -62,9 +61,7 @@ Result Uvh5ReaderImplNativeCuda::destroy() {
 }
 
 Result Uvh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
-    if (!(uvh5File.DS_data_visdata.D_id >= 0) || !playing) {
-        return Result::SKIP;
-    }
+    JST_CHECK(hasPendingCompute());
     
     // We need to synchronize here because the HDF VFD is not asynchronous.
     JST_CUDA_CHECK(cudaStreamSynchronize(stream), [&] {

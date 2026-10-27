@@ -13,8 +13,7 @@ extern "C" {
 namespace Jetstream::Modules {
 
 struct Uvh5ReaderImplNativeCpu : public Uvh5ReaderImpl,
-                                  public NativeCpuRuntimeContext,
-                                  public Scheduler::Context {
+                                  public NativeCpuRuntimeContext {
  public:
     Result create() final;
     Result computeSubmit() override;
@@ -27,9 +26,7 @@ Result Uvh5ReaderImplNativeCpu::create() {
 }
 
 Result Uvh5ReaderImplNativeCpu::computeSubmit() {
-    if (!(uvh5File.DS_data_visdata.D_id >= 0) || !playing) {
-        return Result::SKIP;
-    }
+    JST_CHECK(hasPendingCompute());
     const U64 currentIndex = getCurrentBatchIndex();
     herr_t status = UVH5read(&uvh5File);
     if (status < 0) {

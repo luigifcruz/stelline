@@ -16,8 +16,7 @@ extern "C" {
 namespace Jetstream::Modules {
 
 struct Fbh5ReaderImplNativeCuda : public Fbh5ReaderImpl,
-                                  public NativeCudaRuntimeContext,
-                                  public Scheduler::Context {
+                                  public NativeCudaRuntimeContext {
  public:
     Result create() final;
     Result destroy() final;
@@ -62,9 +61,7 @@ Result Fbh5ReaderImplNativeCuda::destroy() {
 }
 
 Result Fbh5ReaderImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
-    if (!(fbh5File.ds_data.D_id >= 0) || !playing) {
-        return Result::SKIP;
-    }
+    JST_CHECK(hasPendingCompute());
     
     // We need to synchronize here because the HDF VFD is not asynchronous.
     JST_CUDA_CHECK(cudaStreamSynchronize(stream), [&] {
