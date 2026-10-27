@@ -11,17 +11,21 @@ extern "C" {
 
 #include <stelline/fbh5_reader/module.hh>
 #include <jetstream/detail/module_impl.hh>
+#include <jetstream/scheduler_context.hh>
 #include <jetstream/tools/snapshot.hh>
 
 namespace Jetstream::Modules {
 
-struct Fbh5ReaderImpl : public Module::Impl, public DynamicConfig<Fbh5Reader> {
+struct Fbh5ReaderImpl : public Module::Impl,
+                        public DynamicConfig<Fbh5Reader>,
+                        public Scheduler::Context {
  public:
     Result validate() override;
     Result define() override;
     Result create() override;
     Result destroy() override;
     Result reconfigure() override;
+    Result hasPendingCompute() override;
 
     U64 getCurrentBatchIndex() const;
     U64 getBatchCount() const;

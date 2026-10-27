@@ -95,6 +95,6 @@ Result Fbh5ReaderImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(Fbh5ReaderImpl);
+JST_REGISTER_BLOCK(Fbh5ReaderImpl, {"fbh5_reader"});
 
 }  // namespace Jetstream::Blocks
