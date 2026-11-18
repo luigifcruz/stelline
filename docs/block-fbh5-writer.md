@@ -13,7 +13,7 @@ The block is idle until `recording` is enabled. At that point it builds the filt
 
 The input must carry RF `timestamp` and `duration` attributes. `fch1` and `foff` come from the instance band, with the fine channels per F-engine channel inferred from the input channel count. `tstart` and `tsamp` come from the first accepted block: its first RF sample as a UTC MJD, and its duration divided by the spectra per block, which must divide evenly, times the F-engine sample period. `/data` also carries the exact integer grid as `rf_start_sample` (the F-engine sample count of the first spectrum), `synctime`, and `rf_samples_per_row`. The source name, coordinates, and telescope come from the environment when recording starts: `src_raj` in hours, `src_dej`, `az_start`, and `za_start` in degrees, and `telescope_id` 9, blimpy's ATA identifier, for ATA (0 for any other observatory name). Stock SIGPROC names identifier 9 `140ft`, so a `.fil` export needs an ATA-aware reader to show the telescope correctly. `az_start` and `za_start` are `-1` when the pointing has no azimuth or elevation.
 
-The first written block establishes the sample grid. If a later block reveals a gap, the writer inserts zeroed spectra and sets the corresponding `/mask` entries to `1`. No padding is added before the first block or after the last block. Use a reader that honors `/mask`; the zeros are not measurements. A change to the F-engine band or clock, a backwards timestamp, changed duration, off-grid timestamp, or gap larger than 1,024 blocks stops the recording before anything is appended.
+The first written block establishes the sample grid. If a later block reveals a gap, the writer inserts zeroed spectra and sets the corresponding `/mask` entries to `1`. No padding is added before the first block or after the last block. Use a reader that honors `/mask`, because the zeros are not measurements. A change to the F-engine band or clock, a backwards timestamp, changed duration, off-grid timestamp, or gap larger than 1,024 blocks stops the recording before anything is appended.
 
 ## Configuration
 
@@ -47,7 +47,7 @@ Read when recording starts and checked again before every write. The recording s
 | Key | Purpose |
 |---|---|
 | `observation.antennas.0` | Antenna whose F-engine band, clock, and pointing define the file. |
-| `instance.bands.len` | Band count of this instance, at least one. Multiple bands must share one tuning, compared case-insensitively, and form one contiguous channel and frequency range with a uniform channel width; repeated bands are ignored and the writer records them as a single band. |
+| `instance.bands.len` | Band count of this instance, at least one. Multiple bands must share one tuning, compared case-insensitively, and form one contiguous channel and frequency range with a uniform channel width. Repeated bands are ignored, and the writer records the bands as a single band. |
 | `instance.bands.<slot>.tuning` | Tuning identifier. |
 | `instance.bands.<slot>.band_index` | Band index within the tuning. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.frequency_start` | Band start frequency in MHz. |
@@ -92,7 +92,7 @@ Instances recording adjacent bands write one file each, on a shared RF grid but 
 $ python3 tools/stitcher.py combined.fbh5 band0.fbh5 band1.fbh5 band2.fbh5
 ```
 
-The inputs can be given in any order. The tool refuses files with a different `synctime`, `rf_samples_per_row`, channel width, or IF count, rows that are off a shared grid, and bands with a gap or overlap between them. It trims each input to the latest start and earliest end using `rf_start_sample`, joins `/data` and `/mask` along frequency, and keeps the header of the band holding the first output channel, with `nchans`, `tstart`, and `rf_start_sample` updated. An existing output is kept unless `--overwrite` is given. Convert the result with blimpy's `h52fil` for tools that read SIGPROC `.fil` files; that format has no mask.
+The inputs can be given in any order. The tool refuses files with a different `synctime`, `rf_samples_per_row`, channel width, or IF count, rows that are off a shared grid, and bands with a gap or overlap between them. It trims each input to the latest start and earliest end using `rf_start_sample`, joins `/data` and `/mask` along frequency, and keeps the header of the band holding the first output channel, with `nchans`, `tstart`, and `rf_start_sample` updated. An existing output is kept unless `--overwrite` is given. Convert the result with blimpy's `h52fil` for tools that read SIGPROC `.fil` files. That format has no mask.
 
 ## Requirements
 

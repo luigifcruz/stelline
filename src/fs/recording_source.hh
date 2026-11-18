@@ -101,7 +101,7 @@ inline Result LoadRecordingSource(const Flowgraph::Environment& environment,
         if (slot == 0) {
             source.tuning = tuning;
         } else if (tuning != source.tuning) {
-            JST_ERROR("{} Instance bands use more than one tuning; recording supports one tuning.", tag);
+            JST_ERROR("{} Instance bands use more than one tuning, but recording supports one tuning.", tag);
             return Result::ERROR;
         }
         Band entry;
@@ -189,7 +189,7 @@ inline Result CheckRecordingSource(const Flowgraph::Environment& environment,
                                    const RecordingSource& expected) {
     RecordingSource current;
     if (LoadRecordingSource(environment, tag, current) != Result::SUCCESS || current != expected) {
-        JST_ERROR("{} F-engine band or clock changed; start a new recording.", tag);
+        JST_ERROR("{} F-engine band or clock changed. Start a new recording.", tag);
         return Result::ERROR;
     }
     return Result::SUCCESS;

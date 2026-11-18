@@ -33,7 +33,7 @@ class Band:
             raise StitchError(f"{path}: /data and /mask must share a [time, ifs, channels] shape.")
         missing = [key for key in GRID_KEYS + ("fch1", "foff", "tstart") if key not in self.data.attrs]
         if missing:
-            raise StitchError(f"{path}: missing {', '.join(missing)}; it was not written with the RF grid fields.")
+            raise StitchError(f"{path}: missing {', '.join(missing)}, so it was not written with the RF grid fields.")
         self.start = int(self.data.attrs["rf_start_sample"])
         self.synctime = int(self.data.attrs["synctime"])
         self.stride = int(self.data.attrs["rf_samples_per_row"])
@@ -77,7 +77,7 @@ def order_by_frequency(bands):
             actual = band.fch1 + channel * band.foff
             if abs(actual - expected) > tolerance:
                 raise StitchError(
-                    f"{band.path}: channel {channel} is at {actual:.9f} MHz, off the joined axis at {expected:.9f} MHz; "
+                    f"{band.path}: channel {channel} is at {actual:.9f} MHz, off the joined axis at {expected:.9f} MHz. "
                     "the bands have a gap, an overlap, or different channel widths."
                 )
         column += band.channels
@@ -113,7 +113,7 @@ def stitch(inputs, output, overwrite=False):
     if output.resolve() in resolved or (output.exists() and any(os.path.samefile(output, path) for path in inputs)):
         raise StitchError(f"{output}: the output cannot be one of the inputs.")
     if output.exists() and not overwrite:
-        raise StitchError(f"{output}: already exists; pass --overwrite to replace it.")
+        raise StitchError(f"{output}: already exists. Pass --overwrite to replace it.")
 
     with contextlib.ExitStack() as stack:
         bands = [Band(path, stack.enter_context(h5py.File(path, "r"))) for path in inputs]
@@ -169,7 +169,7 @@ def stitch(inputs, output, overwrite=False):
                 try:
                     os.link(staging, output)
                 except FileExistsError:
-                    raise StitchError(f"{output}: already exists; pass --overwrite to replace it.") from None
+                    raise StitchError(f"{output}: already exists. Pass --overwrite to replace it.") from None
                 os.unlink(staging)
         except BaseException:
             with contextlib.suppress(FileNotFoundError):
@@ -190,7 +190,7 @@ def main(argv=None):
         description="Join FBH5 recordings of adjacent bands into one file over their common time range."
     )
     parser.add_argument("output", help="Path of the stitched FBH5 file.")
-    parser.add_argument("inputs", nargs="+", help="FBH5 files of adjacent bands, in any order.")
+    parser.add_argument("inputs", nargs="+", help="Adjacent-band FBH5 files, in any order.")
     parser.add_argument("--overwrite", action="store_true", help="Replace the output if it already exists.")
     args = parser.parse_args(argv)
 

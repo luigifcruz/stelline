@@ -31,7 +31,7 @@ class RecordingTimeline {
         const auto [timestamp, span] = gap.timing;
         if (span != duration || timestamp < nextTimestamp ||
             (timestamp - nextTimestamp) % duration != 0) {
-            JST_ERROR("{} RF block [{}, +{}) is off the recording grid (expected {}, +{}); start a new recording.",
+            JST_ERROR("{} The RF block [{}, +{}) is off the recording grid (expected {}, +{}). Start a new recording.",
                       tag, timestamp, span, nextTimestamp, duration);
             return Result::ERROR;
         }
@@ -39,7 +39,7 @@ class RecordingTimeline {
         gap.firstMissing = nextTimestamp;
         gap.missingBlocks = (timestamp - nextTimestamp) / duration;
         if (gap.missingBlocks > kMaxGapBlocks) {
-            JST_ERROR("{} RF gap of {} blocks exceeds the padding limit of {}; start a new recording.",
+            JST_ERROR("{} The RF gap of {} blocks exceeds the padding limit of {}. Start a new recording.",
                       tag, gap.missingBlocks, kMaxGapBlocks);
             return Result::ERROR;
         }

@@ -69,7 +69,7 @@ Read when recording starts and checked again before every input. The recording s
 | Key | Purpose |
 |---|---|
 | `observation.antennas.0` | Antenna whose F-engine band and clock define the file axes. |
-| `instance.bands.len` | Band count of this instance, at least one. Multiple bands must share one tuning, compared case-insensitively, and form one contiguous channel and frequency range with a uniform channel width; repeated bands are ignored and the writer records them as a single band. |
+| `instance.bands.len` | Band count of this instance, at least one. Multiple bands must share one tuning, compared case-insensitively, and form one contiguous channel and frequency range with a uniform channel width. Repeated bands are ignored, and the writer records the bands as a single band. |
 | `instance.bands.<slot>.tuning` | Tuning identifier. |
 | `instance.bands.<slot>.band_index` | Band index within the tuning. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.frequency_start` | Band start frequency in MHz. |
