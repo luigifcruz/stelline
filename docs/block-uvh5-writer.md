@@ -11,6 +11,8 @@ The UVH5 Writer is the recording sink of a correlator pipeline. It takes integra
 
 The block is idle until `recording` is enabled. At that point it assembles the complete UVH5 header from the flowgraph environment: telescope identity and location, the antenna table with positions and diameters, the baseline ordering, the frequency axis derived from the instance band, and the phase center. Recording refuses to start while any required key is missing, which prevents writing files with silent metadata gaps.
 
+The phase center follows the ATA delay engine and is chosen when recording starts. While the first antenna tracks a source, the catalog entry is `sidereal` in ICRS at the pointing right ascension and declination. When its pointing source is `AzEl` or `Stay put`, the antennas are parked, the delays follow a fixed horizontal direction, and the entry is `driftscan` in the `altaz` frame at the pointing azimuth and elevation. The catalog entry stays fixed for the whole file, so a pointing change during a recording is not supported, and parked recordings assume every antenna, including the delay engine's reference antenna, is parked at the same azimuth and elevation.
+
 Each input tensor must carry a `timestamp` attribute. The writer uses the F-engine sync time and sample period from the environment to write the integration midpoint as a UTC Julian Date. It refreshes the time-dependent metadata (pointing and Earth orientation), computes the baseline UVW coordinates, and appends the integration. Closing the flowgraph finalizes the file.
 
 Each input tensor must also carry `duration`, the number of F-engine samples it covers. The integration time is that duration multiplied by the F-engine sample period, and the first written integration establishes the grid. When a later integration reveals a gap, the writer inserts zero visibilities with flags set and zero sample weights at the missing times. It does not pad before the first or after the last integration. `/Header/extra_keywords` records the exact integer grid as `rf_start_sample` (the F-engine sample count where the first integration starts), `synctime`, and `rf_samples_per_row`. A change to the F-engine band or clock, a backwards or off-grid timestamp, change in duration, or gap larger than 1,024 integrations stops the recording before anything is appended and requires a new recording.
@@ -59,6 +61,8 @@ Read once when recording starts:
 | `observatory.antenna.<name>.position.x` | Antenna position, x axis. |
 | `observatory.antenna.<name>.position.y` | Antenna position, y axis. |
 | `observatory.antenna.<name>.position.z` | Antenna position, z axis. |
+| `observatory.antenna.<name>.pointing.az` | Phase center azimuth in radians when the pointing source is `AzEl` or `Stay put`. |
+| `observatory.antenna.<name>.pointing.el` | Phase center elevation in radians when the pointing source is `AzEl` or `Stay put`. |
 
 Read when recording starts and checked again before every input. A change stops the recording:
 

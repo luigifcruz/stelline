@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <new>
@@ -17,6 +18,8 @@ extern "C" {
 #include "module_impl.hh"
 
 namespace Jetstream::Modules {
+
+constexpr double kPositionAngleOffset = ERFA_DPI / 360.0;
 
 struct Uvh5WriterImplNativeCuda : public Uvh5WriterImpl,
                                    public NativeCudaRuntimeContext,
@@ -149,46 +152,75 @@ Result Uvh5WriterImplNativeCuda::appendIntegration(const U64 timestamp,
     JST_CHECK(refreshDynamicMetadata(timestamp));
 
     UVH5_header_t* header = &uvh5File.header;
-    F64 updatedRightAscensionRad = metadata.pointingRa;
-    F64 updatedDeclinationRad = metadata.pointingDec;
+    const F64 longitudeRad = calc_rad_from_degree(header->longitude);
+    const F64 latitudeRad = calc_rad_from_degree(header->latitude);
+    const F64 julianDate = header->time_array[0];
+    F64 apparentRightAscension = 0.0;
+    F64 apparentDeclination = 0.0;
     F64 positionAngle = 0.0;
-    const I32 rv = calc_itrs_icrs_frame_pos_angle_with_pm_and_ut1_utc(header->time_array,
-                                                                       &updatedRightAscensionRad,
-                                                                       &updatedDeclinationRad,
-                                                                       &metadata.iersPmXArcsec,
-                                                                       &metadata.iersPmYArcsec,
-                                                                       &metadata.iersUt1Utc,
-                                                                       1,
-                                                                       calc_rad_from_degree(header->longitude),
-                                                                       calc_rad_from_degree(header->latitude),
-                                                                       header->altitude,
-                                                                       RADIOINTERFEROMETERY_PI / 360.0,
-                                                                       &positionAngle);
-    if (rv % 10 != 0) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] The radiointerferometry position-angle calculation failed: rv={}",
-                  rv);
-        return Result::ERROR;
+    double hourAngleRad = 0.0;
+    double declinationRad = 0.0;
+
+    if (metadata.driftScan) {
+        eraAe2hd(metadata.pointingAzimuth, metadata.pointingElevation, latitudeRad, &hourAngleRad, &declinationRad);
+        double tai1 = 0.0, tai2 = 0.0, tt1 = 0.0, tt2 = 0.0, ut11 = 0.0, ut12 = 0.0;
+        if (eraUtctai(julianDate, 0.0, &tai1, &tai2) < 0 || eraTaitt(tai1, tai2, &tt1, &tt2) != 0 ||
+            eraUtcut1(julianDate, 0.0, metadata.iersUt1Utc, &ut11, &ut12) < 0) {
+            JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to convert the integration time to UT1 and TT.");
+            return Result::ERROR;
+        }
+        const F64 localSiderealTime = eraGst06a(ut11, ut12, tt1, tt2) + eraSp00(tt1, tt2) + longitudeRad;
+        apparentRightAscension = eraAnp(localSiderealTime - hourAngleRad);
+        apparentDeclination = declinationRad;
+    } else {
+        const double polarMotionX = metadata.iersPmXArcsec * ERFA_DAS2R;
+        const double polarMotionY = metadata.iersPmYArcsec * ERFA_DAS2R;
+        double azimuth = 0.0, zenithDistance = 0.0, observedRightAscension = 0.0, equationOfOrigins = 0.0;
+        if (eraAtco13(metadata.pointingRa, metadata.pointingDec, 0.0, 0.0, 0.0, 0.0,
+                      julianDate, 0.0, metadata.iersUt1Utc,
+                      longitudeRad, latitudeRad, header->altitude,
+                      polarMotionX, polarMotionY,
+                      0.0, 0.0, 0.0, 0.0,
+                      &azimuth, &zenithDistance, &hourAngleRad, &declinationRad,
+                      &observedRightAscension, &equationOfOrigins) < 0) {
+            JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to compute the apparent phase center.");
+            return Result::ERROR;
+        }
+        apparentRightAscension = eraAnp(observedRightAscension - equationOfOrigins);
+        apparentDeclination = declinationRad;
+
+        double icrsRightAscension[2] = {};
+        double icrsDeclination[2] = {};
+        for (int side = 0; side < 2; ++side) {
+            double offsetRightAscension = observedRightAscension;
+            double offsetDeclination = declinationRad + (side == 0 ? -kPositionAngleOffset : kPositionAngleOffset);
+            if (offsetDeclination > ERFA_DPI / 2.0) {
+                offsetRightAscension = eraAnp(offsetRightAscension + ERFA_DPI);
+                offsetDeclination = ERFA_DPI - offsetDeclination;
+            } else if (offsetDeclination < -ERFA_DPI / 2.0) {
+                offsetRightAscension = eraAnp(offsetRightAscension + ERFA_DPI);
+                offsetDeclination = -ERFA_DPI - offsetDeclination;
+            }
+            if (eraAtoc13("R", offsetRightAscension, offsetDeclination,
+                          julianDate, 0.0, metadata.iersUt1Utc,
+                          longitudeRad, latitudeRad, header->altitude,
+                          polarMotionX, polarMotionY,
+                          0.0, 0.0, 0.0, 0.0,
+                          &icrsRightAscension[side], &icrsDeclination[side]) < 0) {
+                JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to compute the phase center position angle.");
+                return Result::ERROR;
+            }
+        }
+        positionAngle = -eraPas(icrsRightAscension[0], icrsDeclination[0], icrsRightAscension[1], icrsDeclination[1]);
     }
 
     const U64 baselineCount = static_cast<U64>(header->Nbls);
     for (U64 baseline = 0; baseline < baselineCount; baseline++) {
         header->phase_center_id_array[baseline] = 0;
-        header->phase_center_app_ra[baseline] = updatedRightAscensionRad;
-        header->phase_center_app_dec[baseline] = updatedDeclinationRad;
+        header->phase_center_app_ra[baseline] = apparentRightAscension;
+        header->phase_center_app_dec[baseline] = apparentDeclination;
         header->phase_center_frame_pa[baseline] = positionAngle;
     }
-
-    double hourAngleRad = 0.0;
-    double updatedDeclinationForFrame = 0.0;
-    calc_ha_dec_rad(updatedRightAscensionRad,
-                    updatedDeclinationRad,
-                    calc_rad_from_degree(header->longitude),
-                    calc_rad_from_degree(header->latitude),
-                    header->altitude,
-                    header->time_array[0],
-                    metadata.iersUt1Utc,
-                    &hourAngleRad,
-                    &updatedDeclinationForFrame);
 
     std::memcpy(header->_antenna_uvw_positions,
                 header->_antenna_enu_positions,
@@ -196,9 +228,18 @@ Result Uvh5WriterImplNativeCuda::appendIntegration(const U64 timestamp,
     calc_position_to_uvw_frame_from_enu(header->_antenna_uvw_positions,
                                         header->Nants_telescope,
                                         hourAngleRad,
-                                        updatedDeclinationForFrame,
-                                        calc_rad_from_degree(header->latitude));
+                                        declinationRad,
+                                        latitudeRad);
     UVH5permute_uvws(header);
+    const double cosine = std::cos(positionAngle);
+    const double sine = std::sin(positionAngle);
+    for (U64 baseline = 0; baseline < baselineCount; baseline++) {
+        double* uvw = &header->uvw_array[baseline * 3];
+        const double u = uvw[0];
+        const double v = uvw[1];
+        uvw[0] = u * cosine - v * sine;
+        uvw[1] = u * sine + v * cosine;
+    }
 
     uvh5File.visdata = const_cast<void*>(data);
     const auto status = UVH5write_dynamic(&uvh5File);

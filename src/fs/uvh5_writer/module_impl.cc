@@ -215,6 +215,23 @@ Result Uvh5WriterImpl::loadMetadata() {
         metadata.pointingSourceName = text.value;
     }
 
+    metadata.driftScan = metadata.pointingSourceName == "AzEl" || metadata.pointingSourceName == "Stay put";
+    if (metadata.driftScan) {
+        for (const auto& [name, value] : {std::pair{"az", &metadata.pointingAzimuth},
+                                          std::pair{"el", &metadata.pointingElevation}}) {
+            const auto key = jst::fmt::format("observatory.antenna.{}.pointing.{}", firstAntenna, name);
+            if (!environment()->tryGet(key, real)) {
+                JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value for a parked antenna.", key);
+                return Result::INCOMPLETE;
+            }
+            if (!std::isfinite(real.value)) {
+                JST_ERROR("[MODULE_UVH5_WRITER] Invalid '{}' environment value.", key);
+                return Result::ERROR;
+            }
+            *value = real.value;
+        }
+    }
+
     JST_CHECK(LoadRecordingSource(*environment(), "[MODULE_UVH5_WRITER]", source));
     metadata.instanceBandCenter = (source.frequencyStop + source.frequencyStart) / 2.0;
     metadata.instanceBandwidth = source.frequencyStop - source.frequencyStart;
@@ -489,11 +506,18 @@ Result Uvh5WriterImpl::create() {
     UVH5Hmalloc_phase_center_catalog(header, 1);
 
     header->phase_center_catalog[0].name = const_cast<char*>(metadata.pointingSourceName.c_str());
-    header->phase_center_catalog[0].type = UVH5_PHASE_CENTER_SIDEREAL;
-    header->phase_center_catalog[0].lon = metadata.pointingRa;
-    header->phase_center_catalog[0].lat = metadata.pointingDec;
-    header->phase_center_catalog[0].frame = const_cast<char*>("icrs");
-    header->phase_center_catalog[0].epoch = 2000.0;
+    if (metadata.driftScan) {
+        header->phase_center_catalog[0].type = UVH5_PHASE_CENTER_DRIFTSCAN;
+        header->phase_center_catalog[0].lon = metadata.pointingAzimuth;
+        header->phase_center_catalog[0].lat = metadata.pointingElevation;
+        header->phase_center_catalog[0].frame = const_cast<char*>("altaz");
+    } else {
+        header->phase_center_catalog[0].type = UVH5_PHASE_CENTER_SIDEREAL;
+        header->phase_center_catalog[0].lon = metadata.pointingRa;
+        header->phase_center_catalog[0].lat = metadata.pointingDec;
+        header->phase_center_catalog[0].frame = const_cast<char*>("icrs");
+        header->phase_center_catalog[0].epoch = 2000.0;
+    }
 
     header->instrument = header->telescope_name;
     header->history = const_cast<char*>("None");

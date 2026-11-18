@@ -54,6 +54,9 @@ struct Uvh5Metadata {
     F64 pointingRa = 0.0;
     F64 pointingDec = 0.0;
     std::string pointingSourceName;
+    bool driftScan = false;
+    F64 pointingAzimuth = 0.0;
+    F64 pointingElevation = 0.0;
 
     U64 packetTimestampOffset = 0;
     F64 sampleTimespan = 0.0;
