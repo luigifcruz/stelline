@@ -10,6 +10,7 @@
 #include <stelline/ata_receiver/module.hh>
 
 #include "detail/daqiri_config.hh"
+#include "detail/geometry.hh"
 #include "module_impl.hh"
 
 using namespace Jetstream;
@@ -48,6 +49,21 @@ std::shared_ptr<Module> BuildModule() {
 }
 
 }  // namespace
+
+TEST_CASE("ATA receiver labels blocks by their first sample regardless of the first packet's slot",
+          "[stelline][ata_receiver][module][timestamp]") {
+    constexpr U64 blockDuration = 8192;
+    constexpr U64 packetDuration = 512;
+    const auto [firstPacket, expectedTimestamp] = GENERATE(Catch::Generators::table<U64, U64>({
+        {8, 0},
+        {9, 0},
+        {16, 8192},
+        {17, 8192},
+        {31, 8192},
+    }));
+
+    REQUIRE(Modules::BlockStartTimestamp(firstPacket * packetDuration, blockDuration) == expectedTimestamp);
+}
 
 TEST_CASE("ATA receiver validates bounded plans before defining its interface",
           "[stelline][ata_receiver][module][validation][lifecycle]") {

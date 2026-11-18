@@ -7,6 +7,10 @@
 
 namespace Jetstream::Modules {
 
+inline U64 BlockStartTimestamp(const U64 packetTimestamp, const U64 blockDuration) {
+    return packetTimestamp - packetTimestamp % blockDuration;
+}
+
 inline U64 PacketSlotIndex(const AtaReceiverBlockGeometry& total,
                            const AtaReceiverBlockGeometry& partial,
                            const U64 antennaSlot,

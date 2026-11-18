@@ -101,7 +101,7 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
 
     // Leaves `block` null when out of capacity so the caller drops the packet.
     Result ensureBlock(const U64 blockTimeIndex,
-                       const U64 timestamp,
+                       const U64 packetTimestamp,
                        std::shared_ptr<AtaReceiverBlock>& block,
                        std::vector<std::shared_ptr<AtaReceiverBlock>>& deferredDrops);
 
@@ -621,7 +621,7 @@ bool AtaReceiverImplNativeCuda::acceptPacket(const VoltagePacket& packet,
 }
 
 Result AtaReceiverImplNativeCuda::ensureBlock(const U64 blockTimeIndex,
-                                              const U64 timestamp,
+                                              const U64 packetTimestamp,
                                               std::shared_ptr<AtaReceiverBlock>& block,
                                               std::vector<std::shared_ptr<AtaReceiverBlock>>& deferredDrops) {
     if (blockMap.contains(blockTimeIndex)) {
@@ -651,7 +651,7 @@ Result AtaReceiverImplNativeCuda::ensureBlock(const U64 blockTimeIndex,
 
     block = idleQueue.front();
     idleQueue.pop();
-    block->create(blockTimeIndex, timestamp, tensor);
+    block->create(blockTimeIndex, BlockStartTimestamp(packetTimestamp, blockDuration), tensor);
     receiveQueue.push(block);
     blockMap[blockTimeIndex] = block;
     JST_CHECK(updateBlockQueueDepths());
