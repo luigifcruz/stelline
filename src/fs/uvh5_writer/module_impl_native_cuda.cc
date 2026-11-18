@@ -92,20 +92,9 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         return Result::ERROR;
     }
 
-    if (!input.hasAttribute("timestamp")) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Input tensor missing required 'timestamp' attribute.");
-        return Result::ERROR;
-    }
-
-    const std::any timestampValue = input.attribute("timestamp");
-    const auto* timestamp = std::any_cast<U64>(&timestampValue);
-    if (!timestamp) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Input 'timestamp' attribute must have type U64.");
-        return Result::ERROR;
-    }
     RecordingGap gap;
-    JST_CHECK(timeline.plan(input, gap));
-    JST_CHECK(checkClockEpoch());
+    JST_CHECK(timeline.plan(input, "[MODULE_UVH5_WRITER_NATIVE_CUDA]", gap));
+    JST_CHECK(CheckRecordingSource(*environment(), "[MODULE_UVH5_WRITER_NATIVE_CUDA]", source));
     const U64 integrations = gap.missingBlocks + 1;
     const auto& header = uvh5File.header;
     if (header.Nbls <= 0 ||
@@ -114,9 +103,7 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Integrations exceed UVH5 time or baseline count limits.");
         return Result::ERROR;
     }
-    const F64 durationSeconds = gap.timing
-        ? static_cast<F64>(gap.timing->duration) * metadata.sampleTimespan
-        : integrationTimespan;
+    const F64 durationSeconds = static_cast<F64>(gap.timing.duration) * metadata.sampleTimespan;
 
     if (gap.missingBlocks != 0) {
         std::vector<CF32> missingData;
@@ -129,11 +116,12 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         U64 missingTimestamp = gap.firstMissing;
         for (U64 block = 0; block < gap.missingBlocks; ++block) {
             JST_CHECK(appendIntegration(missingTimestamp, durationSeconds, missingData.data(), true));
-            missingTimestamp += gap.timing->duration;
+            missingTimestamp += gap.timing.duration;
         }
     }
-    JST_CHECK(appendIntegration(*timestamp, durationSeconds, input.data(), false));
+    JST_CHECK(appendIntegration(gap.timing.timestamp, durationSeconds, input.data(), false));
     timeline.commit(gap);
+    JST_CHECK(publishRecording(gap.timing));
 
     hsize_t currentFileSize = 0;
     JST_HDF5_CHECK(H5Fget_filesize(uvh5File.file_id, &currentFileSize), [&] {

@@ -2,6 +2,8 @@
 #define STELLINE_FBH5_WRITER_MODULE_IMPL_HH
 
 #include <chrono>
+#include <filesystem>
+#include <string>
 
 #include <hdf5.h>
 
@@ -13,6 +15,7 @@ extern "C" {
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/tools/snapshot.hh>
 
+#include "../recording_source.hh"
 #include "../recording_timeline.hh"
 
 namespace Jetstream::Modules {
@@ -37,6 +40,10 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     U64 getChunkCounter() const;
 
  protected:
+    Result loadHeaderMetadata(const Tensor& input);
+    Result planBlock(const Tensor& input, RecordingGap& gap);
+    Result commitBlock(const RecordingGap& gap);
+    Result writeTiming(const BlockTiming& timing);
     Result appendChunks(const void* data, U64 samples, U64 missingBlocks);
     void updateBandwidth(const U64 deltaBytes);
 
@@ -56,6 +63,10 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     bool maskOpen = false;
     uint8_t* mask = nullptr;
     RecordingTimeline timeline;
+    bool blockWritten = false;
+
+    RecordingSource source;
+    std::filesystem::path partialPath;
 
     const void* registeredBuffer = nullptr;
     U64 registeredBufferSize = 0;

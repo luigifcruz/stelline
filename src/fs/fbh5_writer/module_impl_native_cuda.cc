@@ -84,7 +84,7 @@ Result Fbh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     const void* inputPtr = input.data();
     const U64 inputBytes = input.sizeBytes();
     RecordingGap gap;
-    JST_CHECK(timeline.plan(input, gap));
+    JST_CHECK(planBlock(input, gap));
 
     if (!bufferRegistered || registeredBuffer != inputPtr || registeredBufferSize != inputBytes) {
         cudaPointerAttributes attributes = {};
@@ -118,7 +118,7 @@ Result Fbh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     }
 
     JST_CHECK(appendChunks(inputPtr, input.size(), gap.missingBlocks));
-    timeline.commit(gap);
+    JST_CHECK(commitBlock(gap));
 
     hsize_t currentFileSize = 0;
     JST_HDF5_CHECK(H5Fget_filesize(fbh5File.file_id, &currentFileSize), [&] {

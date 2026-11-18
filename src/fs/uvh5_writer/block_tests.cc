@@ -1,8 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <system_error>
+#include <utility>
 #include <vector>
 
 #include <jetstream/backend/base.hh>
@@ -22,6 +27,21 @@
 using namespace Jetstream;
 
 namespace {
+
+struct ScratchDirectory {
+    std::filesystem::path path;
+
+    ScratchDirectory() {
+        auto pattern = (std::filesystem::temp_directory_path() / "stelline-test-XXXXXX").string();
+        REQUIRE(mkdtemp(pattern.data()) != nullptr);
+        path = pattern;
+    }
+
+    ~ScratchDirectory() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
 
 constexpr const char* kTestProvider = "stelline-test-no-hardware";
 
@@ -180,8 +200,8 @@ TEST_CASE("UVH5 writer pads an RF gap in the file and stops on an epoch change",
     REQUIRE(Backend::Initialize<DeviceType::CPU>(backendConfig) == Result::SUCCESS);
     REQUIRE(Backend::Initialize<DeviceType::CUDA>(backendConfig) == Result::SUCCESS);
 
-    const auto path = std::filesystem::temp_directory_path() / "stelline_test_uvh5_gap.uvh5";
-    std::filesystem::remove(path);
+    const ScratchDirectory scratch;
+    const auto path = scratch.path / "gap.uvh5";
 
     {
         Flowgraph flowgraph;
@@ -244,12 +264,22 @@ TEST_CASE("UVH5 writer pads an RF gap in the file and stops on an epoch change",
     const auto flags = ReadDataset<H5_bool_t>(file, "/Data/flags");
     const auto weights = ReadDataset<F64>(file, "/Data/nsamples");
     const auto visibilities = ReadDataset<CF32>(file, "/Data/visdata");
+    const auto frequencies = ReadDataset<F64>(file, "/Header/freq_array");
+    const auto channelWidths = ReadDataset<F64>(file, "/Header/channel_width");
+    const auto startSample = ReadDataset<U64>(file, "/Header/extra_keywords/rf_start_sample");
+    const auto synctime = ReadDataset<U64>(file, "/Header/extra_keywords/synctime");
+    const auto samplesPerRow = ReadDataset<U64>(file, "/Header/extra_keywords/rf_samples_per_row");
     REQUIRE(H5Fclose(file) >= 0);
-    std::filesystem::remove(path);
+
+    CHECK(startSample == std::vector<U64>{0});
+    CHECK(synctime == std::vector<U64>{static_cast<U64>(kSyncTime)});
+    CHECK(samplesPerRow == std::vector<U64>{kBlockDuration});
 
     constexpr size_t kBaselines = 3;
     constexpr size_t kSamplesPerIntegration = kBaselines * 2 * 4;
     REQUIRE(ntimes == std::vector<I32>{5});
+    REQUIRE(frequencies == std::vector<F64>{1000.5e6, 1001.5e6});
+    REQUIRE(channelWidths == std::vector<F64>{1e6, 1e6});
     REQUIRE(times.size() == 5 * kBaselines);
     REQUIRE(flags.size() == 5 * kSamplesPerIntegration);
     REQUIRE(weights.size() == flags.size());
@@ -273,5 +303,89 @@ TEST_CASE("UVH5 writer pads an RF gap in the file and stops on an epoch change",
             CHECK(visibilities[index] == (missing ? CF32{} : CF32{1.0f, 0.0f}));
         }
     }
+#endif
+}
+
+TEST_CASE("UVH5 writer infers fine channels per coarse channel from the input",
+          "[stelline][uvh5_writer][block][frequency][cuda]") {
+#if !defined(STELLINE_DEVICE_CUDA_AVAILABLE) || !defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    SKIP("Stelline was not built with CUDA support.");
+#else
+    BackendGuard backendGuard;
+    Backend::Config backendConfig;
+    backendConfig.headless = true;
+    REQUIRE(Backend::Initialize<DeviceType::CPU>(backendConfig) == Result::SUCCESS);
+    REQUIRE(Backend::Initialize<DeviceType::CUDA>(backendConfig) == Result::SUCCESS);
+
+    const ScratchDirectory scratch;
+    const auto path = scratch.path / "channels.uvh5";
+
+    const auto record = [&](const U64 channels) {
+        Flowgraph flowgraph;
+        REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+        SetObservation(flowgraph);
+
+        Blocks::OnesTensor sourceConfig;
+        sourceConfig.shape = {1, 3, channels, 4};
+        sourceConfig.dataType = "CF32";
+        REQUIRE(flowgraph.blockCreate("source", sourceConfig, {}, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData source;
+        REQUIRE(flowgraph.view().block("source", source) == Result::SUCCESS);
+        Tensor sourceOutput = source.outputs.at("buffer").tensor;
+        REQUIRE(SetSignalAxes(sourceOutput, {
+            .sample = Index{0},
+            .channel = Index{2},
+        }) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("timestamp", U64{0}) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("duration", kBlockDuration) == Result::SUCCESS);
+
+        TensorMap inputs;
+        inputs["input"].requested("source", "buffer");
+
+        Blocks::Uvh5Writer writerConfig;
+        writerConfig.filepath = path.string();
+        writerConfig.overwrite = true;
+        writerConfig.recording = true;
+        REQUIRE(flowgraph.blockCreate("writer", writerConfig, inputs, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData writer;
+        REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+        const auto state = writer.state;
+        const auto diagnostic = writer.diagnostic;
+        if (state == Block::State::Created) {
+            REQUIRE(flowgraph.compute() == Result::SUCCESS);
+        }
+
+        REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+        return std::pair{state, diagnostic};
+    };
+
+    std::ofstream(path) << "previous recording";
+    const auto [mismatchState, mismatchDiagnostic] = record(3);
+    CHECK(mismatchState == Block::State::Errored);
+    CHECK(mismatchDiagnostic ==
+          "[MODULE_UVH5_WRITER] Input channel count 3 does not split the 2 F-engine channels of the instance band.");
+    {
+        std::ifstream preserved(path);
+        CHECK(std::string(std::istreambuf_iterator<char>(preserved), {}) == "previous recording");
+    }
+
+    const auto [state, diagnostic] = record(4);
+    INFO(diagnostic);
+    REQUIRE(state == Block::State::Created);
+
+    const hid_t file = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    REQUIRE(file >= 0);
+    const auto nfreqs = ReadDataset<I32>(file, "/Header/Nfreqs");
+    const auto frequencies = ReadDataset<F64>(file, "/Header/freq_array");
+    const auto channelWidths = ReadDataset<F64>(file, "/Header/channel_width");
+    REQUIRE(H5Fclose(file) >= 0);
+
+    CHECK(nfreqs == std::vector<I32>{4});
+    CHECK(frequencies == std::vector<F64>{1000.0e6, 1000.5e6, 1001.0e6, 1001.5e6});
+    CHECK(channelWidths == std::vector<F64>{0.5e6, 0.5e6, 0.5e6, 0.5e6});
 #endif
 }

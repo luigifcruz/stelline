@@ -40,7 +40,7 @@ struct Fbh5Writer : public Block::Config {
 
         "## Implementation\n"
         "Input Buffer -> FBH5 Module -> HDF5 GDS File\n"
-        "1. Builds the filterbank header from the input tensor shape.\n"
+        "1. Builds the filterbank header from the input shape, RF timing attributes, and F-engine band metadata.\n"
         "2. Opens the FBH5 file with the GPUDirect Storage HDF5 driver.\n"
         "3. Registers the input buffer with CUfile and appends each tensor directly from GPU memory."
     );

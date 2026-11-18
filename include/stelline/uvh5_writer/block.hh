@@ -9,14 +9,12 @@ namespace Jetstream::Blocks {
 
 struct Uvh5Writer : public Block::Config {
     std::string filepath = "./file.uvh5";
-    U64 dspChannelizationRate = 1;
-    U64 dspIntegrationRate = 1;
     bool overwrite = false;
     bool recording = false;
 
     JST_BLOCK_TYPE(uvh5_writer);
     JST_BLOCK_DOMAIN("Stelline");
-    JST_BLOCK_PARAMS(filepath, dspChannelizationRate, dspIntegrationRate, overwrite, recording);
+    JST_BLOCK_PARAMS(filepath, overwrite, recording);
     JST_BLOCK_DESCRIPTION(
         "UVH5 Writer",
         "Sink that writes pre-arranged correlation tensors to UVH5.",
@@ -29,8 +27,6 @@ struct Uvh5Writer : public Block::Config {
 
         "## Arguments\n"
         "- **File Path**: Path to the output UVH5 file.\n"
-        "- **DSP Channelization Rate**: Upstream channelization factor applied to each coarse channel.\n"
-        "- **DSP Integration Rate**: Upstream integration factor used to derive the integration timespan.\n"
         "- **Overwrite**: Whether to overwrite the file if it already exists.\n"
         "- **Recording**: Start or stop recording to the file.\n\n"
 

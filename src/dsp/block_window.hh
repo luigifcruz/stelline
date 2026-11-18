@@ -1,5 +1,4 @@
-#ifndef STELLINE_DSP_BLOCK_WINDOW_HH
-#define STELLINE_DSP_BLOCK_WINDOW_HH
+#pragma once
 
 #include <limits>
 
@@ -52,7 +51,6 @@ class BlockWindow {
         timed = true;
         if (!continues) {
             filled = 0;
-            // A single-block operation preserves the input interval as-is.
             if (span > std::numeric_limits<U64>::max() - timing->timestamp ||
                 (blocksPerWindow > 1 && timing->timestamp % span != 0)) {
                 return {};
@@ -95,10 +93,7 @@ class BlockWindow {
     bool timed = false;
     U64 windowStart = 0;
     U64 blockDuration = 0;
-    // End of the last accepted RF block, even across window and mode changes.
     U64 nextTimestamp = 0;
 };
 
 }  // namespace Jetstream::Modules
-
-#endif  // STELLINE_DSP_BLOCK_WINDOW_HH

@@ -1,5 +1,4 @@
-#ifndef STELLINE_BLOCK_TIMING_HH
-#define STELLINE_BLOCK_TIMING_HH
+#pragma once
 
 #include <any>
 #include <limits>
@@ -35,5 +34,3 @@ inline std::optional<BlockTiming> ReadBlockTiming(const Tensor& tensor) {
 }
 
 }  // namespace Jetstream::Modules
-
-#endif  // STELLINE_BLOCK_TIMING_HH

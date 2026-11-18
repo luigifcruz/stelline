@@ -51,19 +51,23 @@ Tensor WriterInput(const DataType dtype) {
 
 }  // namespace
 
-TEST_CASE("UVH5 writer validates candidates before defining its interface",
-          "[stelline][uvh5_writer][module][validation][lifecycle]") {
-    auto module = BuildModule();
+TEST_CASE("UVH5 writer requires a positive RF duration before recording",
+          "[stelline][uvh5_writer][module][validation][metadata]") {
+    for (const bool zeroDuration : {false, true}) {
+        auto module = BuildModule();
+        auto input = WriterInput(DataType::CF32);
+        REQUIRE(input.setAttribute("timestamp", U64{0}) == Result::SUCCESS);
+        if (zeroDuration) {
+            REQUIRE(input.setAttribute("duration", U64{0}) == Result::SUCCESS);
+        }
 
-    Modules::Uvh5Writer config;
-    config.dspChannelizationRate = 0;
-    REQUIRE(module->create("test", config, {}) == Result::ERROR);
-    REQUIRE(module->state() == Module::State::ERRORED);
-    REQUIRE(module->interface()->inputs().empty());
-
-    const auto& applied =
-        static_cast<const Modules::Uvh5Writer&>(module->config());
-    REQUIRE(applied.dspChannelizationRate == 1);
+        Modules::Uvh5Writer config;
+        config.recording = true;
+        REQUIRE(module->create("test", config, InputMap(std::move(input))) ==
+                Result::ERROR);
+        REQUIRE(module->state() == Module::State::ERRORED);
+        REQUIRE(module->interface()->inputs().empty());
+    }
 }
 
 TEST_CASE("UVH5 writer delegates missing inputs to the framework",
@@ -93,6 +97,7 @@ TEST_CASE("UVH5 writer validates timestamp metadata with its exact type",
     auto module = BuildModule();
     auto input = WriterInput(DataType::CF32);
     REQUIRE(input.setAttribute("timestamp", I64{0}) == Result::SUCCESS);
+    REQUIRE(input.setAttribute("duration", U64{16}) == Result::SUCCESS);
 
     Modules::Uvh5Writer config;
     config.recording = true;

@@ -13,25 +13,23 @@ The block is idle until `recording` is enabled. At that point it assembles the c
 
 Each input tensor must carry a `timestamp` attribute. The writer uses the F-engine sync time and sample period from the environment to write the integration midpoint as a UTC Julian Date. It refreshes the time-dependent metadata (pointing and Earth orientation), computes the baseline UVW coordinates, and appends the integration. Closing the flowgraph finalizes the file.
 
-For inputs that also carry `duration`, the first written integration establishes the grid and the duration is taken from the input. When a later integration reveals a gap, the writer inserts zero visibilities with flags set and zero sample weights at the missing times. It does not pad before the first or after the last integration. An epoch change, backwards or off-grid timestamp, change in duration, or gap larger than 1,024 integrations requires a new recording. Inputs without `duration` are not padded.
+Each input tensor must also carry `duration`, the number of F-engine samples it covers. The integration time is that duration multiplied by the F-engine sample period, and the first written integration establishes the grid. When a later integration reveals a gap, the writer inserts zero visibilities with flags set and zero sample weights at the missing times. It does not pad before the first or after the last integration. `/Header/extra_keywords` records the exact integer grid as `rf_start_sample` (the F-engine sample count where the first integration starts), `synctime`, and `rf_samples_per_row`. A change to the F-engine band or clock, a backwards or off-grid timestamp, change in duration, or gap larger than 1,024 integrations stops the recording before anything is appended and requires a new recording.
 
-The frequency axis is derived rather than configured. The instance band defines the coarse channel range, and `dspChannelizationRate` scales it to the fine channel count, so the input frequency dimension must equal the coarse channel count multiplied by that rate. For inputs without `duration`, the integration timespan is the F-engine sample period multiplied by `dspIntegrationRate`.
+The frequency axis is derived rather than configured. The instance band defines the coarse channel range, and the input frequency dimension must be a whole multiple of that coarse channel count. The multiple is the number of fine channels per coarse channel from the upstream channelizer.
 
 ## Configuration
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `filepath` | string | `./file.uvh5` | Path of the output file. The parent directory must exist. |
-| `dspChannelizationRate` | integer | `1` | Fine channels produced per coarse channel by the upstream channelizer. |
-| `dspIntegrationRate` | integer | `1` | Samples integrated per output visibility by the upstream integrator. |
-| `overwrite` | boolean | `false` | Replace an existing file instead of refusing to start. |
+| `overwrite` | boolean | `false` | Replace an existing file instead of refusing to start. The existing file is kept until the first block of the new recording is written. |
 | `recording` | boolean | `false` | Master switch for writing. |
 
 ## Input
 
 | Name | Description |
 |---|---|
-| `input` | Contiguous `CF32` tensor shaped `[1, baselines, frequencies, 4]` with a `timestamp` attribute. |
+| `input` | Contiguous `CF32` tensor shaped `[1, baselines, frequencies, 4]` with `timestamp` and `duration` attributes. |
 
 The baseline count must match the antenna table, so `N` antennas require `N * (N + 1) / 2` baselines including autocorrelations. The polarization axis holds the four cross products of the `x` and `y` feeds. With the 28-antenna example environment the expected input is `CF32[1, 406, 192, 4]`.
 
@@ -40,7 +38,7 @@ The baseline count must match the antenna table, so `N` antennas require `N * (N
 | Attribute | Type | Direction | Description |
 |---|---|---|---|
 | `timestamp` | `U64` | Read from `input` | Required. First sample of the integration on the F-engine sample counter. |
-| `duration` | `U64` | Read from `input` | Optional. Number of F-engine samples in the integration. Enables gap padding. |
+| `duration` | `U64` | Read from `input` | Required, positive. Number of F-engine samples in the integration. Sets the integration time and gap padding grid. |
 
 ## Environment variables
 
@@ -55,13 +53,19 @@ Read once when recording starts:
 | `observatory.coordinates.longitude` | Site longitude. |
 | `observatory.coordinates.altitude` | Site altitude. |
 | `observation.antennas.length` | Antenna count of the observation. |
-| `observation.antennas.<index>` | Antenna name per index. |
+| `observation.antennas.<index>` | Antenna name per index. Index `0` is also rechecked, as listed below. |
 | `observatory.antenna.<name>.number` | Antenna number. |
 | `observatory.antenna.<name>.diameter` | Dish diameter. |
 | `observatory.antenna.<name>.position.x` | Antenna position, x axis. |
 | `observatory.antenna.<name>.position.y` | Antenna position, y axis. |
 | `observatory.antenna.<name>.position.z` | Antenna position, z axis. |
-| `instance.bands.len` | Band count of this instance (currently one). |
+
+Read when recording starts and checked again before every input. A change stops the recording:
+
+| Key | Purpose |
+|---|---|
+| `observation.antennas.0` | Antenna whose F-engine band and clock define the file axes. |
+| `instance.bands.len` | Band count of this instance; must be one. |
 | `instance.bands.0.tuning` | Tuning identifier. |
 | `instance.bands.0.band_index` | Band index within the tuning. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.frequency_start` | Band start frequency in MHz. |

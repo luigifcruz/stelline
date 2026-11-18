@@ -18,8 +18,6 @@ struct Uvh5WriterImpl : public Block::Impl, public DynamicConfig<Blocks::Uvh5Wri
 
 Result Uvh5WriterImpl::configure() {
     moduleConfig->filepath = filepath;
-    moduleConfig->dspChannelizationRate = dspChannelizationRate;
-    moduleConfig->dspIntegrationRate = dspIntegrationRate;
     moduleConfig->overwrite = overwrite;
     moduleConfig->recording = recording;
 
@@ -35,16 +33,6 @@ Result Uvh5WriterImpl::define() {
                                     "File Path",
                                     "Destination UVH5 filepath.",
                                     {{"type", "filesave"}, {"extensions", Parser::MakeSequence({"uvh5", "h5"})}}));
-
-    JST_CHECK(defineInterfaceConfig("dspChannelizationRate",
-                                    "DSP Channelization Rate",
-                                    "DSP channelization factor used to derive the UVH5 frequency grid.",
-                                    {{"type", "uint"}}));
-
-    JST_CHECK(defineInterfaceConfig("dspIntegrationRate",
-                                    "DSP Integration Rate",
-                                    "DSP integration factor used to derive the UVH5 integration time.",
-                                    {{"type", "uint"}}));
 
     JST_CHECK(defineInterfaceConfig("overwrite",
                                     "Overwrite",

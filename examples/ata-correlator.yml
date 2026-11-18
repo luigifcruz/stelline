@@ -111,8 +111,6 @@ graph:
     provider: generic
     config:
       filepath: /mnt/raid1/test.uvh5
-      dspChannelizationRate: 1
-      dspIntegrationRate: 1
       overwrite: true
       recording: false
     input:
