@@ -21,29 +21,17 @@
 #include <jetstream/scheduler_context.hh>
 
 #include <stelline/config.hh>
+#include <stelline/uvh5_reader/block.hh>
 #include <stelline/uvh5_writer/block.hh>
 
 #include "module_impl.hh"
 #include "radiointerferometryc99.h"
+#include "helpers.hh"
 
 using namespace Jetstream;
+using namespace Jetstream::Testing;
 
 namespace {
-
-struct ScratchDirectory {
-    std::filesystem::path path;
-
-    ScratchDirectory() {
-        auto pattern = (std::filesystem::temp_directory_path() / "stelline-test-XXXXXX").string();
-        REQUIRE(mkdtemp(pattern.data()) != nullptr);
-        path = pattern;
-    }
-
-    ~ScratchDirectory() {
-        std::error_code ec;
-        std::filesystem::remove_all(path, ec);
-    }
-};
 
 constexpr const char* kTestProvider = "stelline-test-no-hardware";
 
@@ -60,35 +48,6 @@ JST_REGISTER_MODULE(Uvh5WriterTestImpl,
 constexpr I64 kSyncTime = 1700000000;
 constexpr F64 kSamplePeriod = 1e-3;
 constexpr U64 kBlockDuration = 16;
-
-struct BackendGuard {
-    ~BackendGuard() {
-        Backend::DestroyAll();
-    }
-};
-
-struct TextValue {
-    std::string value;
-    JST_SERDES(value);
-};
-
-struct RealValue {
-    F64 value = 0.0;
-    JST_SERDES(value);
-};
-
-struct IntegerValue {
-    I64 value = 0;
-    JST_SERDES(value);
-};
-
-void SetEnvironment(Flowgraph& flowgraph, const std::string& key, const std::string& value) {
-    REQUIRE(flowgraph.environment().set(key, TextValue{value}) == Result::SUCCESS);
-}
-
-void SetEnvironment(Flowgraph& flowgraph, const std::string& key, const F64 value) {
-    REQUIRE(flowgraph.environment().set(key, RealValue{value}) == Result::SUCCESS);
-}
 
 constexpr F64 kLatitude = 40.8 * M_PI / 180.0;
 constexpr F64 kLongitude = -121.5 * M_PI / 180.0;
@@ -107,10 +66,6 @@ void ExpectedApparent(const F64 icrsRightAscension,
     eraAtci13(icrsRightAscension, icrsDeclination, 0.0, 0.0, 0.0, 0.0, tt1, tt2,
               &cirsRightAscension, &declination, &equationOfOrigins);
     rightAscension = eraAnp(cirsRightAscension - equationOfOrigins);
-}
-
-void SetEnvironment(Flowgraph& flowgraph, const std::string& key, const I64 value) {
-    REQUIRE(flowgraph.environment().set(key, IntegerValue{value}) == Result::SUCCESS);
 }
 
 void SetObservation(Flowgraph& flowgraph) {
@@ -586,5 +541,90 @@ TEST_CASE("UVH5 writer phases parked antennas to a fixed azimuth and elevation",
     for (size_t index = 0; index < kBaselines * 3; ++index) {
         CHECK_THAT(uvw[kBaselines * 3 + index], Catch::Matchers::WithinAbs(uvw[index], 1e-12));
     }
+#endif
+}
+
+TEST_CASE("UVH5 reader returns what the writer recorded, including padded integrations",
+          "[stelline][uvh5_writer][uvh5_reader][block][cuda]") {
+#if !defined(STELLINE_DEVICE_CUDA_AVAILABLE) || !defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    SKIP("Stelline was not built with CUDA support.");
+#else
+    BackendGuard backendGuard;
+    Backend::Config backendConfig;
+    backendConfig.headless = true;
+    REQUIRE(Backend::Initialize<DeviceType::CPU>(backendConfig) == Result::SUCCESS);
+    REQUIRE(Backend::Initialize<DeviceType::CUDA>(backendConfig) == Result::SUCCESS);
+
+    const ScratchDirectory scratch;
+    const auto path = scratch.path / "roundtrip.uvh5";
+
+    {
+        Flowgraph flowgraph;
+        REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+        SetObservation(flowgraph);
+
+        Blocks::OnesTensor sourceConfig;
+        sourceConfig.shape = {1, 3, 2, 4};
+        sourceConfig.dataType = "CF32";
+        REQUIRE(flowgraph.blockCreate("source", sourceConfig, {}, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData source;
+        REQUIRE(flowgraph.view().block("source", source) == Result::SUCCESS);
+        Tensor sourceOutput = source.outputs.at("buffer").tensor;
+        REQUIRE(SetSignalAxes(sourceOutput, {
+            .sample = Index{0},
+            .channel = Index{2},
+        }) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("timestamp", U64{0}) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("duration", kBlockDuration) == Result::SUCCESS);
+
+        TensorMap inputs;
+        inputs["input"].requested("source", "buffer");
+        Blocks::Uvh5Writer writerConfig;
+        writerConfig.filepath = path.string();
+        writerConfig.recording = true;
+        REQUIRE(flowgraph.blockCreate("writer", writerConfig, inputs, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData writer;
+        for (const U64 block : {U64{0}, U64{1}, U64{3}}) {
+            REQUIRE(sourceOutput.setAttribute("timestamp", block * kBlockDuration) == Result::SUCCESS);
+            REQUIRE(flowgraph.compute() == Result::SUCCESS);
+            REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+            INFO(writer.diagnostic);
+            REQUIRE(writer.state == Block::State::Created);
+        }
+
+        REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+    }
+
+    Flowgraph flowgraph;
+    REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+    Blocks::Uvh5Reader readerConfig;
+    readerConfig.filepath = path.string();
+    readerConfig.batchSize = 1;
+    readerConfig.loop = false;
+    readerConfig.playing = true;
+    REQUIRE(flowgraph.blockCreate("reader", readerConfig, {}, DeviceType::CPU) == Result::SUCCESS);
+
+    Flowgraph::View::BlockData reader;
+    REQUIRE(flowgraph.view().block("reader", reader) == Result::SUCCESS);
+    INFO(reader.diagnostic);
+    REQUIRE(reader.state == Block::State::Created);
+    const Tensor signal = reader.outputs.at("signal").tensor;
+    REQUIRE(signal.shape() == Shape{1, 3, 2, 4});
+
+    for (U64 integration = 0; integration < 4; ++integration) {
+        INFO("Integration " << integration);
+        REQUIRE(flowgraph.compute() == Result::SUCCESS);
+        const CF32 expected = integration == 2 ? CF32{} : CF32{1.0f, 0.0f};
+        for (U64 index = 0; index < signal.size(); ++index) {
+            CHECK(signal.data<CF32>()[index] == expected);
+        }
+    }
+
+    REQUIRE(flowgraph.blockDestroy("reader", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.destroy() == Result::SUCCESS);
 #endif
 }

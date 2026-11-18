@@ -12,6 +12,7 @@
 #include <jetstream/backend/base.hh>
 
 #include <jetstream/domains/core/duplicate/block.hh>
+#include <jetstream/domains/core/multiply_constant/block.hh>
 #include <jetstream/domains/core/ones_tensor/block.hh>
 #include <jetstream/flowgraph.hh>
 #include <jetstream/flowgraph_view.hh>
@@ -22,28 +23,16 @@
 #include <jetstream/scheduler_context.hh>
 
 #include <stelline/config.hh>
+#include <stelline/fbh5_reader/block.hh>
 #include <stelline/fbh5_writer/block.hh>
 
 #include "module_impl.hh"
+#include "helpers.hh"
 
 using namespace Jetstream;
+using namespace Jetstream::Testing;
 
 namespace {
-
-struct ScratchDirectory {
-    std::filesystem::path path;
-
-    ScratchDirectory() {
-        auto pattern = (std::filesystem::temp_directory_path() / "stelline-test-XXXXXX").string();
-        REQUIRE(mkdtemp(pattern.data()) != nullptr);
-        path = pattern;
-    }
-
-    ~ScratchDirectory() {
-        std::error_code ec;
-        std::filesystem::remove_all(path, ec);
-    }
-};
 
 constexpr const char* kTestProvider = "stelline-test-no-hardware";
 
@@ -71,39 +60,6 @@ bool HasStagingFile(const std::filesystem::path& path) {
 constexpr I64 kSyncTime = 1700000000;
 constexpr F64 kSamplePeriod = 1e-3;
 constexpr U64 kBlockDuration = 16;
-
-struct BackendGuard {
-    ~BackendGuard() {
-        Backend::DestroyAll();
-    }
-};
-
-struct TextValue {
-    std::string value;
-    JST_SERDES(value);
-};
-
-struct RealValue {
-    F64 value = 0.0;
-    JST_SERDES(value);
-};
-
-struct IntegerValue {
-    I64 value = 0;
-    JST_SERDES(value);
-};
-
-void SetEnvironment(Flowgraph& flowgraph, const std::string& key, const std::string& value) {
-    REQUIRE(flowgraph.environment().set(key, TextValue{value}) == Result::SUCCESS);
-}
-
-void SetEnvironment(Flowgraph& flowgraph, const std::string& key, const F64 value) {
-    REQUIRE(flowgraph.environment().set(key, RealValue{value}) == Result::SUCCESS);
-}
-
-void SetEnvironment(Flowgraph& flowgraph, const std::string& key, const I64 value) {
-    REQUIRE(flowgraph.environment().set(key, IntegerValue{value}) == Result::SUCCESS);
-}
 
 void SetObservation(Flowgraph& flowgraph, const bool horizontal = true) {
     const std::string prefix = "observatory.antenna.1a.tunings.a";
@@ -633,5 +589,252 @@ TEST_CASE("FBH5 writer records without azimuth and elevation",
     CHECK_THAT(ReadAttribute(data, "src_raj"), Catch::Matchers::WithinAbs(6.0, 1e-12));
     REQUIRE(H5Dclose(data) >= 0);
     REQUIRE(H5Fclose(file) >= 0);
+#endif
+}
+
+TEST_CASE("FBH5 reader returns what the writer recorded, including padded rows",
+          "[stelline][fbh5_writer][fbh5_reader][block][cuda]") {
+#if !defined(STELLINE_DEVICE_CUDA_AVAILABLE) || !defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    SKIP("Stelline was not built with CUDA support.");
+#else
+    BackendGuard backendGuard;
+    Backend::Config backendConfig;
+    backendConfig.headless = true;
+    REQUIRE(Backend::Initialize<DeviceType::CPU>(backendConfig) == Result::SUCCESS);
+    REQUIRE(Backend::Initialize<DeviceType::CUDA>(backendConfig) == Result::SUCCESS);
+
+    const ScratchDirectory scratch;
+    const auto path = scratch.path / "roundtrip.fbh5";
+
+    {
+        Flowgraph flowgraph;
+        REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+        SetObservation(flowgraph);
+
+        Blocks::OnesTensor sourceConfig;
+        sourceConfig.shape = {2, 1, 4, 1};
+        sourceConfig.dataType = "F32";
+        REQUIRE(flowgraph.blockCreate("source", sourceConfig, {}, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData source;
+        REQUIRE(flowgraph.view().block("source", source) == Result::SUCCESS);
+        Tensor sourceOutput = source.outputs.at("buffer").tensor;
+        REQUIRE(SetSignalAxes(sourceOutput, {
+            .sample = Index{0},
+            .channel = Index{2},
+        }) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("timestamp", U64{0}) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("duration", kBlockDuration) == Result::SUCCESS);
+
+        TensorMap deviceInputs;
+        deviceInputs["buffer"].requested("source", "buffer");
+        Blocks::Duplicate deviceConfig;
+        deviceConfig.outputDevice = "cuda";
+        deviceConfig.hostAccessible = false;
+        REQUIRE(flowgraph.blockCreate("device", deviceConfig, deviceInputs, DeviceType::CUDA) == Result::SUCCESS);
+
+        TensorMap inputs;
+        inputs["input"].requested("device", "buffer");
+        Blocks::Fbh5Writer writerConfig;
+        writerConfig.filepath = path.string();
+        writerConfig.recording = true;
+        REQUIRE(flowgraph.blockCreate("writer", writerConfig, inputs, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData writer;
+        for (const U64 block : {U64{0}, U64{1}, U64{3}}) {
+            REQUIRE(sourceOutput.setAttribute("timestamp", block * kBlockDuration) == Result::SUCCESS);
+            REQUIRE(flowgraph.compute() == Result::SUCCESS);
+            REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+            INFO(writer.diagnostic);
+            REQUIRE(writer.state == Block::State::Created);
+        }
+
+        REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.blockDestroy("device", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+    }
+
+    Flowgraph flowgraph;
+    REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+    Blocks::Fbh5Reader readerConfig;
+    readerConfig.filepath = path.string();
+    readerConfig.batchSize = 2;
+    readerConfig.loop = false;
+    readerConfig.playing = true;
+    REQUIRE(flowgraph.blockCreate("reader", readerConfig, {}, DeviceType::CPU) == Result::SUCCESS);
+
+    Flowgraph::View::BlockData reader;
+    REQUIRE(flowgraph.view().block("reader", reader) == Result::SUCCESS);
+    INFO(reader.diagnostic);
+    REQUIRE(reader.state == Block::State::Created);
+    const Tensor signal = reader.outputs.at("signal").tensor;
+    const Tensor mask = reader.outputs.at("mask").tensor;
+    REQUIRE(signal.shape() == Shape{2, 1, 4});
+    REQUIRE(mask.shape() == Shape{2, 1, 4});
+
+    for (U64 block = 0; block < 4; ++block) {
+        INFO("Block " << block);
+        REQUIRE(flowgraph.compute() == Result::SUCCESS);
+        const bool padded = block == 2;
+        for (U64 index = 0; index < signal.size(); ++index) {
+            CHECK(signal.data<F32>()[index] == (padded ? 0.0f : 1.0f));
+            CHECK(mask.data<U8>()[index] == (padded ? 1 : 0));
+        }
+    }
+
+    REQUIRE(flowgraph.blockDestroy("reader", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+#endif
+}
+
+#if defined(STELLINE_DEVICE_CUDA_AVAILABLE) && defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+namespace {
+
+void RecordBand(const std::filesystem::path& path,
+                const I64 bandIndex,
+                const F64 frequencyStart,
+                const I64 channelStart,
+                const F32 value,
+                const std::vector<U64>& blocks) {
+    Flowgraph flowgraph;
+    REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+    SetObservation(flowgraph);
+    const std::string band = "observatory.antenna.1a.tunings.a.bands." + std::to_string(bandIndex);
+    SetEnvironment(flowgraph, "instance.bands.0.band_index", bandIndex);
+    SetEnvironment(flowgraph, band + ".frequency_start", frequencyStart);
+    SetEnvironment(flowgraph, band + ".frequency_stop", frequencyStart + 2.0);
+    SetEnvironment(flowgraph, band + ".channel_start", channelStart);
+    SetEnvironment(flowgraph, band + ".channel_stop", channelStart + 2);
+
+    Blocks::OnesTensor sourceConfig;
+    sourceConfig.shape = {2, 1, 4, 1};
+    sourceConfig.dataType = "F32";
+    REQUIRE(flowgraph.blockCreate("source", sourceConfig, {}, DeviceType::CUDA) == Result::SUCCESS);
+    Flowgraph::View::BlockData source;
+    REQUIRE(flowgraph.view().block("source", source) == Result::SUCCESS);
+    Tensor sourceOutput = source.outputs.at("buffer").tensor;
+    REQUIRE(SetSignalAxes(sourceOutput, {
+        .sample = Index{0},
+        .channel = Index{2},
+    }) == Result::SUCCESS);
+    REQUIRE(sourceOutput.setAttribute("timestamp", blocks.front() * kBlockDuration) == Result::SUCCESS);
+    REQUIRE(sourceOutput.setAttribute("duration", kBlockDuration) == Result::SUCCESS);
+
+    TensorMap scaleInputs;
+    scaleInputs["factor"].requested("source", "buffer");
+    Blocks::MultiplyConstant scaleConfig;
+    scaleConfig.constant = value;
+    REQUIRE(flowgraph.blockCreate("scale", scaleConfig, scaleInputs, DeviceType::CUDA) == Result::SUCCESS);
+
+    TensorMap deviceInputs;
+    deviceInputs["buffer"].requested("scale", "product");
+    Blocks::Duplicate deviceConfig;
+    deviceConfig.outputDevice = "cuda";
+    deviceConfig.hostAccessible = false;
+    REQUIRE(flowgraph.blockCreate("device", deviceConfig, deviceInputs, DeviceType::CUDA) == Result::SUCCESS);
+
+    TensorMap writerInputs;
+    writerInputs["input"].requested("device", "buffer");
+    Blocks::Fbh5Writer writerConfig;
+    writerConfig.filepath = path.string();
+    writerConfig.recording = true;
+    REQUIRE(flowgraph.blockCreate("writer", writerConfig, writerInputs, DeviceType::CUDA) == Result::SUCCESS);
+
+    Flowgraph::View::BlockData writer;
+    for (const U64 block : blocks) {
+        REQUIRE(sourceOutput.setAttribute("timestamp", block * kBlockDuration) == Result::SUCCESS);
+        REQUIRE(flowgraph.compute() == Result::SUCCESS);
+        REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+        INFO(writer.diagnostic);
+        REQUIRE(writer.state == Block::State::Created);
+    }
+
+    REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.blockDestroy("device", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.blockDestroy("scale", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+}
+
+template<typename T>
+std::vector<T> ReadAll(const hid_t file, const char* name, const hid_t type) {
+    const hid_t dataset = H5Dopen(file, name, H5P_DEFAULT);
+    REQUIRE(dataset >= 0);
+    const hid_t space = H5Dget_space(dataset);
+    REQUIRE(space >= 0);
+    std::vector<T> values(static_cast<size_t>(H5Sget_simple_extent_npoints(space)));
+    REQUIRE(H5Dread(dataset, type, H5S_ALL, H5S_ALL, H5P_DEFAULT, values.data()) >= 0);
+    REQUIRE(H5Sclose(space) >= 0);
+    REQUIRE(H5Dclose(dataset) >= 0);
+    return values;
+}
+
+}  // namespace
+#endif
+
+TEST_CASE("Independently started band recordings stitch on one RF grid",
+          "[stelline][fbh5_writer][block][timing][cuda]") {
+#if !defined(STELLINE_DEVICE_CUDA_AVAILABLE) || !defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    SKIP("Stelline was not built with CUDA support.");
+#else
+    constexpr int kMissingDependency = 77;
+    const int probe = RunProgram({STELLINE_TEST_PYTHON, "-c",
+                                  "import sys\ntry:\n    import h5py, numpy\nexcept ImportError:\n    sys.exit(77)"});
+    if (probe == kMissingDependency) {
+        SKIP("The stitcher needs h5py and numpy.");
+    }
+    REQUIRE(probe == 0);
+
+    BackendGuard backendGuard;
+    Backend::Config backendConfig;
+    backendConfig.headless = true;
+    REQUIRE(Backend::Initialize<DeviceType::CPU>(backendConfig) == Result::SUCCESS);
+    REQUIRE(Backend::Initialize<DeviceType::CUDA>(backendConfig) == Result::SUCCESS);
+
+    const ScratchDirectory scratch;
+    const auto lower = scratch.path / "lower.fbh5";
+    const auto upper = scratch.path / "upper.fbh5";
+    const auto joined = scratch.path / "joined.fbh5";
+    RecordBand(lower, 0, 1000.0, 352, 1.0f, {2, 3, 4, 6, 7});
+    RecordBand(upper, 1, 1002.0, 354, 2.0f, {0, 1, 2, 4, 5, 6});
+
+    REQUIRE(RunProgram({STELLINE_TEST_PYTHON,
+                        std::string(STELLINE_TEST_SOURCE_DIR) + "/tools/stitcher.py",
+                        joined.string(),
+                        upper.string(),
+                        lower.string()}) == 0);
+
+    const hid_t file = H5Fopen(joined.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    REQUIRE(file >= 0);
+    const hid_t data = H5Dopen(file, "data", H5P_DEFAULT);
+    REQUIRE(data >= 0);
+    const U64 startSample = ReadIntegerAttribute<U64>(data, "rf_start_sample", H5T_NATIVE_UINT64);
+    const F64 nchans = ReadAttribute(data, "nchans");
+    const F64 fch1 = ReadAttribute(data, "fch1");
+    REQUIRE(H5Dclose(data) >= 0);
+    const auto values = ReadAll<F32>(file, "data", H5T_NATIVE_FLOAT);
+    const auto mask = ReadAll<U8>(file, "mask", H5T_NATIVE_UINT8);
+    REQUIRE(H5Fclose(file) >= 0);
+
+    CHECK(startSample == 2 * kBlockDuration);
+    CHECK(nchans == 8.0);
+    CHECK_THAT(fch1, Catch::Matchers::WithinAbs(1000.0, 1e-12));
+
+    constexpr U64 kRowsPerBlock = 2;
+    constexpr U64 kChannels = 8;
+    REQUIRE(values.size() == 5 * kRowsPerBlock * kChannels);
+    REQUIRE(mask.size() == values.size());
+    for (U64 row = 0; row < 5 * kRowsPerBlock; ++row) {
+        const U64 block = 2 + row / kRowsPerBlock;
+        for (U64 channel = 0; channel < kChannels; ++channel) {
+            INFO("Block " << block << ", channel " << channel);
+            const bool upperBand = channel >= 4;
+            const bool missing = upperBand ? block == 3 : block == 5;
+            const F32 expected = missing ? 0.0f : (upperBand ? 2.0f : 1.0f);
+            CHECK(values[row * kChannels + channel] == expected);
+            CHECK(mask[row * kChannels + channel] == (missing ? 1 : 0));
+        }
+    }
 #endif
 }

@@ -13,15 +13,12 @@
 #include <jetstream/flowgraph_view.hh>
 #include <jetstream/registry.hh>
 
+#include "helpers.hh"
+
 using namespace Jetstream;
+using namespace Jetstream::Testing;
 
 namespace {
-
-struct BackendGuard {
-    ~BackendGuard() {
-        Backend::DestroyAll();
-    }
-};
 
 struct FlowgraphGuard {
     Flowgraph flowgraph;

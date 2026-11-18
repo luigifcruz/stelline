@@ -14,9 +14,12 @@
 
 #include <stelline/config.hh>
 
+#include "helpers.hh"
+
 namespace {
 
 using namespace Jetstream;
+using namespace Jetstream::Testing;
 
 struct GraphCase {
     const char* file;
@@ -56,12 +59,6 @@ const std::vector<TimedGraphCase> kTimedGraphCases = {
     {"stacker.yml", 3, {{1, false}, {2, false}, {3, false}, {4, false}, {5, true},
                         {3, false}, {6, false}, {7, false}, {9, false}, {10, false},
                         {11, true}}},
-};
-
-struct BackendGuard {
-    ~BackendGuard() {
-        Backend::DestroyAll();
-    }
 };
 
 struct FlowgraphGuard {

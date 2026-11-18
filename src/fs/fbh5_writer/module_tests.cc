@@ -27,25 +27,12 @@
 #include "../helpers.hh"
 #include "../recording_axes.hh"
 #include "../recording_source.hh"
+#include "helpers.hh"
 
 using namespace Jetstream;
+using namespace Jetstream::Testing;
 
 namespace {
-
-struct ScratchDirectory {
-    std::filesystem::path path;
-
-    ScratchDirectory() {
-        auto pattern = (std::filesystem::temp_directory_path() / "stelline-test-XXXXXX").string();
-        REQUIRE(mkdtemp(pattern.data()) != nullptr);
-        path = pattern;
-    }
-
-    ~ScratchDirectory() {
-        std::error_code ec;
-        std::filesystem::remove_all(path, ec);
-    }
-};
 
 std::shared_ptr<Module> BuildModule() {
     const auto implementations = Registry::ListAvailableModules("fbh5_writer");
