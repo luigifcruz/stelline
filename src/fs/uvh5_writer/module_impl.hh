@@ -16,6 +16,8 @@ extern "C" {
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/tools/snapshot.hh>
 
+#include "../recording_timeline.hh"
+
 namespace Jetstream::Modules {
 
 constexpr U64 kExpectedRank = 4;
@@ -77,7 +79,9 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
 
  protected:
     Result loadMetadata();
+    Result checkClockEpoch();
     Result refreshDynamicMetadata(const U64& timestamp);
+    Result prepareIntegration(U64 timestamp, F64 durationSeconds, bool missing);
     void updateBandwidth(const U64 deltaBytes);
 
     Shape validatedExpectedShape;
@@ -87,6 +91,7 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
     DataType inputDataType = DataType::None;
 
     Uvh5Metadata metadata;
+    std::string clockEpochKey;
 
     hid_t faplId = -1;
     bool faplOpen = false;
@@ -94,6 +99,7 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
     bool headerAllocated = false;
     bool openAttempted = false;
     bool fileOpen = false;
+    RecordingTimeline timeline;
 
     F64 integrationTimespan = 0.0;
     F64 frequencyBandwidth = 0.0;

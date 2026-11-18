@@ -4,6 +4,8 @@
 #include <cstring>
 #include <filesystem>
 #include <limits>
+#include <new>
+#include <vector>
 
 #include <cufile.h>
 #include <hdf5.h>
@@ -76,6 +78,7 @@ Result Fbh5WriterImpl::create() {
     expectedShape = validatedExpectedShape;
     inputDataType = validatedInputDataType;
     openAttempted = false;
+    timeline = {};
 
     bytesWritten.publish(0);
     chunkCounter.publish(0);
@@ -219,6 +222,45 @@ Result Fbh5WriterImpl::create() {
     return Result::SUCCESS;
 }
 
+Result Fbh5WriterImpl::appendChunk(const void* data) {
+    JST_HDF5_CHECK(H5DSextend(&fbh5File.ds_data), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to extend the FBH5 data dataset. Error {}.", err);
+    });
+    JST_HDF5_CHECK(H5DSwrite(&fbh5File.ds_data, data), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to write the FBH5 data dataset. Error {}.", err);
+    });
+    JST_HDF5_CHECK(H5DSextend(&fbh5File.ds_mask), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to extend the FBH5 mask dataset. Error {}.", err);
+    });
+    JST_HDF5_CHECK(H5DSwrite(&fbh5File.ds_mask, mask), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to write the FBH5 mask dataset. Error {}.", err);
+    });
+    return Result::SUCCESS;
+}
+
+Result Fbh5WriterImpl::appendChunks(const void* data, const U64 samples, const U64 missingBlocks) {
+    if (missingBlocks != 0) {
+        std::vector<F32> missingData;
+        try {
+            missingData.resize(samples, 0.0f);
+        } catch (const std::bad_alloc&) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to allocate the missing-data buffer.");
+            return Result::ERROR;
+        }
+        const auto maskBytes = H5DSsize(&fbh5File.ds_mask);
+        std::memset(mask, 1, maskBytes);
+        for (U64 block = 0; block < missingBlocks; ++block) {
+            const Result result = appendChunk(missingData.data());
+            if (result != Result::SUCCESS) {
+                std::memset(mask, 0, maskBytes);
+                return result;
+            }
+        }
+        std::memset(mask, 0, maskBytes);
+    }
+    return appendChunk(data);
+}
+
 Result Fbh5WriterImpl::destroy() {
     Result result = Result::SUCCESS;
 
@@ -284,6 +326,7 @@ Result Fbh5WriterImpl::destroy() {
     }
 
     fbh5File = {};
+    timeline = {};
 
     return result;
 }

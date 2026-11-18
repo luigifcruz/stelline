@@ -11,9 +11,11 @@ The UVH5 Writer is the recording sink of a correlator pipeline. It takes integra
 
 The block is idle until `recording` is enabled. At that point it assembles the complete UVH5 header from the flowgraph environment: telescope identity and location, the antenna table with positions and diameters, the baseline ordering, the frequency axis derived from the instance band, and the phase center. Recording refuses to start while any required key is missing, which prevents writing files with silent metadata gaps.
 
-Each input tensor must carry a `timestamp` attribute. The writer converts it to UTC and MJD using the F-engine sync time and sample period from the environment, refreshes the time-dependent metadata (pointing and Earth orientation) for that instant, computes the baseline UVW coordinates, and appends one integration to the file. Closing the flowgraph finalizes the file.
+Each input tensor must carry a `timestamp` attribute. The writer uses the F-engine sync time and sample period from the environment to write the integration midpoint as a UTC Julian Date. It refreshes the time-dependent metadata (pointing and Earth orientation), computes the baseline UVW coordinates, and appends the integration. Closing the flowgraph finalizes the file.
 
-The frequency axis is derived rather than configured. The instance band defines the coarse channel range, and `dspChannelizationRate` scales it to the fine channel count, so the input frequency dimension must equal the coarse channel count multiplied by that rate. The integration timespan is likewise the F-engine sample period multiplied by `dspIntegrationRate`.
+For inputs that also carry `duration`, the first written integration establishes the grid and the duration is taken from the input. When a later integration reveals a gap, the writer inserts zero visibilities with flags set and zero sample weights at the missing times. It does not pad before the first or after the last integration. An epoch change, backwards or off-grid timestamp, change in duration, or gap larger than 1,024 integrations requires a new recording. Inputs without `duration` are not padded.
+
+The frequency axis is derived rather than configured. The instance band defines the coarse channel range, and `dspChannelizationRate` scales it to the fine channel count, so the input frequency dimension must equal the coarse channel count multiplied by that rate. For inputs without `duration`, the integration timespan is the F-engine sample period multiplied by `dspIntegrationRate`.
 
 ## Configuration
 
@@ -37,7 +39,8 @@ The baseline count must match the antenna table, so `N` antennas require `N * (N
 
 | Attribute | Type | Direction | Description |
 |---|---|---|---|
-| `timestamp` | `U64` | Read from `input` | Required. Integration time in F-engine sample units, converted to UTC and MJD through the sync time and sample period. A missing attribute aborts the write. |
+| `timestamp` | `U64` | Read from `input` | Required. First sample of the integration on the F-engine sample counter. |
+| `duration` | `U64` | Read from `input` | Optional. Number of F-engine samples in the integration. Enables gap padding. |
 
 ## Environment variables
 
@@ -93,7 +96,7 @@ The metrics below are reported to Nexus.
 |---|---|
 | `bandwidth` | Write bandwidth in megabytes per second. |
 | `totalDataWritten` | Total written UVH5 payload in megabytes. |
-| `chunksWritten` | Total number of written UVH5 chunks. |
+| `chunksWritten` | Total number of written UVH5 chunks, including padded integrations inserted for RF gaps. |
 
 ## Requirements
 

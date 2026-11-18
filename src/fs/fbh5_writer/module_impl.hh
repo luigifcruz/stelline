@@ -13,6 +13,8 @@ extern "C" {
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/tools/snapshot.hh>
 
+#include "../recording_timeline.hh"
+
 namespace Jetstream::Modules {
 
 constexpr U64 kExpectedRank = 4;
@@ -35,6 +37,7 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     U64 getChunkCounter() const;
 
  protected:
+    Result appendChunks(const void* data, U64 samples, U64 missingBlocks);
     void updateBandwidth(const U64 deltaBytes);
 
     Shape validatedExpectedShape;
@@ -52,6 +55,7 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     bool dataOpen = false;
     bool maskOpen = false;
     uint8_t* mask = nullptr;
+    RecordingTimeline timeline;
 
     const void* registeredBuffer = nullptr;
     U64 registeredBufferSize = 0;
@@ -62,6 +66,9 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     I64 bytesSinceLastMeasurement = 0;
     Tools::Snapshot<F64> bandwidthMBps{0.0};
     std::chrono::time_point<std::chrono::steady_clock> lastMeasurementTime;
+
+ private:
+    Result appendChunk(const void* data);
 };
 
 }  // namespace Jetstream::Modules

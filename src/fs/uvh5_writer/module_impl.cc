@@ -1,5 +1,7 @@
 #include "module_impl.hh"
 
+#include <algorithm>
+#include <cmath>
 #include <exception>
 #include <cstdlib>
 #include <cstring>
@@ -323,11 +325,11 @@ Result Uvh5WriterImpl::loadMetadata() {
                                     static_cast<U64>(channelStart);
 
     {
-        const auto key = jst::fmt::format("observatory.antenna.{}.tunings.{}.fengine.synctime",
-                                          firstAntenna,
-                                          metadata.instanceTuning);
-        if (!environment()->tryGet(key, integer)) {
-            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
+        clockEpochKey = jst::fmt::format("observatory.antenna.{}.tunings.{}.fengine.synctime",
+                                         firstAntenna,
+                                         metadata.instanceTuning);
+        if (!environment()->tryGet(clockEpochKey, integer)) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", clockEpochKey);
             return Result::INCOMPLETE;
         }
         if (integer.value < 0) {
@@ -344,6 +346,10 @@ Result Uvh5WriterImpl::loadMetadata() {
         if (!environment()->tryGet(key, real)) {
             JST_ERROR("[MODULE_UVH5_WRITER] Missing required '{}' environment value.", key);
             return Result::INCOMPLETE;
+        }
+        if (!std::isfinite(real.value) || real.value <= 0.0) {
+            JST_ERROR("[MODULE_UVH5_WRITER] Invalid F-engine sample period {}.", real.value);
+            return Result::ERROR;
         }
         metadata.sampleTimespan = real.value;
     }
@@ -372,6 +378,41 @@ Result Uvh5WriterImpl::loadMetadata() {
 
     metadata.valid = true;
 
+    return Result::SUCCESS;
+}
+
+Result Uvh5WriterImpl::checkClockEpoch() {
+    struct {
+        I64 value = 0;
+        JST_SERDES(value);
+    } epoch;
+    if (!environment()->tryGet(clockEpochKey, epoch) || epoch.value < 0 ||
+        static_cast<U64>(epoch.value) != metadata.packetTimestampOffset) {
+        JST_ERROR("[MODULE_UVH5_WRITER] F-engine sync epoch is missing or changed; start a new recording.");
+        return Result::ERROR;
+    }
+    return Result::SUCCESS;
+}
+
+Result Uvh5WriterImpl::prepareIntegration(const U64 timestamp,
+                                         const F64 durationSeconds,
+                                         const bool missing) {
+    constexpr long double kUnixEpochJd = 2440587.5L;
+    const long double midpoint = static_cast<long double>(metadata.packetTimestampOffset) +
+                                 static_cast<long double>(timestamp) * metadata.sampleTimespan +
+                                 durationSeconds / 2.0L;
+    const auto jd = static_cast<F64>(kUnixEpochJd + midpoint / RADIOINTERFEROMETERY_DAYSEC);
+    if (!std::isfinite(jd) || !std::isfinite(durationSeconds) || durationSeconds <= 0.0) {
+        JST_ERROR("[MODULE_UVH5_WRITER] Invalid UVH5 integration time.");
+        return Result::ERROR;
+    }
+
+    auto& header = uvh5File.header;
+    const U64 samples = static_cast<U64>(header.Nbls) * header.Nfreqs * header.Npols;
+    std::fill_n(header.time_array, header.Nbls, jd);
+    std::fill_n(header.integration_time, header.Nbls, durationSeconds);
+    std::fill_n(uvh5File.nsamples, samples, missing ? 0.0 : static_cast<F64>(samples));
+    std::fill_n(uvh5File.flags, samples, missing ? H5_TRUE : H5_FALSE);
     return Result::SUCCESS;
 }
 
@@ -445,6 +486,7 @@ Result Uvh5WriterImpl::create() {
     expectedShape = validatedExpectedShape;
     inputDataType = validatedInputDataType;
     openAttempted = false;
+    timeline = {};
 
     bytesWritten.publish(0);
     chunkCounter.publish(0);
@@ -734,6 +776,7 @@ Result Uvh5WriterImpl::destroy() {
     }
 
     uvh5File = {};
+    timeline = {};
 
     return result;
 }

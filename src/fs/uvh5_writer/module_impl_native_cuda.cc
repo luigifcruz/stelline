@@ -1,6 +1,7 @@
-#include <cmath>
 #include <cstring>
-#include <ctime>
+#include <limits>
+#include <new>
+#include <vector>
 
 extern "C" {
 #include "radiointerferometryc99.h"
@@ -17,39 +18,15 @@ extern "C" {
 
 namespace Jetstream::Modules {
 
-namespace {
-
-I32 CalToMjd(I32 year, I32 month, I32 day) {
-    I32 leapYear = 0;
-
-    static I32 monthTable[2][13] = {
-        {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-        {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-    };
-
-    if (year < -4699 || month < 1 || month > 12) {
-        return 0;
-    }
-
-    leapYear = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-    if (day < 1 || day > monthTable[leapYear][month]) {
-        return 0;
-    }
-
-    return (1461 * (year - (12 - month) / 10 + 4712)) / 4 +
-           (5 + 306 * ((month + 9) % 12)) / 10 -
-           (3 * ((year - (12 - month) / 10 + 4900) / 100)) / 4 +
-           day - 2399904;
-}
-
-}  // namespace
-
 struct Uvh5WriterImplNativeCuda : public Uvh5WriterImpl,
                                    public NativeCudaRuntimeContext,
                                    public Scheduler::Context {
  public:
     Result validate() final;
     Result computeSubmit(const cudaStream_t& stream) override;
+
+ private:
+    Result appendIntegration(U64 timestamp, F64 durationSeconds, const void* data, bool missing);
 };
 
 Result Uvh5WriterImplNativeCuda::validate() {
@@ -126,46 +103,64 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Input 'timestamp' attribute must have type U64.");
         return Result::ERROR;
     }
-    JST_CHECK(refreshDynamicMetadata(*timestamp));
+    RecordingGap gap;
+    JST_CHECK(timeline.plan(input, gap));
+    JST_CHECK(checkClockEpoch());
+    const U64 integrations = gap.missingBlocks + 1;
+    const auto& header = uvh5File.header;
+    if (header.Nbls <= 0 ||
+        integrations > static_cast<U64>((std::numeric_limits<int>::max() - header.Nblts) / header.Nbls) ||
+        integrations > static_cast<U64>(std::numeric_limits<int>::max() - header.Ntimes)) {
+        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Integrations exceed UVH5 time or baseline count limits.");
+        return Result::ERROR;
+    }
+    const F64 durationSeconds = gap.timing
+        ? static_cast<F64>(gap.timing->duration) * metadata.sampleTimespan
+        : integrationTimespan;
 
-    uvh5File.visdata = const_cast<void*>(input.data());
+    if (gap.missingBlocks != 0) {
+        std::vector<CF32> missingData;
+        try {
+            missingData.resize(input.size(), CF32{});
+        } catch (const std::bad_alloc&) {
+            JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to allocate the missing-visibility buffer.");
+            return Result::ERROR;
+        }
+        U64 missingTimestamp = gap.firstMissing;
+        for (U64 block = 0; block < gap.missingBlocks; ++block) {
+            JST_CHECK(appendIntegration(missingTimestamp, durationSeconds, missingData.data(), true));
+            missingTimestamp += gap.timing->duration;
+        }
+    }
+    JST_CHECK(appendIntegration(*timestamp, durationSeconds, input.data(), false));
+    timeline.commit(gap);
+
+    hsize_t currentFileSize = 0;
+    JST_HDF5_CHECK(H5Fget_filesize(uvh5File.file_id, &currentFileSize), [&] {
+        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to query the UVH5 file size. Error {}.", err);
+    });
+
+    const U64 previousBytesWritten = bytesWritten.get();
+    const U64 totalBytesWritten = static_cast<U64>(currentFileSize);
+    const U64 deltaBytesWritten = totalBytesWritten >= previousBytesWritten
+                                      ? totalBytesWritten - previousBytesWritten
+                                      : 0;
+
+    chunkCounter.publish(chunkCounter.get() + integrations);
+    bytesWritten.publish(totalBytesWritten);
+    updateBandwidth(deltaBytesWritten);
+
+    return Result::SUCCESS;
+}
+
+Result Uvh5WriterImplNativeCuda::appendIntegration(const U64 timestamp,
+                                                   const F64 durationSeconds,
+                                                   const void* data,
+                                                   const bool missing) {
+    JST_CHECK(prepareIntegration(timestamp, durationSeconds, missing));
+    JST_CHECK(refreshDynamicMetadata(timestamp));
 
     UVH5_header_t* header = &uvh5File.header;
-
-    F64 realtimeSeconds = 0.0;
-    const F64 channelBandwidth = metadata.instanceBandwidth / static_cast<F64>(metadata.instanceChannelCount);
-    if (channelBandwidth != 0.0) {
-        realtimeSeconds = static_cast<F64>(*timestamp) / (1e6 * std::fabs(channelBandwidth));
-    }
-
-    struct timespec timeSpec = {};
-    timeSpec.tv_sec = static_cast<time_t>(metadata.packetTimestampOffset + std::llround(realtimeSeconds));
-    timeSpec.tv_nsec = static_cast<long>((realtimeSeconds - std::llround(realtimeSeconds)) * 1e9);
-
-    struct tm utcTime = {};
-    if (gmtime_r(&timeSpec.tv_sec, &utcTime) == nullptr) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to convert the UVH5 timestamp to UTC time.");
-        return Result::ERROR;
-    }
-
-    const I32 mjdDay = CalToMjd(utcTime.tm_year + 1900, utcTime.tm_mon + 1, utcTime.tm_mday);
-    if (mjdDay == 0) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to convert the UVH5 timestamp to MJD.");
-        return Result::ERROR;
-    }
-
-    const I32 secondsOfDay = utcTime.tm_hour * 3600 + utcTime.tm_min * 60 + utcTime.tm_sec;
-
-    header->time_array[0] = 2400000.5;
-    header->time_array[0] += static_cast<F64>(mjdDay);
-    header->time_array[0] += static_cast<F64>(secondsOfDay) / RADIOINTERFEROMETERY_DAYSEC;
-    header->time_array[0] += (integrationTimespan / 2.0) / RADIOINTERFEROMETERY_DAYSEC;
-
-    for (size_t index = 0; index < static_cast<size_t>(header->Nbls); index++) {
-        header->time_array[index] = header->time_array[0];
-        header->integration_time[index] = integrationTimespan;
-    }
-
     F64 updatedRightAscensionRad = metadata.pointingRa;
     F64 updatedDeclinationRad = metadata.pointingDec;
     F64 positionAngle = 0.0;
@@ -187,22 +182,12 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         return Result::ERROR;
     }
 
-    uvh5File.nsamples[0] = input.size();
     const U64 baselineCount = static_cast<U64>(header->Nbls);
-    const U64 samplesPerBaseline = static_cast<U64>(header->Nfreqs) *
-                                   static_cast<U64>(header->Npols);
     for (U64 baseline = 0; baseline < baselineCount; baseline++) {
-        header->time_array[baseline] = header->time_array[0];
         header->phase_center_id_array[baseline] = 0;
         header->phase_center_app_ra[baseline] = updatedRightAscensionRad;
         header->phase_center_app_dec[baseline] = updatedDeclinationRad;
         header->phase_center_frame_pa[baseline] = positionAngle;
-
-        for (U64 sample = 0; sample < samplesPerBaseline; sample++) {
-            const U64 sampleIndex = baseline * samplesPerBaseline + sample;
-            uvh5File.nsamples[sampleIndex] = uvh5File.nsamples[0];
-            uvh5File.flags[sampleIndex] = H5_FALSE;
-        }
     }
 
     double hourAngleRad = 0.0;
@@ -227,26 +212,13 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
                                         calc_rad_from_degree(header->latitude));
     UVH5permute_uvws(header);
 
-    if (UVH5write_dynamic(&uvh5File) != 0) {
+    uvh5File.visdata = const_cast<void*>(data);
+    const auto status = UVH5write_dynamic(&uvh5File);
+    uvh5File.visdata = nullptr;
+    if (status != 0) {
         JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to write the UVH5 datasets.");
         return Result::ERROR;
     }
-
-    hsize_t currentFileSize = 0;
-    JST_HDF5_CHECK(H5Fget_filesize(uvh5File.file_id, &currentFileSize), [&] {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to query the UVH5 file size. Error {}.", err);
-    });
-
-    const U64 totalChunks = chunkCounter.get() + 1;
-    const U64 previousBytesWritten = bytesWritten.get();
-    const U64 totalBytesWritten = static_cast<U64>(currentFileSize);
-    const U64 deltaBytesWritten = totalBytesWritten >= previousBytesWritten
-                                      ? totalBytesWritten - previousBytesWritten
-                                      : 0;
-
-    chunkCounter.publish(totalChunks);
-    bytesWritten.publish(totalBytesWritten);
-    updateBandwidth(deltaBytesWritten);
 
     return Result::SUCCESS;
 }

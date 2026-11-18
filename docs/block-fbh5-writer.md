@@ -13,6 +13,8 @@ The block is idle until `recording` is enabled. At that point it builds the filt
 
 The observational header fields (source name, coordinates, start time, channel frequencies) are currently filled with fixed placeholder values rather than live metadata, so downstream tooling should treat them as provisional until the block is wired to the flowgraph environment like the [UVH5 Writer](/docs/block-uvh5-writer).
 
+When the input carries RF `timestamp` and `duration` attributes, the first written block establishes the sample grid. If a later block reveals a gap, the writer inserts zeroed spectra and sets the corresponding `/mask` entries to `1`. No padding is added before the first block or after the last block. Use a reader that honors `/mask`; the zeros are not measurements. A backwards timestamp, changed duration, off-grid timestamp, or gap larger than 1,024 blocks stops the recording rather than shifting the time axis. Inputs without `duration` keep the existing unpadded behavior.
+
 ## Configuration
 
 | Parameter | Type | Default | Description |
@@ -41,7 +43,7 @@ The metrics below are reported to Nexus.
 |---|---|
 | `bandwidth` | Write bandwidth in megabytes per second. |
 | `totalDataWritten` | Total written FBH5 payload in megabytes. |
-| `chunksWritten` | Total number of written FBH5 chunks. |
+| `chunksWritten` | Total number of written FBH5 chunks, including padded chunks inserted for RF gaps. |
 
 ## Requirements
 
