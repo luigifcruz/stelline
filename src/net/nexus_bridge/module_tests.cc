@@ -51,35 +51,6 @@ TEST_CASE("Nexus bridge reloads its Python source after runtime unloading",
         SKIP("Optional Python runtime is unavailable: " << validation.message);
     }
 
-    PythonRuntimeContext offlineConvex;
-    REQUIRE(offlineConvex.createCompute(R"PY(
-import sys
-import types
-
-_saved_modules = {name: sys.modules.get(name) for name in ("convex", "convex.values")}
-
-class ConvexClient:
-    def __init__(self, url):
-        raise RuntimeError("Offline lifecycle test")
-
-convex = types.ModuleType("convex")
-convex.ConvexClient = ConvexClient
-values = types.ModuleType("convex.values")
-values.ConvexInt64 = type("ConvexInt64", (), {})
-sys.modules["convex"] = convex
-sys.modules["convex.values"] = values
-
-def compute(ctx):
-    pass
-
-def cleanup():
-    for name, module in _saved_modules.items():
-        if module is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = module
-)PY", {}, {}, {}, {}, {}) == Result::SUCCESS);
-
     auto module = BuildModule();
     Modules::NexusBridge config;
     config.url = "https://nexus.invalid";
@@ -93,5 +64,4 @@ def cleanup():
     REQUIRE(runtime->diagnostic().healthy);
 
     REQUIRE(module->destroy() == Result::SUCCESS);
-    REQUIRE(offlineConvex.destroyCompute() == Result::SUCCESS);
 }

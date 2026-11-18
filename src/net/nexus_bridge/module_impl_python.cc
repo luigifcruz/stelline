@@ -1,3 +1,5 @@
+// TODO: Rewrite in C++.
+
 #include <jetstream/module_context.hh>
 #include <jetstream/registry.hh>
 #include <jetstream/runtime_context_python.hh>
@@ -10,42 +12,126 @@ namespace Jetstream::Modules {
 namespace {
 
 constexpr const char* kNexusBridgePythonCode = R"NEXUSPY(
-# /// script
-# dependencies = ["convex"]
-# ///
-
-import asyncio
+import collections
+import json
 import math
 import os
 import queue
 import threading
 import time
-from urllib.parse import urlparse, urlunparse
+import urllib.error
+import urllib.request
+import uuid
+from urllib.parse import quote, urlparse, urlunparse
 
-METADATA_QUERY = "queries/observatory:getMetadata"
-INSTANCE_METRICS_MUTATION = "mutations/metrics:publishInstanceMetrics"
-DEFAULT_CONVEX_URL = (
+DEFAULT_NEXUS_URL = (
     <<<NEXUS_URL>>>
 )
+METADATA_POLL_SECONDS = 5.0
 METADATA_RETRY_SECONDS = float(os.getenv("NEXUS_OTL_WATCH_RETRY_SECONDS", "5"))
 INSTANCE_ID = os.getenv("NEXUS_INSTANCE_ID", "").strip()
+INSTANCE_CREDENTIALS_FILE = os.getenv("NEXUS_INSTANCE_CREDENTIALS_FILE", "").strip()
 INSTANCE_CREDENTIALS = os.getenv("NEXUS_INSTANCE_CREDENTIALS", "").strip()
+TELEMETRY_URL = os.getenv("NEXUS_TELEMETRY_URL", "").strip()
+REQUEST_TIMEOUT_SECONDS = 10.0
 METRICS_INTERVAL_SECONDS = 5.0
+METRICS_RETRY_SECONDS = 5.0
+MAX_PENDING_METRIC_SAMPLES = 256
+METRICS_BATCH_SAMPLES = 16
+MAX_METRICS_BATCH_BYTES = 768 * 1024
+MAX_SAMPLE_METRICS_BYTES = 512 * 1024
+JAVASCRIPT_NUMBER_MAX_LENGTH = 24
 METRICS_FORMAT_PREFIX = "stelline-metrics-"
 STATUS_ENV_KEY = "nexus.bridge"
 
-def _convex_url():
-    raw = DEFAULT_CONVEX_URL
-    parsed = urlparse(raw.strip())
-    return urlunparse((parsed.scheme, parsed.netloc, "", "", "", "")).rstrip("/")
+
+def _telemetry_url():
+    if TELEMETRY_URL:
+        return TELEMETRY_URL.rstrip("/")
+    parsed = urlparse(DEFAULT_NEXUS_URL.strip())
+    origin = urlunparse((parsed.scheme, parsed.netloc, "", "", "", "")).rstrip("/")
+    return f"{origin}/telemetry"
 
 
-def _authenticated_client(convex_client, url):
-    if not INSTANCE_CREDENTIALS:
-        raise ValueError("NEXUS_INSTANCE_CREDENTIALS is required")
-    client = convex_client(url)
-    client.set_auth(INSTANCE_CREDENTIALS)
-    return client
+def _instance_id():
+    if not INSTANCE_ID:
+        raise ValueError("NEXUS_INSTANCE_ID is required")
+    return INSTANCE_ID
+
+
+def _instance_credentials():
+    if INSTANCE_CREDENTIALS_FILE:
+        try:
+            with open(INSTANCE_CREDENTIALS_FILE, encoding="utf-8") as source:
+                token = source.read().strip()
+        except OSError as exc:
+            raise ValueError(f"NEXUS_INSTANCE_CREDENTIALS_FILE is unreadable: {exc.strerror}") from None
+        if token:
+            return token
+    if INSTANCE_CREDENTIALS:
+        return INSTANCE_CREDENTIALS
+    raise ValueError("NEXUS_INSTANCE_CREDENTIALS_FILE or NEXUS_INSTANCE_CREDENTIALS is required")
+
+
+class TelemetryError(Exception):
+    def __init__(self, status, message):
+        super().__init__(f"HTTP {status}: {message}" if status else message)
+        self.status = status
+
+    @property
+    def retryable(self):
+        return self.status is None or self.status >= 500 or self.status == 429
+
+
+def _error_message(body):
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return body.decode("utf-8", "replace").strip()[:200]
+    if isinstance(payload, dict) and isinstance(payload.get("error"), str):
+        return payload["error"]
+    return str(payload)[:200]
+
+
+def _encode_json(value):
+    return json.dumps(value, separators=(",", ":")).encode("utf-8")
+
+
+def _javascript_json_length(value):
+    # Nexus measures JSON.stringify(), which can print a number longer than Python does
+    # (1e20 is 100000000000000000000), so allow the longest JavaScript form for each one.
+    numbers = 0
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, dict):
+            pending.extend(item.values())
+        elif isinstance(item, (list, tuple)):
+            pending.extend(item)
+        elif isinstance(item, (int, float)) and not isinstance(item, bool):
+            numbers += 1
+    return len(_encode_json(value)) + numbers * JAVASCRIPT_NUMBER_MAX_LENGTH
+
+
+def _post_json(url, token, body):
+    request = urllib.request.Request(
+        url,
+        data=_encode_json(body),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            return json.loads(response.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        raise TelemetryError(exc.code, _error_message(exc.read())) from None
+    except (urllib.error.URLError, OSError) as exc:
+        reason = getattr(exc, "reason", exc)
+        raise TelemetryError(None, f"{type(exc).__name__}: {reason}") from None
 
 
 def _drain(source):
@@ -56,18 +142,8 @@ def _drain(source):
             return
 
 
-def _clean(value, convex_int64):
-    if isinstance(value, convex_int64):
-        return value.value
-    if isinstance(value, dict):
-        return {key: _clean(item, convex_int64) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_clean(item, convex_int64) for item in value]
-    return value
-
-
-def _environment_value(entry, convex_int64):
-    value = _clean(entry.get("value"), convex_int64)
+def _environment_value(entry):
+    value = entry.get("value")
     value_type = entry.get("type")
     if value is None:
         return None
@@ -78,13 +154,13 @@ def _environment_value(entry, convex_int64):
     return value
 
 
-def _metadata_entries_by_key(snapshot, convex_int64):
+def _metadata_entries_by_key(snapshot):
     return {
-        entry["key"]: _clean({
-            "value": _environment_value(entry, convex_int64),
+        entry["key"]: {
+            "value": _environment_value(entry),
             "type": entry.get("type"),
             "valid": entry.get("valid"),
-        }, convex_int64)
+        }
         for entry in snapshot.get("data", [])
         if isinstance(entry, dict) and entry.get("key")
     }
@@ -130,9 +206,12 @@ def _build_metrics_snapshot(ctx):
 
 
 class _NexusBridge:
-    def __init__(self):
+    def __init__(self, post=_post_json):
+        self._post = post
         self._pending_metadata_updates = queue.SimpleQueue()
-        self._pending_metrics_snapshots = queue.Queue(maxsize=1)
+        self._metric_samples = collections.deque(maxlen=MAX_PENDING_METRIC_SAMPLES)
+        self._metric_samples_lock = threading.Lock()
+        self._metric_samples_ready = threading.Event()
         self._pending_statuses = queue.SimpleQueue()
         self._stop_event = threading.Event()
         self._status_lock = threading.Lock()
@@ -150,18 +229,28 @@ class _NexusBridge:
     def start(self):
         self._record_status(connected=False, variable_count=0, error="")
         self._metadata_thread = threading.Thread(
-            target=self._metadata_watcher_loop,
+            target=self._run_worker,
+            args=(self._metadata_watcher_loop,),
             name="nexus-env-watcher",
             daemon=True,
         )
         self._metadata_thread.start()
         if INSTANCE_ID:
             self._metrics_thread = threading.Thread(
-                target=self._metrics_publisher_loop,
+                target=self._run_worker,
+                args=(self._metrics_publisher_loop,),
                 name="nexus-metrics-publisher",
                 daemon=True,
             )
             self._metrics_thread.start()
+
+    def _run_worker(self, loop):
+        # A request can outlive cleanup(), after which the runtime clears this module's globals.
+        try:
+            loop()
+        except BaseException:
+            if not self._stop_event.is_set():
+                raise
 
     def stop(self):
         self._stop_event.set()
@@ -179,44 +268,46 @@ class _NexusBridge:
     # Metadata synchronization
 
     def _metadata_watcher_loop(self):
-        url = _convex_url()
         known = {}
-
         while not self._stop_event.is_set():
             try:
-                from convex import ConvexClient
-                from convex.values import ConvexInt64
+                self._poll_metadata(known)
+                delay = METADATA_POLL_SECONDS
             except Exception as exc:
+                if self._stop_event.is_set():
+                    return
                 self._record_metadata_error(exc, len(known))
-                self._stop_event.wait(METADATA_RETRY_SECONDS)
-                continue
+                delay = METADATA_RETRY_SECONDS
+            self._stop_event.wait(delay)
 
-            try:
-                asyncio.run(self._stream_metadata(ConvexClient, ConvexInt64, url, known))
-            except Exception as exc:
-                self._record_metadata_error(exc, len(known))
-            self._stop_event.wait(METADATA_RETRY_SECONDS)
-
-    async def _stream_metadata(self, convex_client, convex_int64, url, known):
-        client = _authenticated_client(convex_client, url)
-        query_args = {"instanceId": INSTANCE_ID} if INSTANCE_ID else {}
-        subscription = client.subscribe(METADATA_QUERY, query_args)
-        print(f"Subscribed to {METADATA_QUERY} at {url}")
-        async for snapshot in subscription:
-            if self._stop_event.is_set():
-                return
-            entries = _metadata_entries_by_key(snapshot, convex_int64)
-            changed = {
-                key: entry
-                for key, entry in entries.items()
-                if known.get(key) != entry
-            }
-            removed = [key for key in known if key not in entries]
-            if changed or removed:
-                self._pending_metadata_updates.put((changed, removed))
-            known.clear()
-            known.update(entries)
+    def _poll_metadata(self, known):
+        instance_id = _instance_id()
+        snapshot = self._post(
+            f"{_telemetry_url()}/v1/otl/metadata",
+            _instance_credentials(),
+            {"instanceId": instance_id},
+        )
+        if self._stop_event.is_set():
+            return
+        if not isinstance(snapshot, dict):
+            raise ValueError("Metadata response is not an object")
+        if snapshot.get("unchanged"):
             self._record_status(connected=True, variable_count=len(known), error="")
+            return
+        if not isinstance(snapshot.get("data"), list):
+            raise ValueError("Metadata response has no data")
+        entries = _metadata_entries_by_key(snapshot)
+        changed = {
+            key: entry
+            for key, entry in entries.items()
+            if known.get(key) != entry
+        }
+        removed = [key for key in known if key not in entries]
+        if changed or removed:
+            self._pending_metadata_updates.put((changed, removed))
+        known.clear()
+        known.update(entries)
+        self._record_status(connected=True, variable_count=len(known), error="")
 
     def _record_metadata_error(self, exc, variable_count):
         error = f"{type(exc).__name__}: {exc}"
@@ -252,7 +343,7 @@ class _NexusBridge:
             "connected": self._connected,
             "variables_loaded": self._variable_count,
             "metrics_monitored": self._metrics_monitored,
-            "url": _convex_url(),
+            "url": _telemetry_url(),
             "last_error": self._last_error,
         }
 
@@ -294,27 +385,61 @@ class _NexusBridge:
             ctx.metrics.subscribe_all()
             self._metrics_subscription_started = True
 
+    def _enqueue_metric_sample(self, sample):
+        with self._metric_samples_lock:
+            self._metric_samples.append(sample)
+        self._metric_samples_ready.set()
+
+    def _next_metric_batch(self):
+        batch = []
+        size = len(_encode_json({"samples": []}))
+        with self._metric_samples_lock:
+            for sample in self._metric_samples:
+                sample_size = len(_encode_json(sample)) + 1
+                if batch and (len(batch) == METRICS_BATCH_SAMPLES or size + sample_size > MAX_METRICS_BATCH_BYTES):
+                    break
+                batch.append(sample)
+                size += sample_size
+        return batch
+
+    def _discard_metric_batch(self, batch):
+        sent = {sample["eventId"] for sample in batch}
+        with self._metric_samples_lock:
+            while self._metric_samples and self._metric_samples[0]["eventId"] in sent:
+                self._metric_samples.popleft()
+
     def _metrics_publisher_loop(self):
-        client = None
         while not self._stop_event.is_set():
-            try:
-                snapshot = self._pending_metrics_snapshots.get(timeout=0.5)
-            except queue.Empty:
+            batch = self._next_metric_batch()
+            if not batch:
+                self._metric_samples_ready.wait(0.5)
+                self._metric_samples_ready.clear()
                 continue
 
             try:
-                from convex import ConvexClient
-
-                if client is None:
-                    client = _authenticated_client(ConvexClient, _convex_url())
-                client.mutation(INSTANCE_METRICS_MUTATION, {
-                    "instanceId": INSTANCE_ID,
-                    "timestamp": snapshot["timestamp"],
-                    "metrics": snapshot["metrics"],
-                })
+                self._publish_metrics(batch)
+            except TelemetryError as exc:
+                if self._stop_event.is_set():
+                    return
+                print(f"Metrics publisher error: {exc}")
+                if exc.retryable:
+                    self._stop_event.wait(METRICS_RETRY_SECONDS)
+                    continue
             except Exception as exc:
-                client = None
+                if self._stop_event.is_set():
+                    return
                 print(f"Metrics publisher error: {type(exc).__name__}: {exc}")
+                self._stop_event.wait(METRICS_RETRY_SECONDS)
+                continue
+            self._discard_metric_batch(batch)
+
+    def _publish_metrics(self, samples):
+        instance_id = _instance_id()
+        self._post(
+            f"{_telemetry_url()}/v1/instances/{quote(instance_id, safe='')}/metrics",
+            _instance_credentials(),
+            {"samples": samples},
+        )
 
     def _queue_metrics_snapshot(self, ctx):
         now = time.monotonic()
@@ -330,17 +455,15 @@ class _NexusBridge:
         )
         if not metrics:
             return
+        if _javascript_json_length(metrics) > MAX_SAMPLE_METRICS_BYTES:
+            print("Metrics snapshot exceeds the Nexus sample limit; skipped.")
+            return
 
-        metric_snapshot = {
+        self._enqueue_metric_sample({
+            "eventId": uuid.uuid4().hex,
             "timestamp": int(time.time() * 1000),
             "metrics": metrics,
-        }
-        for _ in _drain(self._pending_metrics_snapshots):
-            pass
-        try:
-            self._pending_metrics_snapshots.put_nowait(metric_snapshot)
-        except queue.Full:
-            pass
+        })
 
 
 _bridge = _NexusBridge()

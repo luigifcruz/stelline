@@ -1,7 +1,7 @@
-import asyncio
+import json
 import os
 from pathlib import Path
-import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, call, patch
@@ -17,7 +17,11 @@ def load_bridge(**environment):
     bridge = {}
     with (
         patch.dict(os.environ, {
-            "NEXUS_INSTANCE_ID": "", "NEXUS_INSTANCE_CREDENTIALS": "", **environment,
+            "NEXUS_INSTANCE_ID": "",
+            "NEXUS_INSTANCE_CREDENTIALS": "",
+            "NEXUS_INSTANCE_CREDENTIALS_FILE": "",
+            "NEXUS_TELEMETRY_URL": "",
+            **environment,
         }),
         patch("threading.Thread.start"),
         patch("threading.Thread.join"),
@@ -89,53 +93,183 @@ class NexusMetricsTests(unittest.TestCase):
         })
 
 
-class NexusAuthenticationTests(unittest.TestCase):
+class NexusTelemetryTests(unittest.TestCase):
     def setUp(self):
         self.module = load_bridge(
             NEXUS_INSTANCE_ID="instance-1", NEXUS_INSTANCE_CREDENTIALS="bearer-token",
         )
 
-    def test_metadata_authenticates_with_the_bearer_before_subscribing(self):
-        bridge = self.module["_NexusBridge"]()
-        factory = Mock()
+    def test_telemetry_url_prefers_the_replicant_value(self):
+        self.assertEqual(self.module["_telemetry_url"](), "https://nexus.invalid/telemetry")
+        self.module["TELEMETRY_URL"] = "https://telemetry.invalid/telemetry/"
+        self.assertEqual(self.module["_telemetry_url"](), "https://telemetry.invalid/telemetry")
 
-        async def snapshots():
-            yield {"data": [{"key": "observation.sync_timestamp", "value": 123, "type": "u64"}]}
+    def test_credentials_file_takes_precedence_over_the_environment(self):
+        with tempfile.NamedTemporaryFile("w") as credentials:
+            credentials.write("file-token\n")
+            credentials.flush()
+            self.module["INSTANCE_CREDENTIALS_FILE"] = credentials.name
+            self.assertEqual(self.module["_instance_credentials"](), "file-token")
+        self.module["INSTANCE_CREDENTIALS_FILE"] = ""
+        self.assertEqual(self.module["_instance_credentials"](), "bearer-token")
 
-        factory.return_value.subscribe.return_value = snapshots()
+    def test_metadata_is_read_from_the_telemetry_service(self):
+        post = Mock(return_value={
+            "snapshotId": "1",
+            "data": [
+                {"key": "observation.sync_timestamp", "value": 123, "type": "u64"},
+                {"key": "observatory.name", "value": "ATA", "type": "string"},
+            ],
+        })
+        bridge = self.module["_NexusBridge"](post)
         known = {}
-        asyncio.run(bridge._stream_metadata(factory, type("ConvexInt64", (), {}), "https://nexus.invalid", known))
-        self.assertEqual(factory.return_value.mock_calls, [
-            call.set_auth("bearer-token"),
-            call.subscribe("queries/observatory:getMetadata", {"instanceId": "instance-1"}),
-        ])
+        bridge._poll_metadata(known)
+        post.assert_called_once_with(
+            "https://nexus.invalid/telemetry/v1/otl/metadata",
+            "bearer-token",
+            {"instanceId": "instance-1"},
+        )
         self.assertTrue(bridge._connected)
-        self.assertIn("observation.sync_timestamp", known)
+        self.assertEqual(known["observation.sync_timestamp"]["value"], "123")
+
         ctx = SimpleNamespace(env={})
         bridge._apply_metadata_updates(ctx)
+        self.assertEqual(set(ctx.env), {"observation.sync_timestamp", "observatory.name"})
         self.assertNotIn("bearer-token", repr(ctx.env))
 
-    def test_missing_bearer_fails_before_creating_a_client(self):
+        post.return_value = {"snapshotId": "2", "data": [
+            {"key": "observatory.name", "value": "ATA", "type": "string"},
+        ]}
+        bridge._poll_metadata(known)
+        bridge._apply_metadata_updates(ctx)
+        self.assertEqual(set(ctx.env), {"observatory.name"})
+
+    def test_missing_credentials_fail_before_any_request(self):
         self.module["INSTANCE_CREDENTIALS"] = ""
-        factory = Mock()
-        bridge = self.module["_NexusBridge"]()
-        with self.assertRaisesRegex(ValueError, "NEXUS_INSTANCE_CREDENTIALS is required"):
-            asyncio.run(bridge._stream_metadata(factory, object, "https://nexus.invalid", {}))
-        factory.assert_not_called()
+        post = Mock()
+        bridge = self.module["_NexusBridge"](post)
+        with self.assertRaisesRegex(ValueError, "NEXUS_INSTANCE_CREDENTIALS"):
+            bridge._poll_metadata({})
+        post.assert_not_called()
 
-    def test_metrics_authenticates_with_the_same_bearer_before_publishing(self):
-        bridge = self.module["_NexusBridge"]()
-        factory = Mock()
-        factory.return_value.mutation.side_effect = lambda *_: bridge._stop_event.set()
-        snapshot = {"timestamp": 1000, "metrics": {"block": {"count": {"type": "number", "value": 1}}}}
-        bridge._pending_metrics_snapshots.put(snapshot)
+    @staticmethod
+    def sample(event_id):
+        return {
+            "eventId": event_id,
+            "timestamp": 1000,
+            "metrics": {"block": {"count": {"type": "number", "value": 1}}},
+        }
 
-        with patch.dict(sys.modules, {"convex": SimpleNamespace(ConvexClient=factory)}):
+    def run_publisher(self, bridge, post, outcomes):
+        def respond(*args):
+            outcome = outcomes.pop(0)
+            if not outcomes:
+                bridge._stop_event.set()
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        post.side_effect = respond
+        with patch.object(bridge._stop_event, "wait"):
             bridge._metrics_publisher_loop()
-        self.assertEqual(factory.return_value.mock_calls, [
-            call.set_auth("bearer-token"),
-            call.mutation("mutations/metrics:publishInstanceMetrics", {"instanceId": "instance-1", **snapshot}),
+
+    def test_metrics_are_posted_as_samples_and_retried_with_the_same_event_id(self):
+        post = Mock()
+        bridge = self.module["_NexusBridge"](post)
+        bridge._enqueue_metric_sample(self.sample("event-1"))
+        error = self.module["TelemetryError"]
+        self.run_publisher(bridge, post, [
+            error(503, "unavailable"), error(None, "offline"), error(429, "rate limited"), {"accepted": 1},
         ])
+
+        url = "https://nexus.invalid/telemetry/v1/instances/instance-1/metrics"
+        body = {"samples": [self.sample("event-1")]}
+        self.assertEqual(post.mock_calls, [call(url, "bearer-token", body)] * 4)
+
+    def test_rejected_metrics_are_not_retried(self):
+        post = Mock()
+        bridge = self.module["_NexusBridge"](post)
+        bridge._enqueue_metric_sample(self.sample("event-1"))
+        error = self.module["TelemetryError"]
+        sent = []
+
+        def respond(url, token, body):
+            sent.append([sample["eventId"] for sample in body["samples"]])
+            if len(sent) == 1:
+                bridge._enqueue_metric_sample(self.sample("event-2"))
+                raise error(401, "Invalid credential")
+            bridge._stop_event.set()
+            return {"accepted": 1}
+
+        post.side_effect = respond
+        bridge._metrics_publisher_loop()
+        self.assertEqual(sent, [["event-1"], ["event-2"]])
+
+    def test_pending_samples_are_bounded_while_the_publisher_is_stalled(self):
+        bridge = self.module["_NexusBridge"](Mock())
+        for index in range(300):
+            bridge._enqueue_metric_sample(self.sample(f"event-{index}"))
+        self.assertEqual(len(bridge._metric_samples), 256)
+        self.assertEqual(bridge._metric_samples[0]["eventId"], "event-44")
+
+    def test_batches_stay_below_the_request_size_limit(self):
+        post = Mock()
+        bridge = self.module["_NexusBridge"](post)
+        padding = "x" * (80 * 1024)
+        for index in range(16):
+            sample = self.sample(f"event-{index}")
+            sample["metrics"]["block"]["padding"] = {"type": "text", "value": padding}
+            bridge._enqueue_metric_sample(sample)
+        sizes = []
+        sent = []
+
+        def respond(url, token, body):
+            sizes.append(len(json.dumps(body, separators=(",", ":"))))
+            sent.extend(sample["eventId"] for sample in body["samples"])
+            if len(sent) >= 16 or len(sizes) > 16:
+                bridge._stop_event.set()
+            return {"accepted": len(body["samples"])}
+
+        post.side_effect = respond
+        bridge._metrics_publisher_loop()
+        self.assertGreater(len(sizes), 1)
+        self.assertTrue(all(size <= 768 * 1024 for size in sizes))
+        self.assertEqual(sent, [f"event-{index}" for index in range(16)])
+        self.assertEqual(len(bridge._metric_samples), 0)
+
+    def test_oversized_snapshots_are_skipped(self):
+        bridge = self.module["_NexusBridge"](Mock())
+        bridge._metrics_thread = object()
+        ctx = SimpleNamespace(metrics={"block": {"blob": {
+            "value": "x" * (600 * 1024),
+            "format": {"type": "stelline-metrics-string"},
+        }}})
+        bridge._queue_metrics_snapshot(ctx)
+        self.assertEqual(len(bridge._metric_samples), 0)
+
+    def test_number_expansion_in_javascript_is_counted(self):
+        bridge = self.module["_NexusBridge"](Mock())
+        bridge._metrics_thread = object()
+        ctx = SimpleNamespace(metrics={"block": {
+            f"m{index}": {"value": 1e20, "format": {"type": "stelline-metrics-number"}}
+            for index in range(10500)
+        }})
+        self.assertLess(len(json.dumps(self.module["_build_metrics_snapshot"](ctx), separators=(",", ":"))), 512 * 1024)
+        bridge._queue_metrics_snapshot(ctx)
+        self.assertEqual(len(bridge._metric_samples), 0)
+
+    def test_a_request_finishing_after_cleanup_is_ignored(self):
+        bridge = self.module["_NexusBridge"]()
+
+        def post(*args):
+            bridge._stop_event.set()
+            for name in ("_metadata_entries_by_key", "_telemetry_url", "METADATA_RETRY_SECONDS"):
+                self.module[name] = None
+            return {"data": [{"key": "observatory.name", "value": "ATA", "type": "string"}]}
+
+        bridge._post = post
+        bridge._run_worker(bridge._metadata_watcher_loop)
+        self.assertTrue(bridge._pending_metadata_updates.empty())
 
 
 if __name__ == "__main__":
