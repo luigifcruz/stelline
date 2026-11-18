@@ -17,11 +17,11 @@ struct Uvh5Writer : public Block::Config {
     JST_BLOCK_PARAMS(filepath, overwrite, recording);
     JST_BLOCK_DESCRIPTION(
         "UVH5 Writer",
-        "Sink that writes pre-arranged correlation tensors to UVH5.",
+        "Sink that records correlation tensors to UVH5.",
         "# UVH5 Writer\n"
-        "The UVH5 Writer block writes pre-arranged visibility tensors to a UVH5 file using "
-        "GPUDirect Storage. Input tensors must be shaped as [time, baselines, frequencies, "
-        "polarizations] with one time sample and four polarization products per write. "
+        "The UVH5 Writer block writes visibility tensors to a UVH5 file using "
+        "GPUDirect Storage. Input tensors hold one time sample, baselines, frequencies, and "
+        "four polarization products per write. "
         "Observatory and observation metadata are read from the flowgraph environment, "
         "typically populated by the Nexus Bridge block.\n\n"
 
@@ -41,7 +41,7 @@ struct Uvh5Writer : public Block::Config {
         "  Input: CF32[1, 406, 192, 4] -> Appended to the file each cycle.\n\n"
 
         "## Implementation\n"
-        "Input Buffer -> UVH5 Module -> HDF5 GDS File\n"
+        "Input Buffer -> [Permutation] -> [Duplicate] -> UVH5 Module -> HDF5 GDS File\n"
         "1. Loads observatory, antenna, and band metadata from the flowgraph environment.\n"
         "2. Builds the UVH5 header and opens the file with the GPUDirect Storage HDF5 driver.\n"
         "3. Appends each input tensor to the visibility dataset directly from GPU memory.\n"

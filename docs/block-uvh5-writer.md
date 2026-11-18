@@ -1,6 +1,6 @@
 ---
 title: UVH5 Writer
-description: Sink that writes pre-arranged correlation tensors to UVH5.
+description: Sink that records correlation tensors to UVH5.
 order: 42
 category: Stelline
 ---
@@ -31,7 +31,7 @@ The frequency axis is derived rather than configured. The instance band defines 
 
 | Name | Description |
 |---|---|
-| `input` | Contiguous `CF32` tensor shaped `[1, baselines, frequencies, 4]` with `timestamp` and `duration` attributes. |
+| `input` | `CF32` tensor with one time sample, baselines, frequencies, and four polarization products, plus `timestamp` and `duration` attributes. |
 
 The baseline count must match the antenna table, so `N` antennas require `N * (N + 1) / 2` baselines including autocorrelations. The polarization axis holds the four cross products of the `x` and `y` feeds. With the 28-antenna example environment the expected input is `CF32[1, 406, 192, 4]`.
 

@@ -628,3 +628,76 @@ TEST_CASE("UVH5 reader returns what the writer recorded, including padded integr
     REQUIRE(flowgraph.destroy() == Result::SUCCESS);
 #endif
 }
+
+TEST_CASE("UVH5 writer arranges correlator-ordered input without extra blocks",
+          "[stelline][uvh5_writer][block][cuda]") {
+#if !defined(STELLINE_DEVICE_CUDA_AVAILABLE) || !defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    SKIP("Stelline was not built with CUDA support.");
+#else
+    BackendGuard backendGuard;
+    Backend::Config backendConfig;
+    backendConfig.headless = true;
+    REQUIRE(Backend::Initialize<DeviceType::CPU>(backendConfig) == Result::SUCCESS);
+    REQUIRE(Backend::Initialize<DeviceType::CUDA>(backendConfig) == Result::SUCCESS);
+
+    const ScratchDirectory scratch;
+    const auto path = scratch.path / "arranged.uvh5";
+
+    {
+        Flowgraph flowgraph;
+        REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+        SetObservation(flowgraph);
+
+        Blocks::OnesTensor sourceConfig;
+        sourceConfig.shape = {3, 2, 1, 4};
+        sourceConfig.dataType = "CF32";
+        REQUIRE(flowgraph.blockCreate("source", sourceConfig, {}, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData source;
+        REQUIRE(flowgraph.view().block("source", source) == Result::SUCCESS);
+        Tensor sourceOutput = source.outputs.at("buffer").tensor;
+        REQUIRE(SetSignalAxes(sourceOutput, {
+            .sample = Index{2},
+            .channel = Index{1},
+        }) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("timestamp", U64{0}) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("duration", kBlockDuration) == Result::SUCCESS);
+
+        TensorMap inputs;
+        inputs["input"].requested("source", "buffer");
+        Blocks::Uvh5Writer writerConfig;
+        writerConfig.filepath = path.string();
+        writerConfig.recording = true;
+        REQUIRE(flowgraph.blockCreate("writer", writerConfig, inputs, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData writer;
+        REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+        INFO(writer.diagnostic);
+        REQUIRE(writer.state == Block::State::Created);
+
+        for (const U64 block : {U64{0}, U64{1}}) {
+            REQUIRE(sourceOutput.setAttribute("timestamp", block * kBlockDuration) == Result::SUCCESS);
+            REQUIRE(flowgraph.compute() == Result::SUCCESS);
+            REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+            INFO(writer.diagnostic);
+            REQUIRE(writer.state == Block::State::Created);
+        }
+
+        REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+    }
+
+    const hid_t file = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    REQUIRE(file >= 0);
+    const auto ntimes = ReadDataset<I32>(file, "/Header/Ntimes");
+    const auto nfreqs = ReadDataset<I32>(file, "/Header/Nfreqs");
+    const auto visibilities = ReadDataset<CF32>(file, "/Data/visdata");
+    REQUIRE(H5Fclose(file) >= 0);
+
+    CHECK(ntimes == std::vector<I32>{2});
+    CHECK(nfreqs == std::vector<I32>{2});
+    CHECK(visibilities.size() == 2 * 3 * 2 * 4);
+    CHECK(std::all_of(visibilities.begin(), visibilities.end(), [](const CF32 value) { return value == CF32{1.0f, 0.0f}; }));
+#endif
+}

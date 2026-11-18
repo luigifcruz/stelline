@@ -1,8 +1,11 @@
 #include <stelline/uvh5_writer/block.hh>
 #include <jetstream/detail/block_impl.hh>
 #include <stelline/uvh5_writer/module.hh>
+#include <jetstream/domains/core/duplicate/module.hh>
+#include <jetstream/domains/core/permutation/module.hh>
 
 #include "module_impl.hh"
+#include "../recording_input.hh"
 
 namespace Jetstream::Blocks {
 
@@ -13,6 +16,8 @@ struct Uvh5WriterImpl : public Block::Impl, public DynamicConfig<Blocks::Uvh5Wri
 
  protected:
     std::shared_ptr<Modules::Uvh5Writer> moduleConfig = std::make_shared<Modules::Uvh5Writer>();
+    std::shared_ptr<Modules::Permutation> permutationConfig = std::make_shared<Modules::Permutation>();
+    std::shared_ptr<Modules::Duplicate> duplicateConfig = std::make_shared<Modules::Duplicate>();
     Modules::Uvh5WriterImpl* moduleImpl = nullptr;
 };
 
@@ -27,7 +32,7 @@ Result Uvh5WriterImpl::configure() {
 Result Uvh5WriterImpl::define() {
     JST_CHECK(defineInterfaceInput("input",
                                    "Input",
-                                   "Pre-arranged rank-4 correlation tensor written to UVH5."));
+                                   "Rank-4 CF32 correlation tensor written to UVH5."));
 
     JST_CHECK(defineInterfaceConfig("filepath",
                                     "File Path",
@@ -96,8 +101,29 @@ Result Uvh5WriterImpl::define() {
 }
 
 Result Uvh5WriterImpl::create() {
+    TensorLink input = inputs().at("input");
+    Modules::RecordingInputPlan plan;
+    if (device() == DeviceType::CUDA) {
+        JST_CHECK(Modules::PlanRecordingInput(input.tensor, "[BLOCK_UVH5_WRITER]", plan));
+    }
+    if (plan.permutation) {
+        permutationConfig->permutation = *plan.permutation;
+        JST_CHECK(moduleCreate("permutation", permutationConfig, {
+            {"buffer", input}
+        }));
+        input = moduleGetOutput({"permutation", "buffer"});
+    }
+    if (plan.copy) {
+        duplicateConfig->outputDevice = "cuda";
+        duplicateConfig->hostAccessible = false;
+        JST_CHECK(moduleCreate("duplicate", duplicateConfig, {
+            {"buffer", input}
+        }));
+        input = moduleGetOutput({"duplicate", "buffer"});
+    }
+
     JST_CHECK(moduleCreate("uvh5_writer", moduleConfig, {
-        {"input", inputs().at("input")}
+        {"input", input}
     }));
 
     moduleImpl = moduleHandle("uvh5_writer")->getImpl<Modules::Uvh5WriterImpl>();

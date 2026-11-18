@@ -1,6 +1,6 @@
 ---
 title: FBH5 Writer
-description: Sink that writes pre-arranged tensors to FBH5.
+description: Sink that records filterbank tensors to FBH5.
 order: 43
 category: Stelline
 ---
@@ -27,7 +27,7 @@ The first written block establishes the sample grid. If a later block reveals a 
 
 | Name | Description |
 |---|---|
-| `input` | Contiguous `F32` tensor shaped `[time, beams, channels, intermediate frequencies]` with `timestamp` and `duration` attributes. |
+| `input` | `F32` tensor with time, beams, channels, and intermediate frequency axes, plus `timestamp` and `duration` attributes. |
 
 The time dimension sets how many spectra are appended per compute cycle, and the channel dimension sets the number of frequency channels per spectrum.
 
