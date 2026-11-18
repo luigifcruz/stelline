@@ -277,10 +277,6 @@ TEST_CASE("Recording source checks reject any band or clock change",
     REQUIRE(Modules::LoadRecordingSource(environment, "[TEST]", expected) == Result::SUCCESS);
     CHECK(expected.channelCount() == 2);
 
-    REQUIRE(environment.set("instance.bands.len", Integer{2}) == Result::SUCCESS);
-    Modules::RecordingSource multiple;
-    CHECK(Modules::LoadRecordingSource(environment, "[TEST]", multiple) == Result::ERROR);
-    setAll();
     REQUIRE(Modules::CheckRecordingSource(environment, "[TEST]", expected) == Result::SUCCESS);
 
     const std::vector<std::pair<std::string, std::function<Result()>>> changes = {
@@ -300,6 +296,92 @@ TEST_CASE("Recording source checks reject any band or clock change",
         setAll();
         REQUIRE(Modules::CheckRecordingSource(environment, "[TEST]", expected) == Result::SUCCESS);
     }
+
+    REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+}
+
+TEST_CASE("Recording sources merge contiguous instance bands",
+          "[stelline][fbh5_writer][module][timing]") {
+    struct Text {
+        std::string value;
+        JST_SERDES(value);
+    };
+    struct Real {
+        F64 value = 0.0;
+        JST_SERDES(value);
+    };
+    struct Integer {
+        I64 value = 0;
+        JST_SERDES(value);
+    };
+
+    Flowgraph flowgraph;
+    REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+    auto& environment = flowgraph.environment();
+    const std::string tuning = "observatory.antenna.1a.tunings.a";
+    const auto setBand = [&](const I64 index, const F64 start, const F64 stop, const I64 first, const I64 last) {
+        const auto band = tuning + ".bands." + std::to_string(index);
+        REQUIRE(environment.set(band + ".frequency_start", Real{start}) == Result::SUCCESS);
+        REQUIRE(environment.set(band + ".frequency_stop", Real{stop}) == Result::SUCCESS);
+        REQUIRE(environment.set(band + ".channel_start", Integer{first}) == Result::SUCCESS);
+        REQUIRE(environment.set(band + ".channel_stop", Integer{last}) == Result::SUCCESS);
+    };
+    const auto setAll = [&]() {
+        REQUIRE(environment.set("instance.bands.len", Integer{2}) == Result::SUCCESS);
+        REQUIRE(environment.set("observation.antennas.0", Text{"1a"}) == Result::SUCCESS);
+        REQUIRE(environment.set("instance.bands.0.tuning", Text{"a"}) == Result::SUCCESS);
+        REQUIRE(environment.set("instance.bands.0.band_index", Integer{1}) == Result::SUCCESS);
+        REQUIRE(environment.set("instance.bands.1.tuning", Text{"a"}) == Result::SUCCESS);
+        REQUIRE(environment.set("instance.bands.1.band_index", Integer{0}) == Result::SUCCESS);
+        setBand(0, 2999.75, 3095.75, 352, 544);
+        setBand(1, 3095.75, 3191.75, 544, 736);
+        REQUIRE(environment.set(tuning + ".fengine.synctime", Integer{1700000000}) == Result::SUCCESS);
+        REQUIRE(environment.set(tuning + ".fengine.sample_period", Real{2e-6}) == Result::SUCCESS);
+    };
+
+    setAll();
+    Modules::RecordingSource merged;
+    REQUIRE(Modules::LoadRecordingSource(environment, "[TEST]", merged) == Result::SUCCESS);
+    CHECK(merged.bandIndices == std::vector<I64>{0, 1});
+    CHECK(merged.channelStart == 352);
+    CHECK(merged.channelStop == 736);
+    CHECK(merged.channelCount() == 384);
+    CHECK(merged.frequencyStart == 2999.75);
+    CHECK(merged.frequencyStop == 3191.75);
+
+    const auto frequencies = Modules::ChannelFrequencies(merged.frequencyStart, merged.frequencyStop,
+                                                         merged.channelCount(), merged.channelCount() * 16);
+    REQUIRE(frequencies.has_value());
+    CHECK_THAT(frequencies->first, Catch::Matchers::WithinAbs(2999.75, 1e-9));
+    CHECK_THAT(frequencies->step, Catch::Matchers::WithinAbs(0.03125, 1e-12));
+
+    const std::vector<std::pair<std::string, std::function<void()>>> rejected = {
+        {"channel gap", [&] { setBand(1, 3096.75, 3192.75, 546, 738); }},
+        {"frequency gap", [&] { setBand(1, 3096.25, 3192.25, 544, 736); }},
+        {"channel width", [&] { setBand(1, 3095.75, 3287.75, 544, 736); }},
+        {"tuning", [&] { REQUIRE(environment.set("instance.bands.1.tuning", Text{"b"}) == Result::SUCCESS); }},
+        {"no bands", [&] { REQUIRE(environment.set("instance.bands.len", Integer{0}) == Result::SUCCESS); }},
+    };
+    for (const auto& [name, change] : rejected) {
+        INFO(name);
+        change();
+        Modules::RecordingSource source;
+        CHECK(Modules::LoadRecordingSource(environment, "[TEST]", source) == Result::ERROR);
+        setAll();
+    }
+
+    REQUIRE(environment.set("instance.bands.0.tuning", Text{" A "}) == Result::SUCCESS);
+    REQUIRE(environment.set("instance.bands.len", Integer{3}) == Result::SUCCESS);
+    REQUIRE(environment.set("instance.bands.2.tuning", Text{"a"}) == Result::SUCCESS);
+    REQUIRE(environment.set("instance.bands.2.band_index", Integer{1}) == Result::SUCCESS);
+    Modules::RecordingSource normalized;
+    REQUIRE(Modules::LoadRecordingSource(environment, "[TEST]", normalized) == Result::SUCCESS);
+    CHECK(normalized == merged);
+    setAll();
+
+    REQUIRE(environment.set("instance.bands.len", Integer{4}) == Result::SUCCESS);
+    Modules::RecordingSource pending;
+    CHECK(Modules::LoadRecordingSource(environment, "[TEST]", pending) == Result::INCOMPLETE);
 
     REQUIRE(flowgraph.destroy() == Result::SUCCESS);
 }

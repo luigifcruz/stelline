@@ -44,7 +44,7 @@ The baseline count must match the antenna table, so `N` antennas require `N * (N
 
 ## Environment variables
 
-The block is a pure consumer of the flowgraph environment. It reads the keys below, where `<name>` is an antenna name, `<tuning>` is the instance tuning, and `<band>` is the instance band index.
+The block is a pure consumer of the flowgraph environment. It reads the keys below, where `<name>` is an antenna name, `<tuning>` is the instance tuning, `<slot>` is a position in the instance band list, and `<band>` is one of the instance band indices.
 
 Read once when recording starts:
 
@@ -64,14 +64,14 @@ Read once when recording starts:
 | `observatory.antenna.<name>.pointing.az` | Phase center azimuth in radians when the pointing source is `AzEl` or `Stay put`. |
 | `observatory.antenna.<name>.pointing.el` | Phase center elevation in radians when the pointing source is `AzEl` or `Stay put`. |
 
-Read when recording starts and checked again before every input. A change stops the recording:
+Read when recording starts and checked again before every input. The recording stops if any of them goes missing or becomes invalid, or if the first antenna, the tuning, the set of bands, the merged band range, or the clock changes:
 
 | Key | Purpose |
 |---|---|
 | `observation.antennas.0` | Antenna whose F-engine band and clock define the file axes. |
-| `instance.bands.len` | Band count of this instance; must be one. |
-| `instance.bands.0.tuning` | Tuning identifier. |
-| `instance.bands.0.band_index` | Band index within the tuning. |
+| `instance.bands.len` | Band count of this instance, at least one. Multiple bands must share one tuning, compared case-insensitively, and form one contiguous channel and frequency range with a uniform channel width; repeated bands are ignored and the writer records them as a single band. |
+| `instance.bands.<slot>.tuning` | Tuning identifier. |
+| `instance.bands.<slot>.band_index` | Band index within the tuning. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.frequency_start` | Band start frequency in MHz. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.frequency_stop` | Band stop frequency in MHz. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.channel_start` | First coarse channel. |
