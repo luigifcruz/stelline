@@ -637,6 +637,11 @@ Result CorrelatorImplNativeCuda::computeInitialize() {
 }
 
 Result CorrelatorImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
+    const WindowStep step = window.admit(inputTensor);
+    if (!step.accept) {
+        return Result::SKIP;
+    }
+
     const auto* inputBase = static_cast<const std::uint8_t*>(inputTensor.buffer().data());
     auto* outputBase = static_cast<std::uint8_t*>(outputTensor.buffer().data());
     auto* accumulatorBase = plan.packed
@@ -660,7 +665,7 @@ Result CorrelatorImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         accumulatorCleared = true;
     }
 
-    if (integrationStep == 0) {
+    if (step.first) {
         JST_CUDA_CHECK(cudaMemsetAsync(outputData, 0, outputTensor.sizeBytes(), stream), [&] {
             JST_ERROR("[MODULE_CORRELATOR_NATIVE_CUDA] Failed to clear the correlator output buffer: {}.", err);
         });
@@ -696,12 +701,10 @@ Result CorrelatorImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
                                  accumulateArguments));
     }
 
-    integrationStep = (integrationStep + 1) % integrationRate;
-    if (integrationStep != 0) {
+    if (!step.last) {
         return Result::SKIP;
     }
-
-    return Result::SUCCESS;
+    return window.stamp(outputTensor);
 }
 
 Result CorrelatorImplNativeCuda::computeDeinitialize() {

@@ -56,7 +56,7 @@ Either side of a colon accepts `*` as a wildcard, so `- * -> 239.1.2.3:50000` ac
 
 | Name | Description |
 |---|---|
-| `output` | Tensor shaped as `totalBlock` in the configured data type, carrying a `timestamp` attribute with the block start time in F-engine sample units. |
+| `output` | Tensor shaped as `totalBlock` in the configured data type, carrying `timestamp` and `duration` attributes with the block start time and length in F-engine sample units. |
 
 The `timestamp` attribute is the link between the data path and the metadata path. Sinks such as the [UVH5 Writer](/docs/block-uvh5-writer) use it to look up time-matched pointing and Earth orientation values.
 
@@ -65,6 +65,7 @@ The `timestamp` attribute is the link between the data path and the metadata pat
 | Attribute | Type | Direction | Description |
 |---|---|---|---|
 | `timestamp` | `U64` | Written on `output` | Start time of the block in F-engine sample units. |
+| `duration` | `U64` | Written on `output` | Number of F-engine samples the block covers. |
 
 ## Metrics
 

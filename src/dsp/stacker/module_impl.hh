@@ -5,6 +5,8 @@
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/memory/axis.hh>
 
+#include "../block_window.hh"
+
 namespace Jetstream::Modules {
 
 struct StackerImpl : public Module::Impl, public DynamicConfig<Stacker> {
@@ -38,7 +40,8 @@ struct StackerImpl : public Module::Impl, public DynamicConfig<Stacker> {
     U64 outputRowByteSize = 0;
     U64 height = 0;
     U64 inputSize = 0;
-    U64 stackIndex;
+    U64 stackIndex = 0;
+    BlockWindow window;
 };
 
 }  // namespace Jetstream::Modules

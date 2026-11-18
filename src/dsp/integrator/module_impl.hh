@@ -5,6 +5,8 @@
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/memory/axis.hh>
 
+#include "../block_window.hh"
+
 namespace Jetstream::Modules {
 
 struct IntegratorImpl : public Module::Impl, public DynamicConfig<Integrator> {
@@ -31,7 +33,7 @@ struct IntegratorImpl : public Module::Impl, public DynamicConfig<Integrator> {
     Index resolvedAxis = 0;
     U64 integratedElementCount = 0;
     U64 numberOfElements = 0;
-    U64 blockIndex;
+    BlockWindow window;
     bool bypass = false;
     bool adjustSampleRate = false;
 };

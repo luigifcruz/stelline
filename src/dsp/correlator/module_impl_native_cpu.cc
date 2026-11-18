@@ -174,19 +174,22 @@ Result CorrelatorImplNativeCpu::destroy() {
 }
 
 Result CorrelatorImplNativeCpu::computeSubmit() {
-    if (integrationStep == 0) {
+    const WindowStep step = window.admit(inputTensor);
+    if (!step.accept) {
+        return Result::SKIP;
+    }
+
+    if (step.first) {
         CF32* output = outputTensor.data<CF32>();
         std::fill(output, output + outputTensor.size(), CF32{});
     }
 
     JST_CHECK(kernel());
 
-    integrationStep = (integrationStep + 1) % integrationRate;
-    if (integrationStep != 0) {
+    if (!step.last) {
         return Result::SKIP;
     }
-
-    return Result::SUCCESS;
+    return window.stamp(outputTensor);
 }
 
 template<typename Input, typename Calculation>

@@ -98,19 +98,25 @@ Result IntegratorImplNativeCpu::create() {
 }
 
 Result IntegratorImplNativeCpu::computeSubmit() {
+    const WindowStep step = window.admit(inputTensor);
+    if (!step.accept) {
+        return Result::SKIP;
+    }
     if (bypass) {
         return Result::SUCCESS;
     }
 
     CF32* output = outputTensor.data<CF32>();
-    if (blockIndex == 0) {
+    if (step.first) {
         std::fill(output, output + numberOfElements, CF32{});
     }
 
     JST_CHECK(kernel());
 
-    blockIndex = (blockIndex + 1) % rate;
-    return blockIndex == 0 ? Result::SUCCESS : Result::SKIP;
+    if (!step.last) {
+        return Result::SKIP;
+    }
+    return window.stamp(outputTensor);
 }
 
 template<typename T>

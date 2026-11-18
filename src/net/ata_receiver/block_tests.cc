@@ -36,7 +36,7 @@ Blocks::AtaReceiver ValidConfig() {
     config.workerCores = {0};
     config.subscriptions = "- 127.0.0.1:10000 -> 239.1.1.1:50000";
     config.totalBlock = {1, 96, 16, 2};
-    config.partialBlock = {1, 96, 16, 2};
+    config.partialBlock = {1, 96, 8, 2};
     config.packetsPerBurst = 1;
     config.maxConcurrentBursts = 1;
     config.maxConcurrentBlocks = 1;
@@ -86,6 +86,7 @@ TEST_CASE("ATA receiver block preserves an invalid plan for sparse recovery",
     REQUIRE(output.dtype() == DataType::CF32);
     REQUIRE(output.shape() == Shape{1, 96, 16, 2});
     REQUIRE(output.hasAttribute("timestamp"));
+    REQUIRE(std::any_cast<U64>(output.attribute("duration")) == 16);
 
     SignalAxes axes;
     REQUIRE(ResolveSignalAxes(output, axes) == Result::SUCCESS);

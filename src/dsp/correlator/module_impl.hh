@@ -5,6 +5,8 @@
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/memory/axis.hh>
 
+#include "../block_window.hh"
+
 namespace Jetstream::Modules {
 
 constexpr U64 kExpectedRank = 4;
@@ -32,7 +34,7 @@ struct CorrelatorImpl : public Module::Impl, public DynamicConfig<Correlator> {
     SignalAxes validatedSignalAxes;
 
     U64 baselineCount = 0;
-    U64 integrationStep = 0;
+    BlockWindow window;
 };
 
 }  // namespace Jetstream::Modules

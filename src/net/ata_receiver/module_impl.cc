@@ -252,6 +252,7 @@ Result AtaReceiverImpl::create() {
         .channel = Index{kChannelAxis},
     }));
     JST_CHECK(outputTensor.setAttribute("timestamp", static_cast<U64>(0)));
+    JST_CHECK(outputTensor.setAttribute("duration", blockDuration));
 
     outputs()["output"].produced(name(), "output", outputTensor);
 

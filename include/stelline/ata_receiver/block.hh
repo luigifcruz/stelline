@@ -64,14 +64,14 @@ struct AtaReceiver : public Block::Config {
         "## Examples\n"
         "- Receive CF32 voltage blocks:\n"
         "  Config: Total Block=[28, 192, 8192, 2], Partial Block=[1, 96, 1024, 2]\n"
-        "  Output: CF32[28, 192, 8192, 2] with a 'timestamp' attribute.\n\n"
+        "  Output: CF32[28, 192, 8192, 2] with 'timestamp' and 'duration' attributes.\n\n"
 
         "## Implementation\n"
         "Network Bursts -> Block Map -> Gather Kernel -> Output Pool\n"
         "1. Worker threads receive packet bursts from the network interface.\n"
         "2. Each packet is filtered against the configured offset and mapped into a block by timestamp.\n"
         "3. A CUDA kernel gathers the packet payloads into the dense output tensor.\n"
-        "4. Completed blocks are emitted from a reusable output pool with a timestamp attribute."
+        "4. Completed blocks are emitted from a reusable output pool with timestamp and duration attributes."
     );
 };
 

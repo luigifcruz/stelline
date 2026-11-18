@@ -58,14 +58,19 @@ Result StackerImplNativeCpu::create() {
 }
 
 Result StackerImplNativeCpu::computeSubmit() {
+    const WindowStep step = window.admit(inputTensor);
+    if (!step.accept) {
+        return Result::SKIP;
+    }
     if (bypass) {
         return Result::SUCCESS;
     }
+    stackIndex = step.index;
 
     U8* output = outputTensor.data<U8>();
     const U8* input = inputTensor.data<U8>();
 
-    if (stackIndex == 0 && outputTensor.sizeBytes() != 0) {
+    if (step.first && outputTensor.sizeBytes() != 0) {
         std::memset(output, 0, outputTensor.sizeBytes());
     }
 
@@ -78,8 +83,10 @@ Result StackerImplNativeCpu::computeSubmit() {
         }
     }
 
-    stackIndex = (stackIndex + 1) % stackRatio;
-    return stackIndex == 0 ? Result::SUCCESS : Result::SKIP;
+    if (!step.last) {
+        return Result::SKIP;
+    }
+    return window.stamp(outputTensor);
 }
 
 JST_REGISTER_MODULE(StackerImplNativeCpu, DeviceType::CPU, RuntimeType::NATIVE, "generic");
