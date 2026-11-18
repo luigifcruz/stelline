@@ -117,8 +117,8 @@ void SetObservation(Flowgraph& flowgraph) {
     }
 
     const std::string antenna = "observatory.antenna.1a";
-    SetEnvironment(flowgraph, antenna + ".pointing.ra", 5.5);
-    SetEnvironment(flowgraph, antenna + ".pointing.dec", 22.0);
+    SetEnvironment(flowgraph, antenna + ".pointing.ra", 1.25);
+    SetEnvironment(flowgraph, antenna + ".pointing.dec", 0.5);
     SetEnvironment(flowgraph, antenna + ".pointing.source_name", std::string("TEST"));
     SetEnvironment(flowgraph, antenna + ".tunings.a.bands.0.frequency_start", 1000.0);
     SetEnvironment(flowgraph, antenna + ".tunings.a.bands.0.frequency_stop", 1002.0);
@@ -266,11 +266,15 @@ TEST_CASE("UVH5 writer pads an RF gap in the file and stops on an epoch change",
     const auto visibilities = ReadDataset<CF32>(file, "/Data/visdata");
     const auto frequencies = ReadDataset<F64>(file, "/Header/freq_array");
     const auto channelWidths = ReadDataset<F64>(file, "/Header/channel_width");
+    const auto catalogRa = ReadDataset<F64>(file, "/Header/phase_center_catalog/0/cat_lon");
+    const auto catalogDec = ReadDataset<F64>(file, "/Header/phase_center_catalog/0/cat_lat");
     const auto startSample = ReadDataset<U64>(file, "/Header/extra_keywords/rf_start_sample");
     const auto synctime = ReadDataset<U64>(file, "/Header/extra_keywords/synctime");
     const auto samplesPerRow = ReadDataset<U64>(file, "/Header/extra_keywords/rf_samples_per_row");
     REQUIRE(H5Fclose(file) >= 0);
 
+    CHECK(catalogRa == std::vector<F64>{1.25});
+    CHECK(catalogDec == std::vector<F64>{0.5});
     CHECK(startSample == std::vector<U64>{0});
     CHECK(synctime == std::vector<U64>{static_cast<U64>(kSyncTime)});
     CHECK(samplesPerRow == std::vector<U64>{kBlockDuration});

@@ -90,3 +90,10 @@ test(
     args: files('nexus_bridge_python.py'),
     suite: 'stelline',
 )
+
+test(
+    'fs-stitcher-python',
+    py,
+    args: files('stitcher_python.py'),
+    suite: 'stelline',
+)

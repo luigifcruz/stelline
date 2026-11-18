@@ -79,8 +79,8 @@ Re-read per input timestamp:
 
 | Key | Purpose |
 |---|---|
-| `observatory.antenna.<name>.pointing.ra` | Phase center right ascension in hours. |
-| `observatory.antenna.<name>.pointing.dec` | Phase center declination in degrees. |
+| `observatory.antenna.<name>.pointing.ra` | Phase center right ascension in radians. |
+| `observatory.antenna.<name>.pointing.dec` | Phase center declination in radians. |
 | `observatory.antenna.<name>.pointing.source_name` | Phase center source name. |
 | `observation.iers.pm_x_arcsec` | Polar motion, x component. |
 | `observation.iers.pm_y_arcsec` | Polar motion, y component. |

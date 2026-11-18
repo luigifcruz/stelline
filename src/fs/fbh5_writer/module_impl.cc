@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <limits>
 #include <new>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -140,22 +141,14 @@ Result Fbh5WriterImpl::create() {
     filterbank_header_t* header = &fbh5File.header;
 
     header->machine_id = 20;
-    header->telescope_id = 6;
     header->data_type = 1;
     header->barycentric = 0;
     header->pulsarcentric = 0;
-    header->src_raj = 20.0 + 39.0 / 60.0 + 7.4 / 3600.0;
-    header->src_dej = 42.0 + 24.0 / 60.0 + 24.5 / 3600.0;
-    header->az_start = 12.3456;
-    header->za_start = 65.4321;
     header->nchans = static_cast<int>(nchans);
     header->nbeams = static_cast<int>(nbeams);
     header->ibeam = 1;
     header->nbits = inputDataType == DataType::F32 ? 32 : 0;
     header->nifs = static_cast<int>(nifs);
-
-    std::strncpy(header->source_name, kSourceName, sizeof(header->source_name) - 1);
-    header->source_name[sizeof(header->source_name) - 1] = '\0';
 
     fbh5File.nchans_per_write = static_cast<std::size_t>(nchans);
     fbh5File.ntimes_per_write = static_cast<std::size_t>(ntimesPerWrite);
@@ -244,6 +237,71 @@ Result Fbh5WriterImpl::loadHeaderMetadata(const Tensor& input) {
     header.fch1 = frequencies->first;
     header.foff = frequencies->step;
 
+    return loadPointing();
+}
+
+Result Fbh5WriterImpl::loadPointing() {
+    struct {
+        std::string value;
+        JST_SERDES(value);
+    } text;
+
+    struct {
+        F64 value = 0.0;
+        JST_SERDES(value);
+    } real;
+
+    const auto require = [&](const std::string& key, auto& value) {
+        if (!environment()->tryGet(key, value)) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Missing required '{}' environment value.", key);
+            return false;
+        }
+        return true;
+    };
+
+    filterbank_header_t& header = fbh5File.header;
+    if (!require("observatory.name", text)) {
+        return Result::INCOMPLETE;
+    }
+    header.telescope_id = text.value == "ATA" ? kSigprocAtaTelescopeId : 0;
+
+    const auto pointing = jst::fmt::format("observatory.antenna.{}.pointing", source.antenna);
+    if (!require(pointing + ".source_name", text)) {
+        return Result::INCOMPLETE;
+    }
+    std::strncpy(header.source_name, text.value.c_str(), sizeof(header.source_name) - 1);
+    header.source_name[sizeof(header.source_name) - 1] = '\0';
+
+    const auto read = [&](const char* name, const bool required, std::optional<F64>& degrees) {
+        const auto key = pointing + "." + name;
+        if (!environment()->tryGet(key, real)) {
+            if (required) {
+                JST_ERROR("[MODULE_FBH5_WRITER] Missing required '{}' environment value.", key);
+                return Result::INCOMPLETE;
+            }
+            return Result::SUCCESS;
+        }
+        if (!std::isfinite(real.value)) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Invalid '{}' environment value.", key);
+            return Result::ERROR;
+        }
+        degrees = real.value * 180.0 / M_PI;
+        return Result::SUCCESS;
+    };
+
+    std::optional<F64> rightAscension;
+    std::optional<F64> declination;
+    std::optional<F64> azimuth;
+    std::optional<F64> elevation;
+    JST_CHECK(read("ra", true, rightAscension));
+    JST_CHECK(read("dec", true, declination));
+    JST_CHECK(read("az", false, azimuth));
+    JST_CHECK(read("el", false, elevation));
+
+    header.src_raj = *rightAscension / 15.0;
+    header.src_dej = *declination;
+    header.az_start = azimuth.value_or(kUnknownAngle);
+    header.za_start = elevation ? 90.0 - *elevation : kUnknownAngle;
     return Result::SUCCESS;
 }
 

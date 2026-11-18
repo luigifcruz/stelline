@@ -105,9 +105,17 @@ void SetEnvironment(Flowgraph& flowgraph, const std::string& key, const I64 valu
     REQUIRE(flowgraph.environment().set(key, IntegerValue{value}) == Result::SUCCESS);
 }
 
-void SetObservation(Flowgraph& flowgraph) {
+void SetObservation(Flowgraph& flowgraph, const bool horizontal = true) {
     const std::string prefix = "observatory.antenna.1a.tunings.a";
     SetEnvironment(flowgraph, "observation.antennas.0", std::string("1a"));
+    SetEnvironment(flowgraph, "observatory.name", std::string("ATA"));
+    SetEnvironment(flowgraph, "observatory.antenna.1a.pointing.source_name", std::string("TEST"));
+    SetEnvironment(flowgraph, "observatory.antenna.1a.pointing.ra", M_PI / 2.0);
+    SetEnvironment(flowgraph, "observatory.antenna.1a.pointing.dec", M_PI / 6.0);
+    if (horizontal) {
+        SetEnvironment(flowgraph, "observatory.antenna.1a.pointing.az", M_PI);
+        SetEnvironment(flowgraph, "observatory.antenna.1a.pointing.el", M_PI / 3.0);
+    }
     SetEnvironment(flowgraph, "instance.bands.len", I64{1});
     SetEnvironment(flowgraph, "instance.bands.0.tuning", std::string("a"));
     SetEnvironment(flowgraph, "instance.bands.0.band_index", I64{0});
@@ -369,6 +377,19 @@ TEST_CASE("FBH5 writer records RF start time, sample time, and channel frequenci
     const F64 foff = ReadAttribute(data, "foff");
     const F64 barycentric = ReadAttribute(data, "barycentric");
     const F64 pulsarcentric = ReadAttribute(data, "pulsarcentric");
+    const F64 telescopeId = ReadAttribute(data, "telescope_id");
+    const F64 rightAscension = ReadAttribute(data, "src_raj");
+    const F64 declination = ReadAttribute(data, "src_dej");
+    const F64 azimuth = ReadAttribute(data, "az_start");
+    const F64 zenithAngle = ReadAttribute(data, "za_start");
+    const hid_t sourceAttribute = H5Aopen(data, "source_name", H5P_DEFAULT);
+    REQUIRE(sourceAttribute >= 0);
+    const hid_t sourceType = H5Aget_type(sourceAttribute);
+    REQUIRE(sourceType >= 0);
+    std::string sourceName(H5Tget_size(sourceType), '\0');
+    REQUIRE(H5Aread(sourceAttribute, sourceType, sourceName.data()) >= 0);
+    REQUIRE(H5Tclose(sourceType) >= 0);
+    REQUIRE(H5Aclose(sourceAttribute) >= 0);
     const U64 startSample = ReadIntegerAttribute<U64>(data, "rf_start_sample", H5T_NATIVE_UINT64);
     const U64 synctime = ReadIntegerAttribute<U64>(data, "synctime", H5T_NATIVE_UINT64);
     const U64 samplesPerRow = ReadIntegerAttribute<U64>(data, "rf_samples_per_row", H5T_NATIVE_UINT64);
@@ -387,6 +408,12 @@ TEST_CASE("FBH5 writer records RF start time, sample time, and channel frequenci
     CHECK_THAT(foff, WithinAbs(0.5, 1e-12));
     CHECK(barycentric == 0.0);
     CHECK(pulsarcentric == 0.0);
+    CHECK(telescopeId == 9.0);
+    CHECK(sourceName.c_str() == std::string("TEST"));
+    CHECK_THAT(rightAscension, WithinAbs(6.0, 1e-12));
+    CHECK_THAT(declination, WithinAbs(30.0, 1e-12));
+    CHECK_THAT(azimuth, WithinAbs(180.0, 1e-12));
+    CHECK_THAT(zenithAngle, WithinAbs(30.0, 1e-12));
     CHECK(startSample == 3 * kBlockDuration);
     CHECK(synctime == static_cast<U64>(kSyncTime));
     CHECK(samplesPerRow == kBlockDuration / 2);
@@ -533,5 +560,78 @@ TEST_CASE("FBH5 writer publishes nothing until a block is recorded",
     std::ifstream preserved(path);
     CHECK(std::string(std::istreambuf_iterator<char>(preserved), {}) == "previous recording");
     CHECK_FALSE(HasStagingFile(path));
+#endif
+}
+
+TEST_CASE("FBH5 writer records without azimuth and elevation",
+          "[stelline][fbh5_writer][block][timing][cuda]") {
+#if !defined(STELLINE_DEVICE_CUDA_AVAILABLE) || !defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    SKIP("Stelline was not built with CUDA support.");
+#else
+    BackendGuard backendGuard;
+    Backend::Config backendConfig;
+    backendConfig.headless = true;
+    REQUIRE(Backend::Initialize<DeviceType::CPU>(backendConfig) == Result::SUCCESS);
+    REQUIRE(Backend::Initialize<DeviceType::CUDA>(backendConfig) == Result::SUCCESS);
+
+    const ScratchDirectory scratch;
+    const auto path = scratch.path / "horizontal.fbh5";
+
+    {
+        Flowgraph flowgraph;
+        REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+        SetObservation(flowgraph, false);
+
+        Blocks::OnesTensor sourceConfig;
+        sourceConfig.shape = {2, 1, 4, 1};
+        sourceConfig.dataType = "F32";
+        REQUIRE(flowgraph.blockCreate("source", sourceConfig, {}, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData source;
+        REQUIRE(flowgraph.view().block("source", source) == Result::SUCCESS);
+        Tensor sourceOutput = source.outputs.at("buffer").tensor;
+        REQUIRE(SetSignalAxes(sourceOutput, {
+            .sample = Index{0},
+            .channel = Index{2},
+        }) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("timestamp", U64{0}) == Result::SUCCESS);
+        REQUIRE(sourceOutput.setAttribute("duration", kBlockDuration) == Result::SUCCESS);
+
+        TensorMap deviceInputs;
+        deviceInputs["buffer"].requested("source", "buffer");
+        Blocks::Duplicate deviceConfig;
+        deviceConfig.outputDevice = "cuda";
+        deviceConfig.hostAccessible = false;
+        REQUIRE(flowgraph.blockCreate("device", deviceConfig, deviceInputs, DeviceType::CUDA) == Result::SUCCESS);
+
+        TensorMap inputs;
+        inputs["input"].requested("device", "buffer");
+
+        Blocks::Fbh5Writer writerConfig;
+        writerConfig.filepath = path.string();
+        writerConfig.recording = true;
+        REQUIRE(flowgraph.blockCreate("writer", writerConfig, inputs, DeviceType::CUDA) == Result::SUCCESS);
+
+        Flowgraph::View::BlockData writer;
+        REQUIRE(flowgraph.view().block("writer", writer) == Result::SUCCESS);
+        INFO(writer.diagnostic);
+        REQUIRE(writer.state == Block::State::Created);
+        REQUIRE(flowgraph.compute() == Result::SUCCESS);
+
+        REQUIRE(flowgraph.blockDestroy("writer", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.blockDestroy("device", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.blockDestroy("source", false) == Result::SUCCESS);
+        REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+    }
+
+    const hid_t file = H5Fopen(path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    REQUIRE(file >= 0);
+    const hid_t data = H5Dopen(file, "data", H5P_DEFAULT);
+    REQUIRE(data >= 0);
+    CHECK(ReadAttribute(data, "az_start") == -1.0);
+    CHECK(ReadAttribute(data, "za_start") == -1.0);
+    CHECK_THAT(ReadAttribute(data, "src_raj"), Catch::Matchers::WithinAbs(6.0, 1e-12));
+    REQUIRE(H5Dclose(data) >= 0);
+    REQUIRE(H5Fclose(file) >= 0);
 #endif
 }

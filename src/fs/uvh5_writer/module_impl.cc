@@ -490,8 +490,8 @@ Result Uvh5WriterImpl::create() {
 
     header->phase_center_catalog[0].name = const_cast<char*>(metadata.pointingSourceName.c_str());
     header->phase_center_catalog[0].type = UVH5_PHASE_CENTER_SIDEREAL;
-    header->phase_center_catalog[0].lon = calc_rad_from_degree(metadata.pointingRa * 360.0 / 24.0);
-    header->phase_center_catalog[0].lat = calc_rad_from_degree(metadata.pointingDec);
+    header->phase_center_catalog[0].lon = metadata.pointingRa;
+    header->phase_center_catalog[0].lat = metadata.pointingDec;
     header->phase_center_catalog[0].frame = const_cast<char*>("icrs");
     header->phase_center_catalog[0].epoch = 2000.0;
 

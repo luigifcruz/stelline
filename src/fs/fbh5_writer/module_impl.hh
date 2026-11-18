@@ -25,7 +25,8 @@ constexpr U64 kTimeAxis = 0;
 constexpr U64 kBeamAxis = 1;
 constexpr U64 kChannelAxis = 2;
 constexpr U64 kIfAxis = 3;
-constexpr const char* kSourceName = "Stelline";
+constexpr int kSigprocAtaTelescopeId = 9;
+constexpr F64 kUnknownAngle = -1.0;
 
 struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
  public:
@@ -41,6 +42,7 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
 
  protected:
     Result loadHeaderMetadata(const Tensor& input);
+    Result loadPointing();
     Result planBlock(const Tensor& input, RecordingGap& gap);
     Result commitBlock(const RecordingGap& gap);
     Result writeTiming(const BlockTiming& timing);
