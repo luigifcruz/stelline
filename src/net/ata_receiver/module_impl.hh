@@ -2,7 +2,6 @@
 #define STELLINE_ATA_RECEIVER_MODULE_IMPL_HH
 
 #include <atomic>
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -16,6 +15,7 @@
 #include <stelline/ata_receiver/module.hh>
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/memory/tensor.hh>
+#include <jetstream/scheduler_context.hh>
 #include <jetstream/tools/snapshot.hh>
 #include <daqiri/daqiri.h>
 
@@ -36,13 +36,16 @@ constexpr U64 kChannelAxis = 1;
 constexpr U64 kSampleAxis = 2;
 constexpr U64 kPolarizationAxis = 3;
 
-struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> {
+struct AtaReceiverImpl : public Module::Impl,
+                         public DynamicConfig<AtaReceiver>,
+                         public Scheduler::Context {
  public:
     Result validate() override;
     Result define() override;
     Result create() override;
     Result destroy() override;
     Result reconfigure() override;
+    Result hasPendingCompute() override;
 
     U64 getReceivedBlocks() const;
     U64 getComputedBlocks() const;
@@ -73,6 +76,7 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
 
  protected:
      void stopThreads();
+     void reportThreadFailure(std::string diagnostic);
 
      Result pushReadyTensor(const std::shared_ptr<Tensor>& tensor, const U64 timestamp);
      Result popReadyTensor(AtaReceiverReadyTensor& ready);
@@ -98,6 +102,8 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
      U64 timestampCutoff = 0;
 
      std::atomic<bool> errored = false;
+     std::mutex threadFailureMutex;
+     std::string threadFailureDiagnostic;
      std::atomic<bool> packetProcessingThreadRunning = false;
      std::atomic<bool> burstCollectorThreadRunning = false;
      std::thread packetProcessingThread;
@@ -113,7 +119,6 @@ struct AtaReceiverImpl : public Module::Impl, public DynamicConfig<AtaReceiver> 
      std::queue<std::shared_ptr<Tensor>> availableOutputTensors;
 
      std::mutex readyMutex;
-     std::condition_variable readyCondition;
      std::queue<AtaReceiverReadyTensor> readyOutputTensors;
 
      std::mutex burstCollectorMutex;
