@@ -4,6 +4,7 @@
 #include <limits>
 #include <vector>
 
+#include <jetstream/domains/dsp/signal_generator/block.hh>
 #include <jetstream/flowgraph.hh>
 #include <jetstream/flowgraph_view.hh>
 #include <jetstream/memory/axis.hh>
@@ -22,8 +23,7 @@ namespace {
 constexpr const char* kTestProvider = "stelline-test-no-hardware";
 
 struct AtaReceiverTestImpl final : public Modules::AtaReceiverImpl,
-                                   public NativeCpuRuntimeContext,
-                                   public Scheduler::Context {};
+                                   public NativeCpuRuntimeContext {};
 
 JST_REGISTER_MODULE(AtaReceiverTestImpl,
                     DeviceType::CPU,
@@ -36,7 +36,7 @@ Blocks::AtaReceiver ValidConfig() {
     config.workerCores = {0};
     config.subscriptions = "- 127.0.0.1:10000 -> 239.1.1.1:50000";
     config.totalBlock = {1, 96, 16, 2};
-    config.partialBlock = {1, 96, 16, 2};
+    config.partialBlock = {1, 96, 8, 2};
     config.packetsPerBurst = 1;
     config.maxConcurrentBursts = 1;
     config.maxConcurrentBlocks = 1;
@@ -45,6 +45,43 @@ Blocks::AtaReceiver ValidConfig() {
 }
 
 }  // namespace
+
+TEST_CASE("Idle ATA reception does not stall an independent source",
+          "[stelline][ata_receiver][block][scheduler]") {
+    Flowgraph flowgraph;
+    REQUIRE(flowgraph.create({}, nullptr, nullptr, nullptr) == Result::SUCCESS);
+    REQUIRE(flowgraph.blockCreate("ata",
+                                  ValidConfig(),
+                                  {},
+                                  DeviceType::CPU,
+                                  RuntimeType::NATIVE,
+                                  kTestProvider) == Result::SUCCESS);
+
+    Blocks::SignalGenerator generator;
+    generator.signalType = "dc";
+    generator.amplitude = 2.0f;
+    generator.dcOffset = 1.0f;
+    generator.bufferSize = 4;
+    REQUIRE(flowgraph.blockCreate("independent", generator, {}) == Result::SUCCESS);
+
+    Flowgraph::View::BlockData source;
+    REQUIRE(flowgraph.view().block("independent", source) == Result::SUCCESS);
+    REQUIRE(source.state == Block::State::Created);
+    Tensor output = source.outputs.at("signal").tensor;
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        output.data<F32>()[0] = 0.0f;
+        REQUIRE(flowgraph.compute() == Result::SUCCESS);
+        REQUIRE(output.data<F32>()[0] == 3.0f);
+    }
+
+    Flowgraph::View::BlockData receiver;
+    REQUIRE(flowgraph.view().block("ata", receiver) == Result::SUCCESS);
+    REQUIRE(receiver.state == Block::State::Created);
+
+    REQUIRE(flowgraph.blockDestroy("independent", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.blockDestroy("ata", false) == Result::SUCCESS);
+    REQUIRE(flowgraph.destroy() == Result::SUCCESS);
+}
 
 TEST_CASE("ATA receiver block preserves an invalid plan for sparse recovery",
           "[stelline][ata_receiver][block][reconfigure][validation]") {
@@ -86,6 +123,7 @@ TEST_CASE("ATA receiver block preserves an invalid plan for sparse recovery",
     REQUIRE(output.dtype() == DataType::CF32);
     REQUIRE(output.shape() == Shape{1, 96, 16, 2});
     REQUIRE(output.hasAttribute("timestamp"));
+    REQUIRE(std::any_cast<U64>(output.attribute("duration")) == 16);
 
     SignalAxes axes;
     REQUIRE(ResolveSignalAxes(output, axes) == Result::SUCCESS);

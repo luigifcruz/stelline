@@ -70,13 +70,11 @@ class ThroughputMeter {
 }  // namespace
 
 struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
-                                   public NativeCudaRuntimeContext,
-                                   public Scheduler::Context {
+                                   public NativeCudaRuntimeContext {
  public:
     Result validate() final;
     Result create() final;
     Result destroy() final;
-    Result hasPendingCompute() override;
     Result computeSubmit(const cudaStream_t& stream) override;
 
  private:
@@ -101,7 +99,7 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
 
     // Leaves `block` null when out of capacity so the caller drops the packet.
     Result ensureBlock(const U64 blockTimeIndex,
-                       const U64 timestamp,
+                       const U64 packetTimestamp,
                        std::shared_ptr<AtaReceiverBlock>& block,
                        std::vector<std::shared_ptr<AtaReceiverBlock>>& deferredDrops);
 
@@ -110,7 +108,6 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
     Result releaseReceivedBlocks();
     Result releaseComputedBlocks();
     Result updateBlockQueueDepths();
-    Result reportThreadFailure();
 
     void publishStreamStats();
 
@@ -121,9 +118,6 @@ struct AtaReceiverImplNativeCuda : public AtaReceiverImpl,
     bool daqiriActive = false;
 
     MulticastMembership multicastMembership;
-
-    std::mutex threadFailureMutex;
-    std::string threadFailureDiagnostic;
 };
 
 Result AtaReceiverImplNativeCuda::validate() {
@@ -200,11 +194,6 @@ Result AtaReceiverImplNativeCuda::createInternal() {
 
     // Initialize variables.
 
-    errored.store(false);
-    {
-        std::lock_guard<std::mutex> lock(threadFailureMutex);
-        threadFailureDiagnostic.clear();
-    }
     streamStats = {};
 
     // Set CUDA device.
@@ -283,51 +272,37 @@ Result AtaReceiverImplNativeCuda::createInternal() {
     packetProcessingThreadRunning.store(true);
     burstCollectorThreadRunning.store(true);
 
-    const auto handleThreadFailure = [this](std::string diagnostic) {
-        if (diagnostic.empty()) {
-            diagnostic = "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed.";
-        }
-        {
-            std::lock_guard<std::mutex> lock(threadFailureMutex);
-            threadFailureDiagnostic = std::move(diagnostic);
-        }
-        errored.store(true);
-        packetProcessingThreadRunning.store(false);
-        burstCollectorThreadRunning.store(false);
-        readyCondition.notify_all();
-    };
-
-    packetProcessingThread = std::thread([this, handleThreadFailure]() {
+    packetProcessingThread = std::thread([this]() {
         try {
             JST_CHECK_THROW(receiveLoop());
         } catch (const Result&) {
-            handleThreadFailure(JST_LOG_LAST_ERROR());
+            reportThreadFailure(JST_LOG_LAST_ERROR());
         } catch (const std::exception& error) {
             const auto diagnostic = jst::fmt::format("[MODULE_ATA_RECEIVER_NATIVE_CUDA] {}", error.what());
             JST_ERROR("{}", diagnostic);
-            handleThreadFailure(diagnostic);
+            reportThreadFailure(diagnostic);
         } catch (...) {
             const std::string diagnostic =
                 "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed with an unknown error.";
             JST_ERROR("{}", diagnostic);
-            handleThreadFailure(diagnostic);
+            reportThreadFailure(diagnostic);
         }
     });
 
-    burstCollectorThread = std::thread([this, handleThreadFailure]() {
+    burstCollectorThread = std::thread([this]() {
         try {
             JST_CHECK_THROW(burstCollectorLoop());
         } catch (const Result&) {
-            handleThreadFailure(JST_LOG_LAST_ERROR());
+            reportThreadFailure(JST_LOG_LAST_ERROR());
         } catch (const std::exception& error) {
             const auto diagnostic = jst::fmt::format("[MODULE_ATA_RECEIVER_NATIVE_CUDA] {}", error.what());
             JST_ERROR("{}", diagnostic);
-            handleThreadFailure(diagnostic);
+            reportThreadFailure(diagnostic);
         } catch (...) {
             const std::string diagnostic =
                 "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed with an unknown error.";
             JST_ERROR("{}", diagnostic);
-            handleThreadFailure(diagnostic);
+            reportThreadFailure(diagnostic);
         }
     });
 
@@ -352,31 +327,8 @@ Result AtaReceiverImplNativeCuda::destroy() {
     return result;
 }
 
-Result AtaReceiverImplNativeCuda::hasPendingCompute() {
-    std::unique_lock<std::mutex> lock(readyMutex);
-    if (!readyCondition.wait_for(lock, std::chrono::milliseconds(100), [this]() {
-            return !readyOutputTensors.empty() ||
-                   errored.load() ||
-                   !packetProcessingThreadRunning.load();
-        })) {
-        return Result::TIMEOUT;
-    }
-
-    if (errored.load()) {
-        return reportThreadFailure();
-    }
-
-    if (readyOutputTensors.empty()) {
-        return Result::YIELD;
-    }
-
-    return Result::SUCCESS;
-}
-
 Result AtaReceiverImplNativeCuda::computeSubmit(const cudaStream_t&) {
-    if (errored.load()) {
-        return reportThreadFailure();
-    }
+    JST_CHECK(hasPendingCompute());
 
     AtaReceiverReadyTensor ready;
     JST_CHECK(popReadyTensor(ready));
@@ -394,19 +346,6 @@ Result AtaReceiverImplNativeCuda::computeSubmit(const cudaStream_t&) {
     emittedBlocks.publish(emittedBlocks.get() + 1);
 
     return Result::SUCCESS;
-}
-
-Result AtaReceiverImplNativeCuda::reportThreadFailure() {
-    std::string diagnostic;
-    {
-        std::lock_guard<std::mutex> lock(threadFailureMutex);
-        diagnostic = threadFailureDiagnostic;
-    }
-    if (diagnostic.empty()) {
-        diagnostic = "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed.";
-    }
-    JST_ERROR("{}", diagnostic);
-    return Result::ERROR;
 }
 
 Result AtaReceiverImplNativeCuda::receiveLoop() {
@@ -621,7 +560,7 @@ bool AtaReceiverImplNativeCuda::acceptPacket(const VoltagePacket& packet,
 }
 
 Result AtaReceiverImplNativeCuda::ensureBlock(const U64 blockTimeIndex,
-                                              const U64 timestamp,
+                                              const U64 packetTimestamp,
                                               std::shared_ptr<AtaReceiverBlock>& block,
                                               std::vector<std::shared_ptr<AtaReceiverBlock>>& deferredDrops) {
     if (blockMap.contains(blockTimeIndex)) {
@@ -651,7 +590,7 @@ Result AtaReceiverImplNativeCuda::ensureBlock(const U64 blockTimeIndex,
 
     block = idleQueue.front();
     idleQueue.pop();
-    block->create(blockTimeIndex, timestamp, tensor);
+    block->create(blockTimeIndex, BlockStartTimestamp(packetTimestamp, blockDuration), tensor);
     receiveQueue.push(block);
     blockMap[blockTimeIndex] = block;
     JST_CHECK(updateBlockQueueDepths());

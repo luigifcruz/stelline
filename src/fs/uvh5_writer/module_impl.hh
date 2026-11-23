@@ -3,6 +3,7 @@
 
 #include <array>
 #include <chrono>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -15,6 +16,9 @@ extern "C" {
 #include <stelline/uvh5_writer/module.hh>
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/tools/snapshot.hh>
+
+#include "../recording_source.hh"
+#include "../recording_timeline.hh"
 
 namespace Jetstream::Modules {
 
@@ -43,8 +47,6 @@ struct Uvh5Metadata {
 
     std::vector<Uvh5AntennaInfo> antennas;
 
-    std::string instanceTuning;
-    U64 instanceBandIndex = 0;
     F64 instanceBandCenter = 0.0;
     F64 instanceBandwidth = 0.0;
     U64 instanceChannelCount = 0;
@@ -52,6 +54,9 @@ struct Uvh5Metadata {
     F64 pointingRa = 0.0;
     F64 pointingDec = 0.0;
     std::string pointingSourceName;
+    bool driftScan = false;
+    F64 pointingAzimuth = 0.0;
+    F64 pointingElevation = 0.0;
 
     U64 packetTimestampOffset = 0;
     F64 sampleTimespan = 0.0;
@@ -78,7 +83,9 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
  protected:
     Result loadMetadata();
     Result refreshDynamicMetadata(const U64& timestamp);
+    Result prepareIntegration(U64 timestamp, F64 durationSeconds, bool missing);
     void updateBandwidth(const U64 deltaBytes);
+    Result publishRecording(const BlockTiming& firstBlock);
 
     Shape validatedExpectedShape;
     DataType validatedInputDataType = DataType::None;
@@ -87,6 +94,8 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
     DataType inputDataType = DataType::None;
 
     Uvh5Metadata metadata;
+    RecordingSource source;
+    std::filesystem::path partialPath;
 
     hid_t faplId = -1;
     bool faplOpen = false;
@@ -94,9 +103,8 @@ struct Uvh5WriterImpl : public Module::Impl, public DynamicConfig<Uvh5Writer> {
     bool headerAllocated = false;
     bool openAttempted = false;
     bool fileOpen = false;
+    RecordingTimeline timeline;
 
-    F64 integrationTimespan = 0.0;
-    F64 frequencyBandwidth = 0.0;
 
     Tools::Snapshot<U64> bytesWritten{0};
     Tools::Snapshot<U64> chunkCounter{0};

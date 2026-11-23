@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <vector>
+#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -10,7 +12,10 @@
 #include <jetstream/module.hh>
 #include <jetstream/registry.hh>
 
+#include "helpers.hh"
+
 using namespace Jetstream;
+using namespace Jetstream::Testing;
 
 namespace {
 
@@ -58,4 +63,82 @@ TEST_CASE("Beamformer module exposes selected implementations",
             REQUIRE(module != nullptr);
         }
     }
+}
+
+TEST_CASE("Beamformer CPU forms weighted beams and the incoherent beam",
+          "[stelline][beamformer][module][cpu]") {
+#if !defined(STELLINE_DEVICE_CPU_AVAILABLE)
+    SKIP("Stelline was not built with CPU support.");
+#else
+    constexpr U64 kAntennas = 2;
+    constexpr U64 kBeams = 2;
+    const CF32 samples[kAntennas][2] = {{{1.0f, 2.0f}, {3.0f, -1.0f}}, {{0.0f, 1.0f}, {2.0f, 0.0f}}};
+    const CF32 weights[kBeams][kAntennas][2] = {
+        {{{0.0f, 1.5f}, {1.0f, 0.0f}}, {{0.5f, 0.0f}, {0.0f, -2.0f}}},
+        {{{0.5f, 0.5f}, {-1.0f, 0.0f}}, {{2.0f, 0.0f}, {0.0f, 0.5f}}},
+    };
+
+    Tensor phasors;
+    REQUIRE(phasors.create(DeviceType::CPU, DataType::CF32, {kBeams, kAntennas, 1, 1, 2}) == Result::SUCCESS);
+    for (U64 beam = 0; beam < kBeams; ++beam) {
+        for (U64 antenna = 0; antenna < kAntennas; ++antenna) {
+            for (U64 polarization = 0; polarization < 2; ++polarization) {
+                phasors.data<CF32>()[(beam * kAntennas + antenna) * 2 + polarization] =
+                    weights[beam][antenna][polarization];
+            }
+        }
+    }
+
+    for (const DataType dtype : {DataType::CF32, DataType::CI8}) {
+        for (const bool squareRoot : {false, true}) {
+            DYNAMIC_SECTION("Input " << dtype << ", square root " << squareRoot) {
+                const F32 scale = dtype == DataType::CI8 ? 1.0f / 128.0f : 1.0f;
+                Tensor input;
+                REQUIRE(input.create(DeviceType::CPU, dtype, {kAntennas, 1, 1, 2}) == Result::SUCCESS);
+                for (U64 antenna = 0; antenna < kAntennas; ++antenna) {
+                    for (U64 polarization = 0; polarization < 2; ++polarization) {
+                        const CF32 value = samples[antenna][polarization];
+                        if (dtype == DataType::CI8) {
+                            input.data<CI8>()[antenna * 2 + polarization] = {
+                                static_cast<I8>(value.real()), static_cast<I8>(value.imag())};
+                        } else {
+                            input.data<CF32>()[antenna * 2 + polarization] = value;
+                        }
+                    }
+                }
+                TensorMap inputs;
+                inputs["buffer"].requested("source", "buffer");
+                inputs["buffer"].tensor = input;
+                inputs["phasors"].requested("phasor", "buffer");
+                inputs["phasors"].tensor = phasors;
+
+                Modules::Beamformer config;
+                config.enableIncoherentBeam = true;
+                config.enableIncoherentBeamSqrt = squareRoot;
+                CpuModule beamformer("beamformer", config, inputs);
+                REQUIRE(beamformer.compute() == Result::SUCCESS);
+
+                const Tensor output = beamformer.output();
+                REQUIRE(output.shape() == Shape{kBeams + 1, 1, 1, 2});
+                for (U64 polarization = 0; polarization < 2; ++polarization) {
+                    F32 power = 0.0f;
+                    for (U64 beam = 0; beam < kBeams; ++beam) {
+                        CF32 expected = {};
+                        for (U64 antenna = 0; antenna < kAntennas; ++antenna) {
+                            expected += samples[antenna][polarization] * scale * weights[beam][antenna][polarization];
+                        }
+                        const CF32 actual = output.data<CF32>()[beam * 2 + polarization];
+                        CHECK(std::abs(actual - expected) < 1e-6f);
+                    }
+                    for (U64 antenna = 0; antenna < kAntennas; ++antenna) {
+                        power += std::norm(samples[antenna][polarization] * scale * weights[0][antenna][polarization]);
+                    }
+                    const CF32 incoherent = output.data<CF32>()[kBeams * 2 + polarization];
+                    CHECK(std::abs(incoherent.real() - (squareRoot ? std::sqrt(power) : power)) < 1e-6f);
+                    CHECK(incoherent.imag() == 0.0f);
+                }
+            }
+        }
+    }
+#endif
 }

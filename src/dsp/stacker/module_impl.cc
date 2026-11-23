@@ -137,6 +137,7 @@ Result StackerImpl::create() {
     height = validatedHeight;
     inputSize = validatedInputSize;
     stackIndex = 0;
+    window.reset(stackRatio);
 
     if (bypass) {
         outputTensor = inputTensor;
@@ -166,6 +167,8 @@ Result StackerImpl::destroy() {
     outputRowByteSize = 0;
     height = 0;
     inputSize = 0;
+    stackIndex = 0;
+    window = {};
 
     return Result::SUCCESS;
 }

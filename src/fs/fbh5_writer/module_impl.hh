@@ -2,6 +2,8 @@
 #define STELLINE_FBH5_WRITER_MODULE_IMPL_HH
 
 #include <chrono>
+#include <filesystem>
+#include <string>
 
 #include <hdf5.h>
 
@@ -13,6 +15,9 @@ extern "C" {
 #include <jetstream/detail/module_impl.hh>
 #include <jetstream/tools/snapshot.hh>
 
+#include "../recording_source.hh"
+#include "../recording_timeline.hh"
+
 namespace Jetstream::Modules {
 
 constexpr U64 kExpectedRank = 4;
@@ -20,7 +25,8 @@ constexpr U64 kTimeAxis = 0;
 constexpr U64 kBeamAxis = 1;
 constexpr U64 kChannelAxis = 2;
 constexpr U64 kIfAxis = 3;
-constexpr const char* kSourceName = "Stelline";
+constexpr int kSigprocAtaTelescopeId = 9;
+constexpr F64 kUnknownAngle = -1.0;
 
 struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
  public:
@@ -35,6 +41,12 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     U64 getChunkCounter() const;
 
  protected:
+    Result loadHeaderMetadata(const Tensor& input);
+    Result loadPointing();
+    Result planBlock(const Tensor& input, RecordingGap& gap);
+    Result commitBlock(const RecordingGap& gap);
+    Result writeTiming(const BlockTiming& timing);
+    Result appendChunks(const void* data, U64 samples, U64 missingBlocks);
     void updateBandwidth(const U64 deltaBytes);
 
     Shape validatedExpectedShape;
@@ -52,6 +64,11 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     bool dataOpen = false;
     bool maskOpen = false;
     uint8_t* mask = nullptr;
+    RecordingTimeline timeline;
+    bool blockWritten = false;
+
+    RecordingSource source;
+    std::filesystem::path partialPath;
 
     const void* registeredBuffer = nullptr;
     U64 registeredBufferSize = 0;
@@ -62,6 +79,9 @@ struct Fbh5WriterImpl : public Module::Impl, public DynamicConfig<Fbh5Writer> {
     I64 bytesSinceLastMeasurement = 0;
     Tools::Snapshot<F64> bandwidthMBps{0.0};
     std::chrono::time_point<std::chrono::steady_clock> lastMeasurementTime;
+
+ private:
+    Result appendChunk(const void* data);
 };
 
 }  // namespace Jetstream::Modules

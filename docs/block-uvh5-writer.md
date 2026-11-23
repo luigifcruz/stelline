@@ -1,6 +1,6 @@
 ---
 title: UVH5 Writer
-description: Sink that writes pre-arranged correlation tensors to UVH5.
+description: Sink that records correlation tensors to UVH5.
 order: 42
 category: Stelline
 ---
@@ -11,25 +11,27 @@ The UVH5 Writer is the recording sink of a correlator pipeline. It takes integra
 
 The block is idle until `recording` is enabled. At that point it assembles the complete UVH5 header from the flowgraph environment: telescope identity and location, the antenna table with positions and diameters, the baseline ordering, the frequency axis derived from the instance band, and the phase center. Recording refuses to start while any required key is missing, which prevents writing files with silent metadata gaps.
 
-Each input tensor must carry a `timestamp` attribute. The writer converts it to UTC and MJD using the F-engine sync time and sample period from the environment, refreshes the time-dependent metadata (pointing and Earth orientation) for that instant, computes the baseline UVW coordinates, and appends one integration to the file. Closing the flowgraph finalizes the file.
+The phase center follows the ATA delay engine and is chosen when recording starts. While the first antenna tracks a source, the catalog entry is `sidereal` in ICRS at the pointing right ascension and declination. When its pointing source is `AzEl` or `Stay put`, the antennas are parked, the delays follow a fixed horizontal direction, and the entry is `driftscan` in the `altaz` frame at the pointing azimuth and elevation. The catalog entry stays fixed for the whole file, so a pointing change during a recording is not supported, and parked recordings assume every antenna, including the delay engine's reference antenna, is parked at the same azimuth and elevation.
 
-The frequency axis is derived rather than configured. The instance band defines the coarse channel range, and `dspChannelizationRate` scales it to the fine channel count, so the input frequency dimension must equal the coarse channel count multiplied by that rate. The integration timespan is likewise the F-engine sample period multiplied by `dspIntegrationRate`.
+Each input tensor must carry a `timestamp` attribute. The writer uses the F-engine sync time and sample period from the environment to write the integration midpoint as a UTC Julian Date. It refreshes the time-dependent metadata (pointing and Earth orientation), computes the baseline UVW coordinates, and appends the integration. Closing the flowgraph finalizes the file.
+
+Each input tensor must also carry `duration`, the number of F-engine samples it covers. The integration time is that duration multiplied by the F-engine sample period, and the first written integration establishes the grid. When a later integration reveals a gap, the writer inserts zero visibilities with flags set and zero sample weights at the missing times. It does not pad before the first or after the last integration. `/Header/extra_keywords` records the exact integer grid as `rf_start_sample` (the F-engine sample count where the first integration starts), `synctime`, and `rf_samples_per_row`. A change to the F-engine band or clock, a backwards or off-grid timestamp, change in duration, or gap larger than 1,024 integrations stops the recording before anything is appended and requires a new recording.
+
+The frequency axis is derived rather than configured. The instance band defines the coarse channel range, and the input frequency dimension must be a whole multiple of that coarse channel count. The multiple is the number of fine channels per coarse channel from the upstream channelizer.
 
 ## Configuration
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `filepath` | string | `./file.uvh5` | Path of the output file. The parent directory must exist. |
-| `dspChannelizationRate` | integer | `1` | Fine channels produced per coarse channel by the upstream channelizer. |
-| `dspIntegrationRate` | integer | `1` | Samples integrated per output visibility by the upstream integrator. |
-| `overwrite` | boolean | `false` | Replace an existing file instead of refusing to start. |
+| `overwrite` | boolean | `false` | Replace an existing file instead of refusing to start. The existing file is kept until the first block of the new recording is written. |
 | `recording` | boolean | `false` | Master switch for writing. |
 
 ## Input
 
 | Name | Description |
 |---|---|
-| `input` | Contiguous `CF32` tensor shaped `[1, baselines, frequencies, 4]` with a `timestamp` attribute. |
+| `input` | `CF32` tensor with one time sample, baselines, frequencies, and four polarization products, plus `timestamp` and `duration` attributes. |
 
 The baseline count must match the antenna table, so `N` antennas require `N * (N + 1) / 2` baselines including autocorrelations. The polarization axis holds the four cross products of the `x` and `y` feeds. With the 28-antenna example environment the expected input is `CF32[1, 406, 192, 4]`.
 
@@ -37,11 +39,12 @@ The baseline count must match the antenna table, so `N` antennas require `N * (N
 
 | Attribute | Type | Direction | Description |
 |---|---|---|---|
-| `timestamp` | `U64` | Read from `input` | Required. Integration time in F-engine sample units, converted to UTC and MJD through the sync time and sample period. A missing attribute aborts the write. |
+| `timestamp` | `U64` | Read from `input` | Required. First sample of the integration on the F-engine sample counter. |
+| `duration` | `U64` | Read from `input` | Required, positive. Number of F-engine samples in the integration. Sets the integration time and gap padding grid. |
 
 ## Environment variables
 
-The block is a pure consumer of the flowgraph environment. It reads the keys below, where `<name>` is an antenna name, `<tuning>` is the instance tuning, and `<band>` is the instance band index.
+The block is a pure consumer of the flowgraph environment. It reads the keys below, where `<name>` is an antenna name, `<tuning>` is the instance tuning, `<slot>` is a position in the instance band list, and `<band>` is one of the instance band indices.
 
 Read once when recording starts:
 
@@ -52,15 +55,23 @@ Read once when recording starts:
 | `observatory.coordinates.longitude` | Site longitude. |
 | `observatory.coordinates.altitude` | Site altitude. |
 | `observation.antennas.length` | Antenna count of the observation. |
-| `observation.antennas.<index>` | Antenna name per index. |
+| `observation.antennas.<index>` | Antenna name per index. Index `0` is also rechecked, as listed below. |
 | `observatory.antenna.<name>.number` | Antenna number. |
 | `observatory.antenna.<name>.diameter` | Dish diameter. |
 | `observatory.antenna.<name>.position.x` | Antenna position, x axis. |
 | `observatory.antenna.<name>.position.y` | Antenna position, y axis. |
 | `observatory.antenna.<name>.position.z` | Antenna position, z axis. |
-| `instance.bands.len` | Band count of this instance (currently one). |
-| `instance.bands.0.tuning` | Tuning identifier. |
-| `instance.bands.0.band_index` | Band index within the tuning. |
+| `observatory.antenna.<name>.pointing.az` | Phase center azimuth in radians when the pointing source is `AzEl` or `Stay put`. |
+| `observatory.antenna.<name>.pointing.el` | Phase center elevation in radians when the pointing source is `AzEl` or `Stay put`. |
+
+Read when recording starts and checked again before every input. The recording stops if any of them goes missing or becomes invalid, or if the first antenna, the tuning, the set of bands, the merged band range, or the clock changes:
+
+| Key | Purpose |
+|---|---|
+| `observation.antennas.0` | Antenna whose F-engine band and clock define the file axes. |
+| `instance.bands.len` | Band count of this instance, at least one. Multiple bands must share one tuning, compared case-insensitively, and form one contiguous channel and frequency range with a uniform channel width. Repeated bands are ignored, and the writer records the bands as a single band. |
+| `instance.bands.<slot>.tuning` | Tuning identifier. |
+| `instance.bands.<slot>.band_index` | Band index within the tuning. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.frequency_start` | Band start frequency in MHz. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.frequency_stop` | Band stop frequency in MHz. |
 | `observatory.antenna.<name>.tunings.<tuning>.bands.<band>.channel_start` | First coarse channel. |
@@ -72,8 +83,8 @@ Re-read per input timestamp:
 
 | Key | Purpose |
 |---|---|
-| `observatory.antenna.<name>.pointing.ra` | Phase center right ascension in hours. |
-| `observatory.antenna.<name>.pointing.dec` | Phase center declination in degrees. |
+| `observatory.antenna.<name>.pointing.ra` | Phase center right ascension in radians. |
+| `observatory.antenna.<name>.pointing.dec` | Phase center declination in radians. |
 | `observatory.antenna.<name>.pointing.source_name` | Phase center source name. |
 | `observation.iers.pm_x_arcsec` | Polar motion, x component. |
 | `observation.iers.pm_y_arcsec` | Polar motion, y component. |
@@ -93,7 +104,7 @@ The metrics below are reported to Nexus.
 |---|---|
 | `bandwidth` | Write bandwidth in megabytes per second. |
 | `totalDataWritten` | Total written UVH5 payload in megabytes. |
-| `chunksWritten` | Total number of written UVH5 chunks. |
+| `chunksWritten` | Total number of written UVH5 chunks, including padded integrations inserted for RF gaps. |
 
 ## Requirements
 

@@ -212,6 +212,12 @@ Result AtaReceiverImpl::define() {
 }
 
 Result AtaReceiverImpl::create() {
+    errored.store(false);
+    {
+        std::lock_guard<std::mutex> lock(threadFailureMutex);
+        threadFailureDiagnostic.clear();
+    }
+
     slotShape = validatedSlotShape;
     packetsPerBlock = validatedPacketsPerBlock;
     packetDuration = validatedPacketDuration;
@@ -252,6 +258,7 @@ Result AtaReceiverImpl::create() {
         .channel = Index{kChannelAxis},
     }));
     JST_CHECK(outputTensor.setAttribute("timestamp", static_cast<U64>(0)));
+    JST_CHECK(outputTensor.setAttribute("duration", blockDuration));
 
     outputs()["output"].produced(name(), "output", outputTensor);
 
@@ -325,7 +332,7 @@ Result AtaReceiverImpl::reconfigure() {
 void AtaReceiverImpl::stopThreads() {
     packetProcessingThreadRunning.store(false);
     burstCollectorThreadRunning.store(false);
-    readyCondition.notify_all();
+    Scheduler::Context::NotifyPendingCompute();
 
     if (packetProcessingThread.joinable()) {
         packetProcessingThread.join();
@@ -336,13 +343,38 @@ void AtaReceiverImpl::stopThreads() {
     }
 }
 
+Result AtaReceiverImpl::hasPendingCompute() {
+    if (errored.load()) {
+        std::lock_guard<std::mutex> lock(threadFailureMutex);
+        JST_ERROR("{}", threadFailureDiagnostic);
+        return Result::ERROR;
+    }
+
+    std::lock_guard<std::mutex> lock(readyMutex);
+    return readyOutputTensors.empty() ? Result::TIMEOUT : Result::SUCCESS;
+}
+
+void AtaReceiverImpl::reportThreadFailure(std::string diagnostic) {
+    if (diagnostic.empty()) {
+        diagnostic = "[MODULE_ATA_RECEIVER_NATIVE_CUDA] Background receiver thread failed.";
+    }
+    {
+        std::lock_guard<std::mutex> lock(threadFailureMutex);
+        threadFailureDiagnostic = std::move(diagnostic);
+    }
+    errored.store(true);
+    packetProcessingThreadRunning.store(false);
+    burstCollectorThreadRunning.store(false);
+    Scheduler::Context::NotifyPendingCompute();
+}
+
 Result AtaReceiverImpl::pushReadyTensor(const std::shared_ptr<Tensor>& tensor, const U64 timestamp) {
     {
         std::lock_guard<std::mutex> lock(readyMutex);
         readyOutputTensors.push({tensor, timestamp});
         readyQueueDepth.publish(readyOutputTensors.size());
     }
-    readyCondition.notify_one();
+    Scheduler::Context::NotifyPendingCompute();
 
     return Result::SUCCESS;
 }

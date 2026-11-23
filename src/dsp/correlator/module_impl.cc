@@ -175,7 +175,7 @@ Result CorrelatorImpl::create() {
 
     outputs()["buffer"].produced(name(), "buffer", outputTensor);
 
-    integrationStep = 0;
+    window.reset(integrationRate);
 
     return Result::SUCCESS;
 }
@@ -184,7 +184,7 @@ Result CorrelatorImpl::destroy() {
     inputTensor = {};
     outputTensor = {};
     baselineCount = 0;
-    integrationStep = 0;
+    window = {};
 
     return Result::SUCCESS;
 }

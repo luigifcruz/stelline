@@ -169,11 +169,15 @@ Result IntegratorImplNativeCuda::computeInitialize() {
 }
 
 Result IntegratorImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
+    const WindowStep step = window.admit(inputTensor);
+    if (!step.accept) {
+        return Result::SKIP;
+    }
     if (bypass) {
         return Result::SUCCESS;
     }
 
-    if (blockIndex == 0) {
+    if (step.first) {
         auto* outputBase = static_cast<std::uint8_t*>(outputTensor.buffer().data());
         if (!outputBase) {
             JST_ERROR("[MODULE_INTEGRATOR_NATIVE_CUDA] Missing output device buffer.");
@@ -205,9 +209,11 @@ Result IntegratorImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     const Extent3D<U64> grid = {gridSize, 1, 1};
 
     JST_CHECK(scheduleKernel(kIntegratorKernelName, stream, grid, block, arguments));
-    blockIndex = (blockIndex + 1) % rate;
 
-    return blockIndex == 0 ? Result::SUCCESS : Result::SKIP;
+    if (!step.last) {
+        return Result::SKIP;
+    }
+    return window.stamp(outputTensor);
 }
 
 Result IntegratorImplNativeCuda::computeDeinitialize() {

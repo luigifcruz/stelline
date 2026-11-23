@@ -158,9 +158,14 @@ Result StackerImplNativeCuda::computeInitialize() {
 }
 
 Result StackerImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
+    const WindowStep step = window.admit(inputTensor);
+    if (!step.accept) {
+        return Result::SKIP;
+    }
     if (bypass) {
         return Result::SUCCESS;
     }
+    stackIndex = step.index;
 
     const auto* inputBase = static_cast<const std::uint8_t*>(inputTensor.buffer().data());
     auto* outputBase = static_cast<std::uint8_t*>(outputTensor.buffer().data());
@@ -172,7 +177,7 @@ Result StackerImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     const void* inputData = inputBase + inputTensor.offsetBytes();
     void* outputData = outputBase + outputTensor.offsetBytes();
 
-    if (stackIndex == 0) {
+    if (step.first) {
         JST_CUDA_CHECK(cudaMemsetAsync(outputData, 0, outputTensor.sizeBytes(), stream), [&] {
             JST_ERROR("[MODULE_STACKER_NATIVE_CUDA] Failed to clear the output buffer: {}.", err);
         });
@@ -213,9 +218,10 @@ Result StackerImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         });
     }
 
-    stackIndex = (stackIndex + 1) % stackRatio;
-
-    return stackIndex == 0 ? Result::SUCCESS : Result::SKIP;
+    if (!step.last) {
+        return Result::SKIP;
+    }
+    return window.stamp(outputTensor);
 }
 
 Result StackerImplNativeCuda::computeDeinitialize() {

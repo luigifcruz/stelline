@@ -17,11 +17,11 @@ struct Fbh5Writer : public Block::Config {
     JST_BLOCK_PARAMS(filepath, overwrite, recording);
     JST_BLOCK_DESCRIPTION(
         "FBH5 Writer",
-        "Sink that writes pre-arranged tensors to FBH5.",
+        "Sink that records filterbank tensors to FBH5.",
         "# FBH5 Writer\n"
-        "The FBH5 Writer block writes pre-arranged filterbank tensors to an FBH5 file using "
-        "GPUDirect Storage. Input tensors must be F32 shaped as [time, beams, channels, "
-        "intermediate frequencies] and are appended to the file each compute cycle.\n\n"
+        "The FBH5 Writer block writes filterbank tensors to an FBH5 file using "
+        "GPUDirect Storage. Input tensors are F32 with four axes: time, beams, channels, and "
+        "intermediate frequencies. Each tensor is appended to the file each compute cycle.\n\n"
 
         "## Arguments\n"
         "- **File Path**: Path to the output FBH5 file.\n"
@@ -39,8 +39,8 @@ struct Fbh5Writer : public Block::Config {
         "  Input: F32[16, 1, 192, 1] -> Appended to the file each cycle.\n\n"
 
         "## Implementation\n"
-        "Input Buffer -> FBH5 Module -> HDF5 GDS File\n"
-        "1. Builds the filterbank header from the input tensor shape.\n"
+        "Input Buffer -> [Permutation] -> [Duplicate] -> FBH5 Module -> HDF5 GDS File\n"
+        "1. Builds the filterbank header from the input shape, RF timing attributes, and F-engine band metadata.\n"
         "2. Opens the FBH5 file with the GPUDirect Storage HDF5 driver.\n"
         "3. Registers the input buffer with CUfile and appends each tensor directly from GPU memory."
     );

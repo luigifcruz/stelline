@@ -11,6 +11,8 @@ The Integrator sums samples along a tensor axis to raise the signal-to-noise rat
 
 Each accumulation cycle starts by zeroing the output buffer. The CPU implementation uses contiguous axis-aware reductions, while the CUDA implementation uses a runtime-compiled kernel. Both sum `size` consecutive groups along the chosen axis and add the result into the output. When `rate` is greater than one, the output is only emitted after that many buffers have been accumulated, and the block skips downstream processing in between. Setting both `size` and `rate` to one bypasses `CF32` integration. The input can be real float, complex float, or complex signed byte, and the output is always complex float.
 
+With valid `U64` `timestamp` and `duration` attributes, multi-block windows start at exact multiples of `duration × rate` in F-engine samples and require adjacent, equal-duration blocks. A forward gap or a span change breaks an incomplete window, and stale or overlapping blocks are ignored. Inputs with neither timing attribute retain count-based grouping, and partial or invalid timing is skipped. An emitted tensor carries the window start and full RF span, and a single-block result retains its input interval. If the output has multiple time bins and `rate > 1`, corresponding bins are summed across blocks. The interval describes the whole tensor's coverage, not one contiguous interval per bin.
+
 ## Configuration
 
 | Parameter | Type | Default | Description |

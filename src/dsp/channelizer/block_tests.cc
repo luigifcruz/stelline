@@ -13,15 +13,12 @@
 #include <jetstream/flowgraph_view.hh>
 #include <jetstream/registry.hh>
 
+#include "helpers.hh"
+
 using namespace Jetstream;
+using namespace Jetstream::Testing;
 
 namespace {
-
-struct BackendGuard {
-    ~BackendGuard() {
-        Backend::DestroyAll();
-    }
-};
 
 struct FlowgraphGuard {
     Flowgraph flowgraph;
@@ -96,6 +93,9 @@ TEST_CASE("Channelizer matches the shifted FFT tensor contract",
     Blocks::Channelizer channelizer;
     REQUIRE(graph.flowgraph.blockCreate("channelizer", channelizer, inputs) ==
             Result::SUCCESS);
+    Tensor timingSource = sourceBlock.outputs.at("buffer").tensor;
+    REQUIRE(timingSource.setAttribute("timestamp", U64{16}) == Result::SUCCESS);
+    REQUIRE(timingSource.setAttribute("duration", U64{4}) == Result::SUCCESS);
     REQUIRE(graph.flowgraph.compute() == Result::SUCCESS);
 
     Flowgraph::View::BlockData block;
@@ -106,6 +106,8 @@ TEST_CASE("Channelizer matches the shifted FFT tensor contract",
     REQUIRE(std::any_cast<Index>(output.attribute("sampleAxis")) == Index{2});
     REQUIRE(std::any_cast<Index>(output.attribute("channelAxis")) == Index{1});
     REQUIRE(std::any_cast<F32>(output.attribute("sampleRate")) == F32{256.0f});
+    REQUIRE(std::any_cast<U64>(output.attribute("timestamp")) == 16);
+    REQUIRE(std::any_cast<U64>(output.attribute("duration")) == 4);
 
     constexpr std::array<F32, 8> expected = {0.0f, 0.0f, 4.0f, 0.0f,
                                               0.0f, 0.0f, 4.0f, 0.0f};

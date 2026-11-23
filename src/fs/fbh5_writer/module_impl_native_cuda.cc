@@ -1,7 +1,3 @@
-extern "C" {
-#include "h5dsc99/h5_dataspace.h"
-}
-
 #include <jetstream/backend/devices/cuda/helpers.hh>
 #include <jetstream/runtime_context_native_cuda.hh>
 #include <jetstream/scheduler_context.hh>
@@ -87,6 +83,8 @@ Result Fbh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
 
     const void* inputPtr = input.data();
     const U64 inputBytes = input.sizeBytes();
+    RecordingGap gap;
+    JST_CHECK(planBlock(input, gap));
 
     if (!bufferRegistered || registeredBuffer != inputPtr || registeredBufferSize != inputBytes) {
         cudaPointerAttributes attributes = {};
@@ -119,28 +117,15 @@ Result Fbh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         registeredBufferSize = inputBytes;
     }
 
-    JST_HDF5_CHECK(H5DSextend(&fbh5File.ds_data), [&] {
-        JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Failed to extend the FBH5 data dataset. Error {}.", err);
-    });
-
-    JST_HDF5_CHECK(H5DSwrite(&fbh5File.ds_data, const_cast<void*>(inputPtr)), [&] {
-        JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Failed to write the FBH5 data dataset. Error {}.", err);
-    });
-
-    JST_HDF5_CHECK(H5DSextend(&fbh5File.ds_mask), [&] {
-        JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Failed to extend the FBH5 mask dataset. Error {}.", err);
-    });
-
-    JST_HDF5_CHECK(H5DSwrite(&fbh5File.ds_mask, mask), [&] {
-        JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Failed to write the FBH5 mask dataset. Error {}.", err);
-    });
+    JST_CHECK(appendChunks(inputPtr, input.size(), gap.missingBlocks));
+    JST_CHECK(commitBlock(gap));
 
     hsize_t currentFileSize = 0;
     JST_HDF5_CHECK(H5Fget_filesize(fbh5File.file_id, &currentFileSize), [&] {
         JST_ERROR("[MODULE_FBH5_WRITER_NATIVE_CUDA] Failed to query the FBH5 file size. Error {}.", err);
     });
 
-    const U64 totalChunks = chunkCounter.get() + 1;
+    const U64 totalChunks = chunkCounter.get() + gap.missingBlocks + 1;
     const U64 previousBytesWritten = bytesWritten.get();
     const U64 totalBytesWritten = static_cast<U64>(currentFileSize);
     const U64 deltaBytesWritten = totalBytesWritten >= previousBytesWritten

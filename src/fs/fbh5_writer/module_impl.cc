@@ -1,9 +1,14 @@
 #include "module_impl.hh"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <limits>
+#include <new>
+#include <optional>
+#include <utility>
+#include <vector>
 
 #include <cufile.h>
 #include <hdf5.h>
@@ -12,6 +17,7 @@
 #include <jetstream/memory/axis.hh>
 
 #include "../helpers.hh"
+#include "../recording_axes.hh"
 
 extern "C" {
 #include "filterbankc99.h"
@@ -76,6 +82,8 @@ Result Fbh5WriterImpl::create() {
     expectedShape = validatedExpectedShape;
     inputDataType = validatedInputDataType;
     openAttempted = false;
+    timeline = {};
+    blockWritten = false;
 
     bytesWritten.publish(0);
     chunkCounter.publish(0);
@@ -124,13 +132,6 @@ Result Fbh5WriterImpl::create() {
         JST_ERROR("[MODULE_FBH5_WRITER] File '{}' already exists.", filepath);
         return Result::ERROR;
     }
-    if (fileExists) {
-        const bool removed = std::filesystem::remove(filePath, fileQueryError);
-        if (fileQueryError || !removed) {
-            JST_ERROR("[MODULE_FBH5_WRITER] Failed to remove '{}' before overwriting.", filepath);
-            return Result::ERROR;
-        }
-    }
 
     const U64 ntimesPerWrite = expectedShape[kTimeAxis];
     const U64 nbeams = expectedShape[kBeamAxis];
@@ -140,29 +141,18 @@ Result Fbh5WriterImpl::create() {
     filterbank_header_t* header = &fbh5File.header;
 
     header->machine_id = 20;
-    header->telescope_id = 6;
     header->data_type = 1;
-    header->barycentric = 1;
-    header->pulsarcentric = 1;
-    header->src_raj = 20.0 + 39.0 / 60.0 + 7.4 / 3600.0;
-    header->src_dej = 42.0 + 24.0 / 60.0 + 24.5 / 3600.0;
-    header->az_start = 12.3456;
-    header->za_start = 65.4321;
-    header->fch1 = 4626.464842353016138;
-    header->foff = -0.000002793967724;
+    header->barycentric = 0;
+    header->pulsarcentric = 0;
     header->nchans = static_cast<int>(nchans);
     header->nbeams = static_cast<int>(nbeams);
     header->ibeam = 1;
     header->nbits = inputDataType == DataType::F32 ? 32 : 0;
-    header->tstart = 57856.810798611114;
-    header->tsamp = 1.825361100800;
     header->nifs = static_cast<int>(nifs);
-
-    std::strncpy(header->source_name, kSourceName, sizeof(header->source_name) - 1);
-    header->source_name[sizeof(header->source_name) - 1] = '\0';
 
     fbh5File.nchans_per_write = static_cast<std::size_t>(nchans);
     fbh5File.ntimes_per_write = static_cast<std::size_t>(ntimesPerWrite);
+    JST_CHECK(loadHeaderMetadata(inputs().at("input").tensor));
 
     // Keep both datasets unfiltered so GDS can write raw chunks.
     fbh5File.ds_data.filter_flag = H5_FILTER_FLAG_NONE;
@@ -179,13 +169,18 @@ Result Fbh5WriterImpl::create() {
         JST_ERROR("[MODULE_FBH5_WRITER] Failed to configure the HDF5 GDS file access property list. Error {}.", err);
     });
 
+    if (const auto error = ReservePartialRecording(filePath, partialPath)) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to create a staging file beside '{}': {}.", filepath, error.message());
+        return Result::ERROR;
+    }
+
     hid_t dataTypeId = H5Tcopy(H5T_IEEE_F32LE);
     if (dataTypeId < 0) {
         JST_ERROR("[MODULE_FBH5_WRITER] Failed to create the FBH5 dataset data type.");
         return Result::ERROR;
     }
 
-    const herr_t openStatus = filterbank_h5_open_explicit(filepath.c_str(),
+    const herr_t openStatus = filterbank_h5_open_explicit(partialPath.c_str(),
                                                           &fbh5File,
                                                           dataTypeId,
                                                           faplId);
@@ -217,6 +212,201 @@ Result Fbh5WriterImpl::create() {
     bytesWritten.publish(0);
 
     return Result::SUCCESS;
+}
+
+Result Fbh5WriterImpl::loadHeaderMetadata(const Tensor& input) {
+    if (!ReadBlockTiming(input)) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Recording requires U64 'timestamp' and positive U64 'duration' input attributes.");
+        return Result::ERROR;
+    }
+
+    JST_CHECK(LoadRecordingSource(*environment(), "[MODULE_FBH5_WRITER]", source));
+
+    filterbank_header_t& header = fbh5File.header;
+    const auto frequencies = ChannelFrequencies(source.frequencyStart,
+                                                source.frequencyStop,
+                                                source.channelCount(),
+                                                static_cast<U64>(header.nchans));
+    if (!frequencies || !std::isfinite(frequencies->first) || !std::isfinite(frequencies->step)) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Input channel count {} does not split the {} F-engine channels of the instance band.",
+                  header.nchans,
+                  source.channelCount());
+        return Result::ERROR;
+    }
+
+    header.fch1 = frequencies->first;
+    header.foff = frequencies->step;
+
+    return loadPointing();
+}
+
+Result Fbh5WriterImpl::loadPointing() {
+    struct {
+        std::string value;
+        JST_SERDES(value);
+    } text;
+
+    struct {
+        F64 value = 0.0;
+        JST_SERDES(value);
+    } real;
+
+    const auto require = [&](const std::string& key, auto& value) {
+        if (!environment()->tryGet(key, value)) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Missing required '{}' environment value.", key);
+            return false;
+        }
+        return true;
+    };
+
+    filterbank_header_t& header = fbh5File.header;
+    if (!require("observatory.name", text)) {
+        return Result::INCOMPLETE;
+    }
+    header.telescope_id = text.value == "ATA" ? kSigprocAtaTelescopeId : 0;
+
+    const auto pointing = jst::fmt::format("observatory.antenna.{}.pointing", source.antenna);
+    if (!require(pointing + ".source_name", text)) {
+        return Result::INCOMPLETE;
+    }
+    std::strncpy(header.source_name, text.value.c_str(), sizeof(header.source_name) - 1);
+    header.source_name[sizeof(header.source_name) - 1] = '\0';
+
+    const auto read = [&](const char* name, const bool required, std::optional<F64>& degrees) {
+        const auto key = pointing + "." + name;
+        if (!environment()->tryGet(key, real)) {
+            if (required) {
+                JST_ERROR("[MODULE_FBH5_WRITER] Missing required '{}' environment value.", key);
+                return Result::INCOMPLETE;
+            }
+            return Result::SUCCESS;
+        }
+        if (!std::isfinite(real.value)) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Invalid '{}' environment value.", key);
+            return Result::ERROR;
+        }
+        degrees = real.value * 180.0 / M_PI;
+        return Result::SUCCESS;
+    };
+
+    std::optional<F64> rightAscension;
+    std::optional<F64> declination;
+    std::optional<F64> azimuth;
+    std::optional<F64> elevation;
+    JST_CHECK(read("ra", true, rightAscension));
+    JST_CHECK(read("dec", true, declination));
+    JST_CHECK(read("az", false, azimuth));
+    JST_CHECK(read("el", false, elevation));
+
+    header.src_raj = *rightAscension / 15.0;
+    header.src_dej = *declination;
+    header.az_start = azimuth.value_or(kUnknownAngle);
+    header.za_start = elevation ? 90.0 - *elevation : kUnknownAngle;
+    return Result::SUCCESS;
+}
+
+Result Fbh5WriterImpl::planBlock(const Tensor& input, RecordingGap& gap) {
+    JST_CHECK(timeline.plan(input, "[MODULE_FBH5_WRITER]", gap));
+
+    JST_CHECK(CheckRecordingSource(*environment(), "[MODULE_FBH5_WRITER]", source));
+
+    if (!blockWritten) {
+        JST_CHECK(writeTiming(gap.timing));
+    }
+    return Result::SUCCESS;
+}
+
+Result Fbh5WriterImpl::commitBlock(const RecordingGap& gap) {
+    timeline.commit(gap);
+    blockWritten = true;
+    if (partialPath.empty()) {
+        return Result::SUCCESS;
+    }
+    JST_HDF5_CHECK(H5Fflush(fbh5File.file_id, H5F_SCOPE_GLOBAL), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to flush the new recording before publishing it. Error {}.", err);
+    });
+    if (const auto error = PublishPartialRecording(partialPath, filepath, overwrite)) {
+        if (error == std::errc::file_exists) {
+            JST_ERROR("[MODULE_FBH5_WRITER] File '{}' already exists.", filepath);
+        } else {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to move the new recording into '{}'.", filepath);
+        }
+        return Result::ERROR;
+    }
+    return Result::SUCCESS;
+}
+
+Result Fbh5WriterImpl::writeTiming(const BlockTiming& timing) {
+    auto& header = fbh5File.header;
+    header.tstart = UnixSecondsToMjd(RfSampleUnixSeconds(static_cast<U64>(source.synctime),
+                                                         timing.timestamp,
+                                                         source.samplePeriod));
+    if (timing.duration % fbh5File.ntimes_per_write != 0) {
+        JST_ERROR("[MODULE_FBH5_WRITER] Block duration of {} RF samples does not divide into {} spectra.",
+                  timing.duration,
+                  fbh5File.ntimes_per_write);
+        return Result::ERROR;
+    }
+    const U64 samplesPerRow = timing.duration / fbh5File.ntimes_per_write;
+    header.tsamp = static_cast<F64>(samplesPerRow) * source.samplePeriod;
+
+    for (const auto& [name, value] : {std::pair{"tstart", &header.tstart}, std::pair{"tsamp", &header.tsamp}}) {
+        const hid_t attribute = H5Aopen(fbh5File.ds_data.D_id, name, H5P_DEFAULT);
+        if (attribute < 0) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to open the FBH5 '{}' attribute.", name);
+            return Result::ERROR;
+        }
+        const herr_t writeStatus = H5Awrite(attribute, H5T_NATIVE_DOUBLE, value);
+        const herr_t closeStatus = H5Aclose(attribute);
+        if (writeStatus < 0 || closeStatus < 0) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to write the FBH5 '{}' attribute.", name);
+            return Result::ERROR;
+        }
+    }
+    const RecordingGrid grid{timing.timestamp, static_cast<U64>(source.synctime), samplesPerRow};
+    JST_HDF5_CHECK(WriteRecordingGrid(fbh5File.ds_data.D_id, false, grid), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to write the FBH5 RF grid attributes. Error {}.", err);
+    });
+    return Result::SUCCESS;
+}
+
+Result Fbh5WriterImpl::appendChunk(const void* data) {
+    JST_HDF5_CHECK(H5DSextend(&fbh5File.ds_data), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to extend the FBH5 data dataset. Error {}.", err);
+    });
+    JST_HDF5_CHECK(H5DSwrite(&fbh5File.ds_data, data), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to write the FBH5 data dataset. Error {}.", err);
+    });
+    JST_HDF5_CHECK(H5DSextend(&fbh5File.ds_mask), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to extend the FBH5 mask dataset. Error {}.", err);
+    });
+    JST_HDF5_CHECK(H5DSwrite(&fbh5File.ds_mask, mask), [&] {
+        JST_ERROR("[MODULE_FBH5_WRITER] Failed to write the FBH5 mask dataset. Error {}.", err);
+    });
+    return Result::SUCCESS;
+}
+
+Result Fbh5WriterImpl::appendChunks(const void* data, const U64 samples, const U64 missingBlocks) {
+    if (missingBlocks != 0) {
+        std::vector<F32> missingData;
+        try {
+            missingData.resize(samples, 0.0f);
+        } catch (const std::bad_alloc&) {
+            JST_ERROR("[MODULE_FBH5_WRITER] Failed to allocate the missing-data buffer.");
+            return Result::ERROR;
+        }
+        const auto maskBytes = H5DSsize(&fbh5File.ds_mask);
+        std::memset(mask, 1, maskBytes);
+        for (U64 block = 0; block < missingBlocks; ++block) {
+            const Result result = appendChunk(missingData.data());
+            if (result != Result::SUCCESS) {
+                std::memset(mask, 0, maskBytes);
+                return result;
+            }
+        }
+        std::memset(mask, 0, maskBytes);
+    }
+    return appendChunk(data);
 }
 
 Result Fbh5WriterImpl::destroy() {
@@ -283,7 +473,11 @@ Result Fbh5WriterImpl::destroy() {
         faplId = -1;
     }
 
+    RemovePartialRecording(partialPath);
+
     fbh5File = {};
+    timeline = {};
+    blockWritten = false;
 
     return result;
 }

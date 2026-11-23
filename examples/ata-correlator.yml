@@ -70,40 +70,6 @@ graph:
         width: 159
         height: 0
         configCollapsed: false
-  - name: permutation_1
-    module: permutation
-    device: cuda
-    runtime: native
-    provider: generic
-    config:
-      permutation: '[2, 0, 1, 3]'
-      contiguous: false
-    input:
-      buffer: '${graph.correlator.output.buffer}'
-    meta:
-      node:
-        x: 617
-        y: 342
-        width: 140
-        height: 0
-        configCollapsed: false
-  - name: duplicate
-    module: duplicate
-    device: cuda
-    runtime: native
-    provider: generic
-    config:
-      hostAccessible: false
-      outputDevice: cuda
-    input:
-      buffer: '${graph.permutation_1.output.buffer}'
-    meta:
-      node:
-        x: 816
-        y: 342.66666
-        width: 140
-        height: 0
-        configCollapsed: false
   - name: uvh5_writer
     module: uvh5_writer
     device: cuda
@@ -111,12 +77,10 @@ graph:
     provider: generic
     config:
       filepath: /mnt/raid1/test.uvh5
-      dspChannelizationRate: 1
-      dspIntegrationRate: 1
       overwrite: true
       recording: false
     input:
-      input: '${graph.duplicate.output.buffer}'
+      input: '${graph.correlator.output.buffer}'
     meta:
       node:
         x: 1016.3333

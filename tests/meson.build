@@ -10,6 +10,11 @@ catch2_dep = dependency(
 )
 
 plugin_test_dependencies = [plugin_code_dep, catch2_dep]
+plugin_test_includes = include_directories('.')
+plugin_test_args = [
+    '-DSTELLINE_TEST_PYTHON="@0@"'.format(py.full_path()),
+    '-DSTELLINE_TEST_SOURCE_DIR="@0@"'.format(meson.project_source_root()),
+]
 plugin_test_link_args = ['-Wl,--no-as-needed']
 
 plugin_test_main = static_library(
@@ -41,6 +46,8 @@ foreach test_source : plugin_test_lst
         'stelline-' + test_name + '-tests',
         test_source,
         dependencies: plugin_test_dependencies,
+        include_directories: plugin_test_includes,
+        cpp_args: plugin_test_args,
         link_with: plugin_test_main,
         link_language: 'cpp',
         link_args: plugin_test_link_args,
@@ -60,6 +67,7 @@ plugin_flowgraph_tests = executable(
     'stelline-dsp-flowgraph-tests',
     'flowgraphs/base.cc',
     dependencies: plugin_test_dependencies,
+    include_directories: plugin_test_includes,
     link_with: plugin_test_main,
     link_language: 'cpp',
     cpp_args: [
@@ -88,5 +96,12 @@ test(
     'net-nexus_bridge-python',
     py,
     args: files('nexus_bridge_python.py'),
+    suite: 'stelline',
+)
+
+test(
+    'fs-stitcher-python',
+    py,
+    args: files('stitcher_python.py'),
     suite: 'stelline',
 )

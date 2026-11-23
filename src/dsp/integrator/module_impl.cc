@@ -115,7 +115,7 @@ Result IntegratorImpl::create() {
     numberOfElements = validatedNumberOfElements;
     bypass = validatedBypass;
     adjustSampleRate = validatedAdjustSampleRate;
-    blockIndex = 0;
+    window.reset(rate);
 
     if (bypass) {
         outputTensor = inputTensor;
@@ -159,7 +159,7 @@ Result IntegratorImpl::destroy() {
     numberOfElements = 0;
     bypass = false;
     adjustSampleRate = false;
-    blockIndex = 0;
+    window = {};
 
     return Result::SUCCESS;
 }

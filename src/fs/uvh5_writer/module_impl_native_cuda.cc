@@ -1,6 +1,8 @@
 #include <cmath>
 #include <cstring>
-#include <ctime>
+#include <limits>
+#include <new>
+#include <vector>
 
 extern "C" {
 #include "radiointerferometryc99.h"
@@ -17,32 +19,7 @@ extern "C" {
 
 namespace Jetstream::Modules {
 
-namespace {
-
-I32 CalToMjd(I32 year, I32 month, I32 day) {
-    I32 leapYear = 0;
-
-    static I32 monthTable[2][13] = {
-        {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-        {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-    };
-
-    if (year < -4699 || month < 1 || month > 12) {
-        return 0;
-    }
-
-    leapYear = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-    if (day < 1 || day > monthTable[leapYear][month]) {
-        return 0;
-    }
-
-    return (1461 * (year - (12 - month) / 10 + 4712)) / 4 +
-           (5 + 306 * ((month + 9) % 12)) / 10 -
-           (3 * ((year - (12 - month) / 10 + 4900) / 100)) / 4 +
-           day - 2399904;
-}
-
-}  // namespace
+constexpr double kPositionAngleOffset = ERFA_DPI / 360.0;
 
 struct Uvh5WriterImplNativeCuda : public Uvh5WriterImpl,
                                    public NativeCudaRuntimeContext,
@@ -50,6 +27,9 @@ struct Uvh5WriterImplNativeCuda : public Uvh5WriterImpl,
  public:
     Result validate() final;
     Result computeSubmit(const cudaStream_t& stream) override;
+
+ private:
+    Result appendIntegration(U64 timestamp, F64 durationSeconds, const void* data, bool missing);
 };
 
 Result Uvh5WriterImplNativeCuda::validate() {
@@ -115,107 +95,132 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
         return Result::ERROR;
     }
 
-    if (!input.hasAttribute("timestamp")) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Input tensor missing required 'timestamp' attribute.");
+    RecordingGap gap;
+    JST_CHECK(timeline.plan(input, "[MODULE_UVH5_WRITER_NATIVE_CUDA]", gap));
+    JST_CHECK(CheckRecordingSource(*environment(), "[MODULE_UVH5_WRITER_NATIVE_CUDA]", source));
+    const U64 integrations = gap.missingBlocks + 1;
+    const auto& header = uvh5File.header;
+    if (header.Nbls <= 0 ||
+        integrations > static_cast<U64>((std::numeric_limits<int>::max() - header.Nblts) / header.Nbls) ||
+        integrations > static_cast<U64>(std::numeric_limits<int>::max() - header.Ntimes)) {
+        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Integrations exceed UVH5 time or baseline count limits.");
         return Result::ERROR;
     }
+    const F64 durationSeconds = static_cast<F64>(gap.timing.duration) * metadata.sampleTimespan;
 
-    const std::any timestampValue = input.attribute("timestamp");
-    const auto* timestamp = std::any_cast<U64>(&timestampValue);
-    if (!timestamp) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Input 'timestamp' attribute must have type U64.");
-        return Result::ERROR;
-    }
-    JST_CHECK(refreshDynamicMetadata(*timestamp));
-
-    uvh5File.visdata = const_cast<void*>(input.data());
-
-    UVH5_header_t* header = &uvh5File.header;
-
-    F64 realtimeSeconds = 0.0;
-    const F64 channelBandwidth = metadata.instanceBandwidth / static_cast<F64>(metadata.instanceChannelCount);
-    if (channelBandwidth != 0.0) {
-        realtimeSeconds = static_cast<F64>(*timestamp) / (1e6 * std::fabs(channelBandwidth));
-    }
-
-    struct timespec timeSpec = {};
-    timeSpec.tv_sec = static_cast<time_t>(metadata.packetTimestampOffset + std::llround(realtimeSeconds));
-    timeSpec.tv_nsec = static_cast<long>((realtimeSeconds - std::llround(realtimeSeconds)) * 1e9);
-
-    struct tm utcTime = {};
-    if (gmtime_r(&timeSpec.tv_sec, &utcTime) == nullptr) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to convert the UVH5 timestamp to UTC time.");
-        return Result::ERROR;
-    }
-
-    const I32 mjdDay = CalToMjd(utcTime.tm_year + 1900, utcTime.tm_mon + 1, utcTime.tm_mday);
-    if (mjdDay == 0) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to convert the UVH5 timestamp to MJD.");
-        return Result::ERROR;
-    }
-
-    const I32 secondsOfDay = utcTime.tm_hour * 3600 + utcTime.tm_min * 60 + utcTime.tm_sec;
-
-    header->time_array[0] = 2400000.5;
-    header->time_array[0] += static_cast<F64>(mjdDay);
-    header->time_array[0] += static_cast<F64>(secondsOfDay) / RADIOINTERFEROMETERY_DAYSEC;
-    header->time_array[0] += (integrationTimespan / 2.0) / RADIOINTERFEROMETERY_DAYSEC;
-
-    for (size_t index = 0; index < static_cast<size_t>(header->Nbls); index++) {
-        header->time_array[index] = header->time_array[0];
-        header->integration_time[index] = integrationTimespan;
-    }
-
-    F64 updatedRightAscensionRad = metadata.pointingRa;
-    F64 updatedDeclinationRad = metadata.pointingDec;
-    F64 positionAngle = 0.0;
-    const I32 rv = calc_itrs_icrs_frame_pos_angle_with_pm_and_ut1_utc(header->time_array,
-                                                                       &updatedRightAscensionRad,
-                                                                       &updatedDeclinationRad,
-                                                                       &metadata.iersPmXArcsec,
-                                                                       &metadata.iersPmYArcsec,
-                                                                       &metadata.iersUt1Utc,
-                                                                       1,
-                                                                       calc_rad_from_degree(header->longitude),
-                                                                       calc_rad_from_degree(header->latitude),
-                                                                       header->altitude,
-                                                                       RADIOINTERFEROMETERY_PI / 360.0,
-                                                                       &positionAngle);
-    if (rv % 10 != 0) {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] The radiointerferometry position-angle calculation failed: rv={}",
-                  rv);
-        return Result::ERROR;
-    }
-
-    uvh5File.nsamples[0] = input.size();
-    const U64 baselineCount = static_cast<U64>(header->Nbls);
-    const U64 samplesPerBaseline = static_cast<U64>(header->Nfreqs) *
-                                   static_cast<U64>(header->Npols);
-    for (U64 baseline = 0; baseline < baselineCount; baseline++) {
-        header->time_array[baseline] = header->time_array[0];
-        header->phase_center_id_array[baseline] = 0;
-        header->phase_center_app_ra[baseline] = updatedRightAscensionRad;
-        header->phase_center_app_dec[baseline] = updatedDeclinationRad;
-        header->phase_center_frame_pa[baseline] = positionAngle;
-
-        for (U64 sample = 0; sample < samplesPerBaseline; sample++) {
-            const U64 sampleIndex = baseline * samplesPerBaseline + sample;
-            uvh5File.nsamples[sampleIndex] = uvh5File.nsamples[0];
-            uvh5File.flags[sampleIndex] = H5_FALSE;
+    if (gap.missingBlocks != 0) {
+        std::vector<CF32> missingData;
+        try {
+            missingData.resize(input.size(), CF32{});
+        } catch (const std::bad_alloc&) {
+            JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to allocate the missing-visibility buffer.");
+            return Result::ERROR;
+        }
+        U64 missingTimestamp = gap.firstMissing;
+        for (U64 block = 0; block < gap.missingBlocks; ++block) {
+            JST_CHECK(appendIntegration(missingTimestamp, durationSeconds, missingData.data(), true));
+            missingTimestamp += gap.timing.duration;
         }
     }
+    JST_CHECK(appendIntegration(gap.timing.timestamp, durationSeconds, input.data(), false));
+    timeline.commit(gap);
+    JST_CHECK(publishRecording(gap.timing));
 
+    hsize_t currentFileSize = 0;
+    JST_HDF5_CHECK(H5Fget_filesize(uvh5File.file_id, &currentFileSize), [&] {
+        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to query the UVH5 file size. Error {}.", err);
+    });
+
+    const U64 previousBytesWritten = bytesWritten.get();
+    const U64 totalBytesWritten = static_cast<U64>(currentFileSize);
+    const U64 deltaBytesWritten = totalBytesWritten >= previousBytesWritten
+                                      ? totalBytesWritten - previousBytesWritten
+                                      : 0;
+
+    chunkCounter.publish(chunkCounter.get() + integrations);
+    bytesWritten.publish(totalBytesWritten);
+    updateBandwidth(deltaBytesWritten);
+
+    return Result::SUCCESS;
+}
+
+Result Uvh5WriterImplNativeCuda::appendIntegration(const U64 timestamp,
+                                                   const F64 durationSeconds,
+                                                   const void* data,
+                                                   const bool missing) {
+    JST_CHECK(prepareIntegration(timestamp, durationSeconds, missing));
+    JST_CHECK(refreshDynamicMetadata(timestamp));
+
+    UVH5_header_t* header = &uvh5File.header;
+    const F64 longitudeRad = calc_rad_from_degree(header->longitude);
+    const F64 latitudeRad = calc_rad_from_degree(header->latitude);
+    const F64 julianDate = header->time_array[0];
+    F64 apparentRightAscension = 0.0;
+    F64 apparentDeclination = 0.0;
+    F64 positionAngle = 0.0;
     double hourAngleRad = 0.0;
-    double updatedDeclinationForFrame = 0.0;
-    calc_ha_dec_rad(updatedRightAscensionRad,
-                    updatedDeclinationRad,
-                    calc_rad_from_degree(header->longitude),
-                    calc_rad_from_degree(header->latitude),
-                    header->altitude,
-                    header->time_array[0],
-                    metadata.iersUt1Utc,
-                    &hourAngleRad,
-                    &updatedDeclinationForFrame);
+    double declinationRad = 0.0;
+
+    if (metadata.driftScan) {
+        eraAe2hd(metadata.pointingAzimuth, metadata.pointingElevation, latitudeRad, &hourAngleRad, &declinationRad);
+        double tai1 = 0.0, tai2 = 0.0, tt1 = 0.0, tt2 = 0.0, ut11 = 0.0, ut12 = 0.0;
+        if (eraUtctai(julianDate, 0.0, &tai1, &tai2) < 0 || eraTaitt(tai1, tai2, &tt1, &tt2) != 0 ||
+            eraUtcut1(julianDate, 0.0, metadata.iersUt1Utc, &ut11, &ut12) < 0) {
+            JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to convert the integration time to UT1 and TT.");
+            return Result::ERROR;
+        }
+        const F64 localSiderealTime = eraGst06a(ut11, ut12, tt1, tt2) + eraSp00(tt1, tt2) + longitudeRad;
+        apparentRightAscension = eraAnp(localSiderealTime - hourAngleRad);
+        apparentDeclination = declinationRad;
+    } else {
+        const double polarMotionX = metadata.iersPmXArcsec * ERFA_DAS2R;
+        const double polarMotionY = metadata.iersPmYArcsec * ERFA_DAS2R;
+        double azimuth = 0.0, zenithDistance = 0.0, observedRightAscension = 0.0, equationOfOrigins = 0.0;
+        if (eraAtco13(metadata.pointingRa, metadata.pointingDec, 0.0, 0.0, 0.0, 0.0,
+                      julianDate, 0.0, metadata.iersUt1Utc,
+                      longitudeRad, latitudeRad, header->altitude,
+                      polarMotionX, polarMotionY,
+                      0.0, 0.0, 0.0, 0.0,
+                      &azimuth, &zenithDistance, &hourAngleRad, &declinationRad,
+                      &observedRightAscension, &equationOfOrigins) < 0) {
+            JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to compute the apparent phase center.");
+            return Result::ERROR;
+        }
+        apparentRightAscension = eraAnp(observedRightAscension - equationOfOrigins);
+        apparentDeclination = declinationRad;
+
+        double icrsRightAscension[2] = {};
+        double icrsDeclination[2] = {};
+        for (int side = 0; side < 2; ++side) {
+            double offsetRightAscension = observedRightAscension;
+            double offsetDeclination = declinationRad + (side == 0 ? -kPositionAngleOffset : kPositionAngleOffset);
+            if (offsetDeclination > ERFA_DPI / 2.0) {
+                offsetRightAscension = eraAnp(offsetRightAscension + ERFA_DPI);
+                offsetDeclination = ERFA_DPI - offsetDeclination;
+            } else if (offsetDeclination < -ERFA_DPI / 2.0) {
+                offsetRightAscension = eraAnp(offsetRightAscension + ERFA_DPI);
+                offsetDeclination = -ERFA_DPI - offsetDeclination;
+            }
+            if (eraAtoc13("R", offsetRightAscension, offsetDeclination,
+                          julianDate, 0.0, metadata.iersUt1Utc,
+                          longitudeRad, latitudeRad, header->altitude,
+                          polarMotionX, polarMotionY,
+                          0.0, 0.0, 0.0, 0.0,
+                          &icrsRightAscension[side], &icrsDeclination[side]) < 0) {
+                JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to compute the phase center position angle.");
+                return Result::ERROR;
+            }
+        }
+        positionAngle = -eraPas(icrsRightAscension[0], icrsDeclination[0], icrsRightAscension[1], icrsDeclination[1]);
+    }
+
+    const U64 baselineCount = static_cast<U64>(header->Nbls);
+    for (U64 baseline = 0; baseline < baselineCount; baseline++) {
+        header->phase_center_id_array[baseline] = 0;
+        header->phase_center_app_ra[baseline] = apparentRightAscension;
+        header->phase_center_app_dec[baseline] = apparentDeclination;
+        header->phase_center_frame_pa[baseline] = positionAngle;
+    }
 
     std::memcpy(header->_antenna_uvw_positions,
                 header->_antenna_enu_positions,
@@ -223,30 +228,26 @@ Result Uvh5WriterImplNativeCuda::computeSubmit(const cudaStream_t& stream) {
     calc_position_to_uvw_frame_from_enu(header->_antenna_uvw_positions,
                                         header->Nants_telescope,
                                         hourAngleRad,
-                                        updatedDeclinationForFrame,
-                                        calc_rad_from_degree(header->latitude));
+                                        declinationRad,
+                                        latitudeRad);
     UVH5permute_uvws(header);
+    const double cosine = std::cos(positionAngle);
+    const double sine = std::sin(positionAngle);
+    for (U64 baseline = 0; baseline < baselineCount; baseline++) {
+        double* uvw = &header->uvw_array[baseline * 3];
+        const double u = uvw[0];
+        const double v = uvw[1];
+        uvw[0] = u * cosine - v * sine;
+        uvw[1] = u * sine + v * cosine;
+    }
 
-    if (UVH5write_dynamic(&uvh5File) != 0) {
+    uvh5File.visdata = const_cast<void*>(data);
+    const auto status = UVH5write_dynamic(&uvh5File);
+    uvh5File.visdata = nullptr;
+    if (status != 0) {
         JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to write the UVH5 datasets.");
         return Result::ERROR;
     }
-
-    hsize_t currentFileSize = 0;
-    JST_HDF5_CHECK(H5Fget_filesize(uvh5File.file_id, &currentFileSize), [&] {
-        JST_ERROR("[MODULE_UVH5_WRITER_NATIVE_CUDA] Failed to query the UVH5 file size. Error {}.", err);
-    });
-
-    const U64 totalChunks = chunkCounter.get() + 1;
-    const U64 previousBytesWritten = bytesWritten.get();
-    const U64 totalBytesWritten = static_cast<U64>(currentFileSize);
-    const U64 deltaBytesWritten = totalBytesWritten >= previousBytesWritten
-                                      ? totalBytesWritten - previousBytesWritten
-                                      : 0;
-
-    chunkCounter.publish(totalChunks);
-    bytesWritten.publish(totalBytesWritten);
-    updateBandwidth(deltaBytesWritten);
 
     return Result::SUCCESS;
 }

@@ -11,6 +11,8 @@ The Stacker tiles successive input buffers along a tensor axis, assembling an ou
 
 The output is zeroed when a new stacking cycle begins. Each compute cycle then writes the current input buffer into its slot along the chosen axis, cycling through `ratio` slots, and the assembled output is only emitted once every slot has been filled. In between, the block skips downstream processing. A ratio of one bypasses stacking. The CPU implementation copies contiguous rows directly. On CUDA, narrow rows use a runtime-compiled kernel and wide rows use a strided device copy.
 
+With valid `U64` `timestamp` and `duration` attributes, multi-block windows start at exact multiples of `duration × ratio` in F-engine samples and require adjacent, equal-duration blocks. A forward gap or a span change breaks an incomplete window, and stale or overlapping blocks are ignored. Inputs with neither timing attribute retain count-based grouping, and partial or invalid timing is skipped. An emitted tensor carries the window start and full RF span, and a single-block result retains its input interval.
+
 ## Configuration
 
 | Parameter | Type | Default | Description |
