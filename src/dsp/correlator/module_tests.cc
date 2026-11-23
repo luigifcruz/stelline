@@ -33,21 +33,21 @@ bool HasImplementation(const std::string& type, const DeviceType device) {
 
 TEST_CASE("Correlator module exposes selected implementations",
           "[stelline][correlator][module][registration]") {
-    const auto implementations = Registry::ListAvailableModules("correlator");
+    const auto implementations = Registry::ListAvailableModules("stelline_correlator");
     std::size_t expected = 0;
 
 #if defined(STELLINE_DEVICE_CPU_AVAILABLE)
-    REQUIRE(HasImplementation("correlator", DeviceType::CPU));
+    REQUIRE(HasImplementation("stelline_correlator", DeviceType::CPU));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("correlator", DeviceType::CPU));
+    REQUIRE_FALSE(HasImplementation("stelline_correlator", DeviceType::CPU));
 #endif
 
 #if defined(STELLINE_DEVICE_CUDA_AVAILABLE)
-    REQUIRE(HasImplementation("correlator", DeviceType::CUDA));
+    REQUIRE(HasImplementation("stelline_correlator", DeviceType::CUDA));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("correlator", DeviceType::CUDA));
+    REQUIRE_FALSE(HasImplementation("stelline_correlator", DeviceType::CUDA));
 #endif
 
     REQUIRE(implementations.size() == expected);
@@ -55,7 +55,7 @@ TEST_CASE("Correlator module exposes selected implementations",
         DYNAMIC_SECTION("Device: " << implementation.device
                                     << " Runtime: " << implementation.runtime) {
             std::shared_ptr<Module> module;
-            REQUIRE(Registry::BuildModule("correlator",
+            REQUIRE(Registry::BuildModule("stelline_correlator",
                                           implementation.device,
                                           implementation.runtime,
                                           implementation.provider,
@@ -75,7 +75,7 @@ TEST_CASE("Correlator CPU integrates only blocks of one timed RF window",
         for (const DataType dtype : {DataType::CF32, DataType::CI8}) {
             DYNAMIC_SECTION("Rate: " << rate << ", dtype: " << dtype) {
                 std::shared_ptr<Module> module;
-                REQUIRE(Registry::BuildModule("correlator",
+                REQUIRE(Registry::BuildModule("stelline_correlator",
                                               DeviceType::CPU,
                                               RuntimeType::NATIVE,
                                               "generic",

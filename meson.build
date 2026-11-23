@@ -13,16 +13,41 @@ project(
 )
 
 #
-# Global Variables
+# Plugin Metadata
 #
 
-plugin_is_linux = target_machine.system().startswith('linux')
+plugin_id = 'stelline'
+plugin_title = 'Stelline'
+plugin_summary = 'GPU-accelerated radio astronomy blocks for the Allen Telescope Array.'
+plugin_author = 'The Contributors of Stelline'
+plugin_license = 'MIT'
 
-if not plugin_is_linux
-    error('Stelline only supports Linux targets for now.')
+#
+# CyberEther
+#
+
+cyberether_dep = dependency(
+    'jetstream',
+    fallback: ['cyberether', 'libjetstream_dep'],
+    required: true,
+    default_options: [
+        'tests=false',
+        'examples=false',
+        'remote=disabled',
+    ],
+)
+
+cyberether_version = cyberether_dep.version()
+cyberether_build_id = cyberether_dep.get_variable('build_id', default_value: '')
+cyberether_backends = cyberether_dep.get_variable('backends', default_value: '').split(',')
+
+if cyberether_build_id == ''
+    error('This CyberEther SDK does not export a build ID. Build against a newer CyberEther.')
 endif
 
-minimum_jetstream_version = '1.16.0'
+if not cyberether_build_id.startswith('linux-')
+    error('Stelline only supports Linux builds of CyberEther for now.')
+endif
 
 #
 # Load Python
@@ -44,18 +69,12 @@ inc_lst = [
     include_directories('include'),
 ]
 
-plugin_requested_devices = get_option('devices')
-if plugin_requested_devices.length() == 0
-    error('The devices option must contain auto or cuda.')
-endif
-
-plugin_devices_auto = 'auto' in plugin_requested_devices
-if plugin_devices_auto and plugin_requested_devices.length() != 1
-    error('The auto device cannot be combined with explicit devices.')
-endif
-
-plugin_device_cuda_requested = plugin_devices_auto or 'cuda' in plugin_requested_devices
+plugin_device_cuda_requested = 'cuda' in cyberether_backends
 plugin_device_cuda_enabled = false
+
+if not plugin_device_cuda_requested
+    error('Stelline needs a CUDA build of CyberEther, such as linux-x86_64-cuda.')
+endif
 
 plugin_device_cpu_enabled = true
 cfg_lst.set('STELLINE_DEVICE_CPU_AVAILABLE', true)
@@ -131,7 +150,7 @@ plugin_examples = files(
 )
 
 plugin_module = shared_module(
-    'stelline',
+    plugin_id,
     [],
     dependencies: plugin_code_dep,
     gnu_symbol_visibility: 'hidden',
@@ -142,24 +161,30 @@ plugin_module = shared_module(
     install: false,
 )
 
-plugin_package_device = plugin_device_cuda_enabled ? 'cuda' : ''
+plugin_bundle_args = [
+    py,
+    files('tools/bundler.py'),
+    '--output', '@OUTPUT@',
+    '--id', plugin_id,
+    '--title', plugin_title,
+    '--summary', plugin_summary,
+    '--author', plugin_author,
+    '--license', plugin_license,
+    '--version', meson.project_version(),
+    '--cyberether', cyberether_version,
+    '--build', cyberether_build_id,
+    '--library', '@INPUT0@',
+]
+foreach example : plugin_examples
+    plugin_bundle_args += ['--example', example]
+endforeach
 
 custom_target(
     'stelline_cep',
-    input: [plugin_module] + plugin_examples,
-    output: 'stelline.cep',
-    command: [
-        py,
-        files('tools/bundler.py'),
-        '--output', '@OUTPUT@',
-        '--name', meson.project_name(),
-        '--version', meson.project_version(),
-        '--minimum-jetstream-version', minimum_jetstream_version,
-        '--target', 'path=@INPUT0@,system=' + host_machine.system() + ',device=' + plugin_package_device + ',arch=' + host_machine.cpu_family(),
-        '--example', '@INPUT1@',
-        '--example', '@INPUT2@',
-        '--example', '@INPUT3@',
-    ],
+    input: [plugin_module],
+    depend_files: plugin_examples,
+    output: '-'.join(plugin_id, meson.project_version(), 'cyberether', cyberether_version, cyberether_build_id) + '.cep',
+    command: plugin_bundle_args,
     build_by_default: true,
     install: false,
 )
@@ -177,7 +202,12 @@ summary({
 }, section: 'General', bool_yn: true)
 
 summary({
-    'Selection': ','.join(plugin_requested_devices),
+    'Version': cyberether_version,
+    'Build ID': cyberether_build_id,
+    'Backends': ','.join(cyberether_backends),
+}, section: 'CyberEther', bool_yn: true)
+
+summary({
     'CPU': plugin_device_cpu_enabled,
     'CUDA': plugin_device_cuda_enabled,
 }, section: 'Devices', bool_yn: true)

@@ -32,7 +32,7 @@ The Stelline plugin captures voltage packets from the network directly into GPU 
 
 ### Migrating from BLADE
 
-The BLADE plugin is being retired, and its eight DSP blocks are now part of Stelline. Their block identifiers, configuration fields, and tensor interfaces are unchanged, so existing flowgraphs can use the Stelline bundle without renaming blocks. Remove the BLADE bundle before loading Stelline to avoid duplicate block registrations. For C++ integrations, replace `<blade/...>` includes with `<stelline/...>`. The `Jetstream::Blocks` and `Jetstream::Modules` types are unchanged.
+The BLADE plugin is being retired, and its eight DSP blocks are now part of Stelline. Their configuration fields and tensor interfaces are unchanged, but every Stelline block identifier now starts with `stelline_`, so rename the `module` entries of existing flowgraphs, for example `beamformer` to `stelline_beamformer`. Remove the BLADE bundle before loading Stelline. For C++ integrations, replace `<blade/...>` includes with `<stelline/...>`. The `Jetstream::Blocks` and `Jetstream::Modules` types are unchanged.
 
 ## Requirements
 

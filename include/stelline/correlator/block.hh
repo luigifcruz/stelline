@@ -12,7 +12,7 @@ struct Correlator : public Block::Config {
     U64 conjugateAntennaIndex = 1;
     std::string calculationMode = "double_precision_fp";
 
-    JST_BLOCK_TYPE(correlator);
+    JST_BLOCK_TYPE(stelline_correlator);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_NODE_SIZE(M);
     JST_BLOCK_PARAMS(integrationRate, conjugateAntennaIndex, calculationMode);

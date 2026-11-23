@@ -33,24 +33,24 @@ bool HasImplementation(const std::string& type, const DeviceType device) {
 
 TEST_CASE("Phasor module exposes its selected CPU implementation",
           "[stelline][phasor][module][registration]") {
-    const auto implementations = Registry::ListAvailableModules("phasor");
+    const auto implementations = Registry::ListAvailableModules("stelline_phasor");
     std::size_t expected = 0;
 
 #if defined(STELLINE_DEVICE_CPU_AVAILABLE)
-    REQUIRE(HasImplementation("phasor", DeviceType::CPU));
+    REQUIRE(HasImplementation("stelline_phasor", DeviceType::CPU));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("phasor", DeviceType::CPU));
+    REQUIRE_FALSE(HasImplementation("stelline_phasor", DeviceType::CPU));
 #endif
 
-    REQUIRE_FALSE(HasImplementation("phasor", DeviceType::CUDA));
+    REQUIRE_FALSE(HasImplementation("stelline_phasor", DeviceType::CUDA));
     REQUIRE(implementations.size() == expected);
 
     for (const auto& implementation : implementations) {
         DYNAMIC_SECTION("Device: " << implementation.device
                                     << " Runtime: " << implementation.runtime) {
             std::shared_ptr<Module> module;
-            REQUIRE(Registry::BuildModule("phasor",
+            REQUIRE(Registry::BuildModule("stelline_phasor",
                                           implementation.device,
                                           implementation.runtime,
                                           implementation.provider,
@@ -63,7 +63,7 @@ TEST_CASE("Phasor module exposes its selected CPU implementation",
 TEST_CASE("Phasor preserves calibrations for a beam at boresight",
           "[stelline][phasor][module][cpu][compute]") {
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("phasor",
+    REQUIRE(Registry::BuildModule("stelline_phasor",
                                   DeviceType::CPU,
                                   RuntimeType::NATIVE,
                                   "generic",

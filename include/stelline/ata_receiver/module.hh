@@ -24,7 +24,7 @@ struct AtaReceiver : public Module::Config {
     U64 maxConcurrentBlocks = 4;
     U64 outputPoolSize = 2;
 
-    JST_MODULE_TYPE(ata_receiver);
+    JST_MODULE_TYPE(stelline_ata_receiver);
     JST_MODULE_PARAMS(engine, interfaceAddress, gpuDeviceId, masterCore, workerCores,
                       subscriptions, totalBlock, partialBlock, offsetBlock, dataType,
                       packetsPerBurst, maxConcurrentBursts, maxConcurrentBlocks,

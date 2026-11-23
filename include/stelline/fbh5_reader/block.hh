@@ -13,7 +13,7 @@ struct Fbh5Reader : public Block::Config {
     bool loop = true;
     bool playing = true;
 
-    JST_BLOCK_TYPE(fbh5_reader);
+    JST_BLOCK_TYPE(stelline_fbh5_reader);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(filepath, batchSize, loop, playing);
     JST_BLOCK_DESCRIPTION(

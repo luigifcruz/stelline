@@ -10,7 +10,7 @@ struct Beamformer : public Module::Config {
     bool enableIncoherentBeamSqrt = false;
     U64 blockSize = 512;
 
-    JST_MODULE_TYPE(beamformer);
+    JST_MODULE_TYPE(stelline_beamformer);
     JST_MODULE_PARAMS(enableIncoherentBeam, enableIncoherentBeamSqrt, blockSize);
 };
 

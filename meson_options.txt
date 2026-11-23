@@ -1,8 +1,1 @@
 option('tests', type: 'boolean', value: true, description: 'Build plugin tests.')
-option(
-    'devices',
-    type: 'array',
-    value: ['auto'],
-    choices: ['auto', 'cuda'],
-    description: 'Select GPU implementations to build. The auto setting enables every available supported GPU device. The build always includes CPU DSP implementations.',
-)

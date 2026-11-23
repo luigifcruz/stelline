@@ -12,7 +12,7 @@ struct Fbh5Writer : public Module::Config {
     bool overwrite = false;
     bool recording = false;
 
-    JST_MODULE_TYPE(fbh5_writer);
+    JST_MODULE_TYPE(stelline_fbh5_writer);
     JST_MODULE_PARAMS(filepath, overwrite, recording);
 };
 

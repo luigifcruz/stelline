@@ -13,7 +13,7 @@ struct Fbh5Reader : public Module::Config {
     bool loop = true;
     bool playing = true;
 
-    JST_MODULE_TYPE(fbh5_reader);
+    JST_MODULE_TYPE(stelline_fbh5_reader);
     JST_MODULE_PARAMS(filepath, batchSize, loop, playing);
 };
 

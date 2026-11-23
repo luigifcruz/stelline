@@ -6,7 +6,7 @@ if plugin_device_cuda_requested
         'cuda',
         version: '>=12.0',
         modules: ['cuda', 'culibos', 'cufile', 'nvrtc', 'cufft'],
-        required: not plugin_devices_auto,
+        required: true,
     )
 
     cuda_found = true

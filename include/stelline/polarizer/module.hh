@@ -10,7 +10,7 @@ struct Polarizer : public Module::Config {
     std::string outputPolarization = "lr";
     U64 blockSize = 512;
 
-    JST_MODULE_TYPE(polarizer);
+    JST_MODULE_TYPE(stelline_polarizer);
     JST_MODULE_PARAMS(inputPolarization, outputPolarization, blockSize);
 };
 

@@ -9,11 +9,11 @@ using namespace Jetstream;
 
 TEST_CASE("Stacker block declares its module",
           "[stelline][stacker][block][registration]") {
-    const auto registrations = Registry::ListAvailableBlocks("stacker");
+    const auto registrations = Registry::ListAvailableBlocks("stelline_stacker");
     REQUIRE(registrations.size() == 1);
 
     const std::vector<Registry::BlockModuleRequirement> expected = {
-        {"stacker"},
+        {"stelline_stacker"},
     };
     REQUIRE(registrations.front().moduleRequirements == expected);
 }

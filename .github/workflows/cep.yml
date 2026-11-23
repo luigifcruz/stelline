@@ -15,10 +15,6 @@ on:
         description: Stelline commit to build (empty uses the triggering ref)
         required: false
         type: string
-    outputs:
-      cyberether_version:
-        description: CyberEther version used to build the CEP
-        value: ${{ jobs.build.outputs.cyberether_version }}
 
 permissions:
   contents: read
@@ -31,8 +27,6 @@ jobs:
       CYBERETHER_VERSION: ${{ inputs.cyberether_version }}
       CYBERETHER_TAG: ${{ inputs.cyberether_tag }}
       CYBERETHER_IMAGE_SUFFIX: ${{ matrix.image_suffix }}
-    outputs:
-      cyberether_version: ${{ steps.build.outputs.cyberether_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -40,11 +34,9 @@ jobs:
           - tag: x86_64-cuda
             runner: ubuntu-latest
             image_suffix: ubuntu24-x86_64-cuda
-            device: cuda
           - tag: aarch64-cuda
             runner: ubuntu-24.04-arm
             image_suffix: ubuntu24-aarch64-cuda
-            device: cuda
 
     steps:
       - name: Checkout
@@ -52,8 +44,7 @@ jobs:
         with:
           ref: ${{ inputs.plugin_ref }}
 
-      - name: Build CEP artifact
-        id: build
+      - name: Build CEP bundle
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" != workflow_dispatch &&
@@ -66,14 +57,12 @@ jobs:
             echo 'Expected a stable CyberEther version (x.y.z) and matching tag (vx.y.z).' >&2
             exit 1
           fi
-          echo "cyberether_version=${CYBERETHER_VERSION}" >> "${GITHUB_OUTPUT}"
           image="ghcr.io/luigifcruz/cyberether:${CYBERETHER_TAG}-${CYBERETHER_IMAGE_SUFFIX}"
           echo "Building against CyberEther ${CYBERETHER_VERSION} using ${image}"
           docker run --rm \
             --env BUILD_TYPE=release \
             --env CYBERETHER_VERSION \
             --env CYBERETHER_TAG \
-            --env STELLINE_DEVICES=${{ matrix.device }} \
             --env CEP_OUTPUT_DIR=.dist/${{ matrix.tag }} \
             --volume "${PWD}:/workspace" \
             --workdir /workspace \
@@ -92,50 +81,22 @@ jobs:
               rm -rf /var/lib/apt/lists/*
               git config --global --add safe.directory /workspace
               rm -rf build
-              meson setup build -Dbuildtype="${BUILD_TYPE}" -Ddevices="${STELLINE_DEVICES}"
+              meson setup build -Dbuildtype="${BUILD_TYPE}"
               meson compile -C build stelline_cep
               mkdir -p "${CEP_OUTPUT_DIR}"
-              cp build/stelline.cep "${CEP_OUTPUT_DIR}/stelline.cep"
+              cp build/*.cep "${CEP_OUTPUT_DIR}/"
             '
 
-      - name: Stage artifact
+      - name: Find bundle
+        id: bundle
         run: |
           set -euo pipefail
-          mkdir -p .dist/artifacts
-          test -s .dist/${{ matrix.tag }}/stelline.cep
-          cp .dist/${{ matrix.tag }}/stelline.cep .dist/artifacts/stelline-ubuntu24-${{ matrix.tag }}.cep
+          bundles=(.dist/${{ matrix.tag }}/*.cep)
+          test "${#bundles[@]}" -eq 1
+          test -s "${bundles[0]}"
+          echo "path=${bundles[0]}" >> "${GITHUB_OUTPUT}"
 
-      - uses: actions/upload-artifact@v4.6.2
+      - uses: actions/upload-artifact@v7.0.2
         with:
-          name: stelline-cep-ubuntu24-${{ matrix.tag }}
-          path: .dist/artifacts/stelline-ubuntu24-${{ matrix.tag }}.cep
-
-  merge:
-    name: merge
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.3.1
-        with:
-          ref: ${{ inputs.plugin_ref }}
-
-      - uses: actions/download-artifact@v4.3.0
-        with:
-          pattern: stelline-cep-ubuntu24-*-cuda
-          path: .dist/ceps
-          merge-multiple: true
-
-      - name: Merge CEP bundles
-        run: |
-          set -euo pipefail
-          python3 tools/merger.py \
-            --output .dist/artifacts/stelline.cep \
-            .dist/ceps/stelline-ubuntu24-x86_64-cuda.cep \
-            .dist/ceps/stelline-ubuntu24-aarch64-cuda.cep
-
-      - uses: actions/upload-artifact@v4.6.2
-        with:
-          name: stelline-cep-ubuntu24-cuda
-          path: .dist/artifacts/stelline.cep
+          path: ${{ steps.bundle.outputs.path }}
+          archive: false

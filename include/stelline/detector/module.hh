@@ -10,7 +10,7 @@ struct Detector : public Module::Config {
     U64 numberOfOutputPolarizations = 4;
     U64 blockSize = 512;
 
-    JST_MODULE_TYPE(detector);
+    JST_MODULE_TYPE(stelline_detector);
     JST_MODULE_PARAMS(integrationRate, numberOfOutputPolarizations, blockSize);
 };
 

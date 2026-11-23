@@ -1,16 +1,4 @@
-deps = [
-    dependency(
-        'jetstream',
-        version: '>=' + minimum_jetstream_version,
-        fallback: ['cyberether', 'libjetstream_dep'],
-        required: true,
-        default_options: [
-            'tests=false',
-            'examples=false',
-            'remote=disabled',
-        ],
-    ),
-]
+deps = [cyberether_dep]
 
 all_deps_found = true
 foreach x_dep : deps

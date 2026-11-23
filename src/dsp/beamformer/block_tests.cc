@@ -9,11 +9,11 @@ using namespace Jetstream;
 
 TEST_CASE("Beamformer block declares its module",
           "[stelline][beamformer][block][registration]") {
-    const auto registrations = Registry::ListAvailableBlocks("beamformer");
+    const auto registrations = Registry::ListAvailableBlocks("stelline_beamformer");
     REQUIRE(registrations.size() == 1);
 
     const std::vector<Registry::BlockModuleRequirement> expected = {
-        {"beamformer"},
+        {"stelline_beamformer"},
     };
     REQUIRE(registrations.front().moduleRequirements == expected);
 }

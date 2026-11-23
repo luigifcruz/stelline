@@ -56,7 +56,7 @@ struct FlowgraphGuard {
 
 TEST_CASE("Channelizer block declares its composed modules",
           "[stelline][channelizer][block][registration]") {
-    const auto registrations = Registry::ListAvailableBlocks("channelizer");
+    const auto registrations = Registry::ListAvailableBlocks("stelline_channelizer");
     REQUIRE(registrations.size() == 1);
 
     const std::vector<Registry::BlockModuleRequirement> expected = {

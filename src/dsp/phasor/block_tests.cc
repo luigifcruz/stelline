@@ -9,11 +9,11 @@ using namespace Jetstream;
 
 TEST_CASE("Phasor block declares its module",
           "[stelline][phasor][block][registration]") {
-    const auto registrations = Registry::ListAvailableBlocks("phasor");
+    const auto registrations = Registry::ListAvailableBlocks("stelline_phasor");
     REQUIRE(registrations.size() == 1);
 
     const std::vector<Registry::BlockModuleRequirement> expected = {
-        {"phasor"},
+        {"stelline_phasor"},
     };
     REQUIRE(registrations.front().moduleRequirements == expected);
 }

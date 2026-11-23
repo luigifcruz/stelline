@@ -10,7 +10,7 @@ namespace Jetstream::Blocks {
 struct NexusBridge : public Block::Config {
     std::string url = "https://nexus.stelline.space";
 
-    JST_BLOCK_TYPE(nexus_bridge);
+    JST_BLOCK_TYPE(stelline_nexus_bridge);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_NODE_SIZE(M);
     JST_BLOCK_PARAMS(url);

@@ -16,7 +16,7 @@ struct Phasor : public Block::Config {
     F64 arrayReferenceLatitude = -40.00980599999271*M_PI/180;
     F64 arrayReferenceAltitude = 818.6837417125288;
 
-    JST_BLOCK_TYPE(phasor);
+    JST_BLOCK_TYPE(stelline_phasor);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(
         observationFrequencyHz,

@@ -107,21 +107,21 @@ void RequireWindow(BlockWindow& window, const U64 firstBlock, const U64 blocks) 
 
 TEST_CASE("Integrator module exposes selected implementations",
           "[stelline][integrator][module][registration]") {
-    const auto implementations = Registry::ListAvailableModules("integrator");
+    const auto implementations = Registry::ListAvailableModules("stelline_integrator");
     std::size_t expected = 0;
 
 #if defined(STELLINE_DEVICE_CPU_AVAILABLE)
-    REQUIRE(HasImplementation("integrator", DeviceType::CPU));
+    REQUIRE(HasImplementation("stelline_integrator", DeviceType::CPU));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("integrator", DeviceType::CPU));
+    REQUIRE_FALSE(HasImplementation("stelline_integrator", DeviceType::CPU));
 #endif
 
 #if defined(STELLINE_DEVICE_CUDA_AVAILABLE)
-    REQUIRE(HasImplementation("integrator", DeviceType::CUDA));
+    REQUIRE(HasImplementation("stelline_integrator", DeviceType::CUDA));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("integrator", DeviceType::CUDA));
+    REQUIRE_FALSE(HasImplementation("stelline_integrator", DeviceType::CUDA));
 #endif
 
     REQUIRE(implementations.size() == expected);
@@ -129,7 +129,7 @@ TEST_CASE("Integrator module exposes selected implementations",
         DYNAMIC_SECTION("Device: " << implementation.device
                                     << " Runtime: " << implementation.runtime) {
             std::shared_ptr<Module> module;
-            REQUIRE(Registry::BuildModule("integrator",
+            REQUIRE(Registry::BuildModule("stelline_integrator",
                                           implementation.device,
                                           implementation.runtime,
                                           implementation.provider,
@@ -145,7 +145,7 @@ TEST_CASE("Integrator module reconfiguration is transactional",
     SKIP("Stelline was not built with CPU support.");
 #else
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("integrator",
+    REQUIRE(Registry::BuildModule("stelline_integrator",
                                   DeviceType::CPU,
                                   RuntimeType::NATIVE,
                                   "generic",
@@ -302,7 +302,7 @@ TEST_CASE("Integrator CPU sums only blocks of one timed RF window",
     SKIP("Stelline was not built with CPU support.");
 #else
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("integrator",
+    REQUIRE(Registry::BuildModule("stelline_integrator",
                                   DeviceType::CPU,
                                   RuntimeType::NATIVE,
                                   "generic",
@@ -360,7 +360,7 @@ TEST_CASE("Integrator CPU bypass passes each new timed block through",
     SKIP("Stelline was not built with CPU support.");
 #else
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("integrator",
+    REQUIRE(Registry::BuildModule("stelline_integrator",
                                   DeviceType::CPU,
                                   RuntimeType::NATIVE,
                                   "generic",

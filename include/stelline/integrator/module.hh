@@ -11,7 +11,7 @@ struct Integrator : public Module::Config {
     U64 axis = 2;  // The block axis to integrate on, defaulting to T
     U64 blockSize = 512;
 
-    JST_MODULE_TYPE(integrator);
+    JST_MODULE_TYPE(stelline_integrator);
     JST_MODULE_PARAMS(size, rate, axis, blockSize);
 };
 

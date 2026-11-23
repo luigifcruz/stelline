@@ -46,12 +46,12 @@ Modules::AtaReceiver ValidConfig() {
 }
 
 std::shared_ptr<Module> BuildModule() {
-    const auto implementations = Registry::ListAvailableModules("ata_receiver");
+    const auto implementations = Registry::ListAvailableModules("stelline_ata_receiver");
     REQUIRE(implementations.size() == 1);
 
     const auto& implementation = implementations.front();
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("ata_receiver",
+    REQUIRE(Registry::BuildModule("stelline_ata_receiver",
                                   implementation.device,
                                   implementation.runtime,
                                   implementation.provider,

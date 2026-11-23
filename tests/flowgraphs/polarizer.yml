@@ -55,7 +55,7 @@ graph:
         width: 180
         height: 0
   - name: cpu_dut
-    module: polarizer
+    module: stelline_polarizer
     device: cpu
     runtime: native
     provider: generic
@@ -72,7 +72,7 @@ graph:
         width: 180
         height: 0
   - name: cuda_dut
-    module: polarizer
+    module: stelline_polarizer
     device: cuda
     runtime: native
     provider: generic

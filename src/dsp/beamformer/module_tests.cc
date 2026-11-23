@@ -33,21 +33,21 @@ bool HasImplementation(const std::string& type, const DeviceType device) {
 
 TEST_CASE("Beamformer module exposes selected implementations",
           "[stelline][beamformer][module][registration]") {
-    const auto implementations = Registry::ListAvailableModules("beamformer");
+    const auto implementations = Registry::ListAvailableModules("stelline_beamformer");
     std::size_t expected = 0;
 
 #if defined(STELLINE_DEVICE_CPU_AVAILABLE)
-    REQUIRE(HasImplementation("beamformer", DeviceType::CPU));
+    REQUIRE(HasImplementation("stelline_beamformer", DeviceType::CPU));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("beamformer", DeviceType::CPU));
+    REQUIRE_FALSE(HasImplementation("stelline_beamformer", DeviceType::CPU));
 #endif
 
 #if defined(STELLINE_DEVICE_CUDA_AVAILABLE)
-    REQUIRE(HasImplementation("beamformer", DeviceType::CUDA));
+    REQUIRE(HasImplementation("stelline_beamformer", DeviceType::CUDA));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("beamformer", DeviceType::CUDA));
+    REQUIRE_FALSE(HasImplementation("stelline_beamformer", DeviceType::CUDA));
 #endif
 
     REQUIRE(implementations.size() == expected);
@@ -55,7 +55,7 @@ TEST_CASE("Beamformer module exposes selected implementations",
         DYNAMIC_SECTION("Device: " << implementation.device
                                     << " Runtime: " << implementation.runtime) {
             std::shared_ptr<Module> module;
-            REQUIRE(Registry::BuildModule("beamformer",
+            REQUIRE(Registry::BuildModule("stelline_beamformer",
                                           implementation.device,
                                           implementation.runtime,
                                           implementation.provider,
@@ -115,7 +115,7 @@ TEST_CASE("Beamformer CPU forms weighted beams and the incoherent beam",
                 Modules::Beamformer config;
                 config.enableIncoherentBeam = true;
                 config.enableIncoherentBeamSqrt = squareRoot;
-                CpuModule beamformer("beamformer", config, inputs);
+                CpuModule beamformer("stelline_beamformer", config, inputs);
                 REQUIRE(beamformer.compute() == Result::SUCCESS);
 
                 const Tensor output = beamformer.output();

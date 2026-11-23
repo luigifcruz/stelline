@@ -51,11 +51,11 @@ struct FlowgraphGuard {
 
 TEST_CASE("Integrator block declares its module",
           "[stelline][integrator][block][registration]") {
-    const auto registrations = Registry::ListAvailableBlocks("integrator");
+    const auto registrations = Registry::ListAvailableBlocks("stelline_integrator");
     REQUIRE(registrations.size() == 1);
 
     const std::vector<Registry::BlockModuleRequirement> expected = {
-        {"integrator"},
+        {"stelline_integrator"},
     };
     REQUIRE(registrations.front().moduleRequirements == expected);
 }

@@ -33,21 +33,21 @@ bool HasImplementation(const std::string& type, const DeviceType device) {
 
 TEST_CASE("Stacker module exposes selected implementations",
           "[stelline][stacker][module][registration]") {
-    const auto implementations = Registry::ListAvailableModules("stacker");
+    const auto implementations = Registry::ListAvailableModules("stelline_stacker");
     std::size_t expected = 0;
 
 #if defined(STELLINE_DEVICE_CPU_AVAILABLE)
-    REQUIRE(HasImplementation("stacker", DeviceType::CPU));
+    REQUIRE(HasImplementation("stelline_stacker", DeviceType::CPU));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("stacker", DeviceType::CPU));
+    REQUIRE_FALSE(HasImplementation("stelline_stacker", DeviceType::CPU));
 #endif
 
 #if defined(STELLINE_DEVICE_CUDA_AVAILABLE)
-    REQUIRE(HasImplementation("stacker", DeviceType::CUDA));
+    REQUIRE(HasImplementation("stelline_stacker", DeviceType::CUDA));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("stacker", DeviceType::CUDA));
+    REQUIRE_FALSE(HasImplementation("stelline_stacker", DeviceType::CUDA));
 #endif
 
     REQUIRE(implementations.size() == expected);
@@ -55,7 +55,7 @@ TEST_CASE("Stacker module exposes selected implementations",
         DYNAMIC_SECTION("Device: " << implementation.device
                                     << " Runtime: " << implementation.runtime) {
             std::shared_ptr<Module> module;
-            REQUIRE(Registry::BuildModule("stacker",
+            REQUIRE(Registry::BuildModule("stelline_stacker",
                                           implementation.device,
                                           implementation.runtime,
                                           implementation.provider,
@@ -75,7 +75,7 @@ TEST_CASE("Stacker CPU fills slots only from one timed RF window",
         for (const U64 threshold : {1, 64}) {
             DYNAMIC_SECTION("Ratio: " << ratio << ", copy threshold: " << threshold) {
                 std::shared_ptr<Module> module;
-                REQUIRE(Registry::BuildModule("stacker",
+                REQUIRE(Registry::BuildModule("stelline_stacker",
                                               DeviceType::CPU,
                                               RuntimeType::NATIVE,
                                               "generic",

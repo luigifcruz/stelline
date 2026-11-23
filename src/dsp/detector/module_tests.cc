@@ -32,21 +32,21 @@ bool HasImplementation(const std::string& type, const DeviceType device) {
 
 TEST_CASE("Detector module exposes selected implementations",
           "[stelline][detector][module][registration]") {
-    const auto implementations = Registry::ListAvailableModules("detector");
+    const auto implementations = Registry::ListAvailableModules("stelline_detector");
     std::size_t expected = 0;
 
 #if defined(STELLINE_DEVICE_CPU_AVAILABLE)
-    REQUIRE(HasImplementation("detector", DeviceType::CPU));
+    REQUIRE(HasImplementation("stelline_detector", DeviceType::CPU));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("detector", DeviceType::CPU));
+    REQUIRE_FALSE(HasImplementation("stelline_detector", DeviceType::CPU));
 #endif
 
 #if defined(STELLINE_DEVICE_CUDA_AVAILABLE)
-    REQUIRE(HasImplementation("detector", DeviceType::CUDA));
+    REQUIRE(HasImplementation("stelline_detector", DeviceType::CUDA));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("detector", DeviceType::CUDA));
+    REQUIRE_FALSE(HasImplementation("stelline_detector", DeviceType::CUDA));
 #endif
 
     REQUIRE(implementations.size() == expected);
@@ -54,7 +54,7 @@ TEST_CASE("Detector module exposes selected implementations",
         DYNAMIC_SECTION("Device: " << implementation.device
                                     << " Runtime: " << implementation.runtime) {
             std::shared_ptr<Module> module;
-            REQUIRE(Registry::BuildModule("detector",
+            REQUIRE(Registry::BuildModule("stelline_detector",
                                           implementation.device,
                                           implementation.runtime,
                                           implementation.provider,
@@ -87,7 +87,7 @@ TEST_CASE("Detector CPU computes power products and integrates consecutive sampl
             Modules::Detector config;
             config.integrationRate = rate;
             config.numberOfOutputPolarizations = 4;
-            CpuModule detector("detector", config, inputs);
+            CpuModule detector("stelline_detector", config, inputs);
             REQUIRE(detector.compute() == Result::SUCCESS);
 
             const Tensor output = detector.output();
@@ -113,7 +113,7 @@ TEST_CASE("Detector CPU computes power products and integrates consecutive sampl
         Modules::Detector config;
         config.integrationRate = 4;
         config.numberOfOutputPolarizations = 1;
-        CpuModule detector("detector", config, inputs);
+        CpuModule detector("stelline_detector", config, inputs);
         REQUIRE(detector.compute() == Result::SUCCESS);
 
         const Tensor output = detector.output();

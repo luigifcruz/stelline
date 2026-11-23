@@ -2,9 +2,11 @@
 version: 2
 title: ATA Beamformer
 summary: Simple beamformer example for the Allen Telescope Array (ATA).
+plugins:
+  - stelline
 graph:
   - name: nexus_bridge
-    module: nexus_bridge
+    module: stelline_nexus_bridge
     device: cpu
     runtime: python
     provider: generic
@@ -33,7 +35,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: ata_receiver
-    module: ata_receiver
+    module: stelline_ata_receiver
     device: cuda
     runtime: native
     provider: generic
@@ -68,7 +70,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: beamformer
-    module: beamformer
+    module: stelline_beamformer
     device: cuda
     runtime: native
     provider: generic
@@ -87,7 +89,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: detector
-    module: detector
+    module: stelline_detector
     device: cuda
     runtime: native
     provider: generic
@@ -105,7 +107,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: fbh5_writer
-    module: fbh5_writer
+    module: stelline_fbh5_writer
     device: cuda
     runtime: native
     provider: generic

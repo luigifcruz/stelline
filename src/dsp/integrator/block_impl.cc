@@ -56,6 +56,6 @@ Result IntegratorImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(IntegratorImpl, {"integrator"});
+JST_REGISTER_BLOCK(IntegratorImpl, {"stelline_integrator"});
 
 }  // namespace Jetstream::Blocks

@@ -2,9 +2,11 @@
 version: 2
 title: ATA Spectrogram
 summary: Simple lineplot plot for the Allen Telescope Array (ATA).
+plugins:
+  - stelline
 graph:
   - name: ata_receiver
-    module: ata_receiver
+    module: stelline_ata_receiver
     device: cuda
     runtime: native
     provider: generic
@@ -56,7 +58,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: channelizer
-    module: channelizer
+    module: stelline_channelizer
     device: cuda
     runtime: native
     provider: generic
@@ -188,7 +190,7 @@ graph:
         detached: false
         detachedConfigOpen: false
   - name: nexus_bridge
-    module: nexus_bridge
+    module: stelline_nexus_bridge
     device: cpu
     runtime: python
     provider: generic

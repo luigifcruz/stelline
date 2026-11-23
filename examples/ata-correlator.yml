@@ -2,9 +2,11 @@
 version: 2
 title: ATA Correlator
 summary: Simple correlator example for the Allen Telescope Array (ATA).
+plugins:
+  - stelline
 graph:
   - name: nexus_bridge
-    module: nexus_bridge
+    module: stelline_nexus_bridge
     device: cpu
     runtime: python
     provider: generic
@@ -18,7 +20,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: ata_receiver
-    module: ata_receiver
+    module: stelline_ata_receiver
     device: cuda
     runtime: native
     provider: generic
@@ -53,7 +55,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: correlator
-    module: correlator
+    module: stelline_correlator
     device: cuda
     runtime: native
     provider: generic
@@ -71,7 +73,7 @@ graph:
         height: 0
         configCollapsed: false
   - name: uvh5_writer
-    module: uvh5_writer
+    module: stelline_uvh5_writer
     device: cuda
     runtime: native
     provider: generic

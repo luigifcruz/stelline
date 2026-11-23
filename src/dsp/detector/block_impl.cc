@@ -54,6 +54,6 @@ Result DetectorImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(DetectorImpl, {"detector"});
+JST_REGISTER_BLOCK(DetectorImpl, {"stelline_detector"});
 
 }  // namespace Jetstream::Blocks

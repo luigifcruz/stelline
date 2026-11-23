@@ -15,12 +15,12 @@ using namespace Jetstream;
 namespace {
 
 std::shared_ptr<Module> BuildModule() {
-    const auto implementations = Registry::ListAvailableModules("nexus_bridge");
+    const auto implementations = Registry::ListAvailableModules("stelline_nexus_bridge");
     REQUIRE(implementations.size() == 1);
 
     const auto& implementation = implementations.front();
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("nexus_bridge",
+    REQUIRE(Registry::BuildModule("stelline_nexus_bridge",
                                   implementation.device,
                                   implementation.runtime,
                                   implementation.provider,

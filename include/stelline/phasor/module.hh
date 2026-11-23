@@ -16,7 +16,7 @@ struct Phasor : public Module::Config {
     F64 arrayReferenceLongitude = -52.874986919708704;
     F64 arrayReferenceAltitude = 818.6837417125288;
 
-    JST_MODULE_TYPE(phasor);
+    JST_MODULE_TYPE(stelline_phasor);
     JST_MODULE_PARAMS(
         observationFrequencyHz,
         channelBandwidthHz,

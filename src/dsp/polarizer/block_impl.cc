@@ -58,6 +58,6 @@ Result PolarizerImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(PolarizerImpl, {"polarizer"});
+JST_REGISTER_BLOCK(PolarizerImpl, {"stelline_polarizer"});
 
 }  // namespace Jetstream::Blocks

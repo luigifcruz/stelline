@@ -10,7 +10,7 @@ namespace Jetstream::Modules {
 struct NexusBridge : public Module::Config {
     std::string url = "https://nexus.stelline.space";
 
-    JST_MODULE_TYPE(nexus_bridge);
+    JST_MODULE_TYPE(stelline_nexus_bridge);
     JST_MODULE_PARAMS(url);
 };
 

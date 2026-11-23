@@ -12,7 +12,7 @@ struct Fbh5Writer : public Block::Config {
     bool overwrite = false;
     bool recording = false;
 
-    JST_BLOCK_TYPE(fbh5_writer);
+    JST_BLOCK_TYPE(stelline_fbh5_writer);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(filepath, overwrite, recording);
     JST_BLOCK_DESCRIPTION(

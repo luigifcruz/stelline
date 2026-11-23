@@ -35,12 +35,12 @@ using namespace Jetstream::Testing;
 namespace {
 
 std::shared_ptr<Module> BuildModule() {
-    const auto implementations = Registry::ListAvailableModules("fbh5_writer");
+    const auto implementations = Registry::ListAvailableModules("stelline_fbh5_writer");
     REQUIRE(implementations.size() == 1);
 
     const auto& implementation = implementations.front();
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("fbh5_writer",
+    REQUIRE(Registry::BuildModule("stelline_fbh5_writer",
                                   implementation.device,
                                   implementation.runtime,
                                   implementation.provider,

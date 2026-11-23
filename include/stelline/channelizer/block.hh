@@ -6,7 +6,7 @@
 namespace Jetstream::Blocks {
 
 struct Channelizer : public Block::Config {
-    JST_BLOCK_TYPE(channelizer);
+    JST_BLOCK_TYPE(stelline_channelizer);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS();
     JST_BLOCK_DESCRIPTION(

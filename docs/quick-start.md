@@ -5,11 +5,11 @@ order: 3
 category: Getting Started
 ---
 
-This page assumes you already followed the [installation](/docs/installation) steps and have a working `stelline.cep` bundle. The walkthrough uses an NVIDIA DGX Spark as the host machine, set up following the official [DGX Spark documentation](https://docs.nvidia.com/dgx/dgx-spark/), and the central Stelline plugin, though the same flow applies to any other plugin of the stack. If you are new to CyberEther itself, read the upstream [quick start](https://cyberether.org/docs/quick-start) first to get familiar with the flowgraph editor.
+This page assumes you already followed the [installation](/docs/installation) steps and have Stelline installed in CyberEther. The walkthrough uses an NVIDIA DGX Spark as the host machine, set up following the official [DGX Spark documentation](https://docs.nvidia.com/dgx/dgx-spark/), and the central Stelline plugin, though the same flow applies to any other plugin of the stack. If you are new to CyberEther itself, read the upstream [quick start](https://cyberether.org/docs/quick-start) first to get familiar with the flowgraph editor.
 
 ## 1. Load the plugin
 
-Open CyberEther and load `stelline.cep` through the plugin manager. The Stelline blocks will appear in the block picker under the **Stelline** domain. The upstream [installing plugins](https://cyberether.org/docs/installing-plugins) page describes this flow in detail.
+Open CyberEther and install Stelline from the **Plugins** gallery in the **Start** tab, or install a `.cep` bundle you built yourself. The Stelline blocks will appear in the block picker under the **Stelline** domain. The upstream [installing plugins](https://cyberether.org/docs/installing-plugins) page describes this flow in detail.
 
 ## 2. Open an example flowgraph
 

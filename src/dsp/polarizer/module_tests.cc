@@ -32,21 +32,21 @@ bool HasImplementation(const std::string& type, const DeviceType device) {
 
 TEST_CASE("Polarizer module exposes selected implementations",
           "[stelline][polarizer][module][registration]") {
-    const auto implementations = Registry::ListAvailableModules("polarizer");
+    const auto implementations = Registry::ListAvailableModules("stelline_polarizer");
     std::size_t expected = 0;
 
 #if defined(STELLINE_DEVICE_CPU_AVAILABLE)
-    REQUIRE(HasImplementation("polarizer", DeviceType::CPU));
+    REQUIRE(HasImplementation("stelline_polarizer", DeviceType::CPU));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("polarizer", DeviceType::CPU));
+    REQUIRE_FALSE(HasImplementation("stelline_polarizer", DeviceType::CPU));
 #endif
 
 #if defined(STELLINE_DEVICE_CUDA_AVAILABLE)
-    REQUIRE(HasImplementation("polarizer", DeviceType::CUDA));
+    REQUIRE(HasImplementation("stelline_polarizer", DeviceType::CUDA));
     ++expected;
 #else
-    REQUIRE_FALSE(HasImplementation("polarizer", DeviceType::CUDA));
+    REQUIRE_FALSE(HasImplementation("stelline_polarizer", DeviceType::CUDA));
 #endif
 
     REQUIRE(implementations.size() == expected);
@@ -54,7 +54,7 @@ TEST_CASE("Polarizer module exposes selected implementations",
         DYNAMIC_SECTION("Device: " << implementation.device
                                     << " Runtime: " << implementation.runtime) {
             std::shared_ptr<Module> module;
-            REQUIRE(Registry::BuildModule("polarizer",
+            REQUIRE(Registry::BuildModule("stelline_polarizer",
                                           implementation.device,
                                           implementation.runtime,
                                           implementation.provider,
@@ -87,7 +87,7 @@ TEST_CASE("Polarizer CPU converts linear feeds to circular and single components
         Modules::Polarizer config;
         config.inputPolarization = "xy";
         config.outputPolarization = "lr";
-        CpuModule polarizer("polarizer", config, inputs);
+        CpuModule polarizer("stelline_polarizer", config, inputs);
         REQUIRE(polarizer.compute() == Result::SUCCESS);
 
         const Tensor output = polarizer.output();
@@ -103,7 +103,7 @@ TEST_CASE("Polarizer CPU converts linear feeds to circular and single components
             Modules::Polarizer config;
             config.inputPolarization = "xy";
             config.outputPolarization = component;
-            CpuModule polarizer("polarizer", config, inputs);
+            CpuModule polarizer("stelline_polarizer", config, inputs);
             REQUIRE(polarizer.compute() == Result::SUCCESS);
 
             const Tensor output = polarizer.output();

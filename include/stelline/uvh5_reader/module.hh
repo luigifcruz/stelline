@@ -13,7 +13,7 @@ struct Uvh5Reader : public Module::Config {
     bool loop = true;
     bool playing = true;
 
-    JST_MODULE_TYPE(uvh5_reader);
+    JST_MODULE_TYPE(stelline_uvh5_reader);
     JST_MODULE_PARAMS(filepath, batchSize, loop, playing);
 };
 

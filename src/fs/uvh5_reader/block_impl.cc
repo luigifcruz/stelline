@@ -90,6 +90,6 @@ Result Uvh5ReaderImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(Uvh5ReaderImpl, {"uvh5_reader"});
+JST_REGISTER_BLOCK(Uvh5ReaderImpl, {"stelline_uvh5_reader"});
 
 }  // namespace Jetstream::Blocks

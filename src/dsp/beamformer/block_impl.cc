@@ -53,6 +53,6 @@ Result BeamformerImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(BeamformerImpl, {"beamformer"});
+JST_REGISTER_BLOCK(BeamformerImpl, {"stelline_beamformer"});
 
 }  // namespace Jetstream::Blocks

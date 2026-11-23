@@ -12,7 +12,7 @@ struct Correlator : public Module::Config {
     U64 conjugateAntennaIndex = 1;
     std::string calculationMode = "double_precision_fp";
 
-    JST_MODULE_TYPE(correlator);
+    JST_MODULE_TYPE(stelline_correlator);
     JST_MODULE_PARAMS(integrationRate, conjugateAntennaIndex, calculationMode);
 };
 

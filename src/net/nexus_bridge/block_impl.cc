@@ -94,6 +94,6 @@ Result NexusBridgeImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(NexusBridgeImpl, {"nexus_bridge"});
+JST_REGISTER_BLOCK(NexusBridgeImpl, {"stelline_nexus_bridge"});
 
 }  // namespace Jetstream::Blocks

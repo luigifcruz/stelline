@@ -131,6 +131,6 @@ Result Uvh5WriterImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(Uvh5WriterImpl, {"uvh5_writer"});
+JST_REGISTER_BLOCK(Uvh5WriterImpl, {"stelline_uvh5_writer"});
 
 }  // namespace Jetstream::Blocks

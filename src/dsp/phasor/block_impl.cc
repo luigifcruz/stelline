@@ -88,6 +88,6 @@ Result PhasorImpl::create() {
     return Result::SUCCESS;
 }
 
-JST_REGISTER_BLOCK(PhasorImpl, {"phasor"});
+JST_REGISTER_BLOCK(PhasorImpl, {"stelline_phasor"});
 
 }  // namespace Jetstream::Blocks

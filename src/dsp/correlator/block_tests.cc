@@ -9,11 +9,11 @@ using namespace Jetstream;
 
 TEST_CASE("Correlator block declares its module",
           "[stelline][correlator][block][registration]") {
-    const auto registrations = Registry::ListAvailableBlocks("correlator");
+    const auto registrations = Registry::ListAvailableBlocks("stelline_correlator");
     REQUIRE(registrations.size() == 1);
 
     const std::vector<Registry::BlockModuleRequirement> expected = {
-        {"correlator"},
+        {"stelline_correlator"},
     };
     REQUIRE(registrations.front().moduleRequirements == expected);
 }

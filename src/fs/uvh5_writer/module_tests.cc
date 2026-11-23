@@ -18,12 +18,12 @@ using namespace Jetstream;
 namespace {
 
 std::shared_ptr<Module> BuildModule() {
-    const auto implementations = Registry::ListAvailableModules("uvh5_writer");
+    const auto implementations = Registry::ListAvailableModules("stelline_uvh5_writer");
     REQUIRE(implementations.size() == 1);
 
     const auto& implementation = implementations.front();
     std::shared_ptr<Module> module;
-    REQUIRE(Registry::BuildModule("uvh5_writer",
+    REQUIRE(Registry::BuildModule("stelline_uvh5_writer",
                                   implementation.device,
                                   implementation.runtime,
                                   implementation.provider,

@@ -5,19 +5,19 @@ order: 2
 category: Getting Started
 ---
 
-Stelline plugins ship as CyberEther plugin bundles. The recommended way to install them is through the pre-built bundles, with container images and building from source available as alternatives. This documentation assumes that the host OS is Ubuntu 24.04, but most of the instructions should apply to newer or older versions with minor changes.
+Stelline plugins ship as CyberEther plugin bundles. The recommended way to install them is through the CyberEther gallery, with container images and building from source available as alternatives. This documentation assumes that the host OS is Ubuntu 24.04, but most of the instructions should apply to newer or older versions with minor changes.
 
 ## Pre-built Binaries
 
 Installing a plugin takes three steps:
 
-1. Download and install CyberEther 1.16.0 or newer from the [official website](https://cyberether.org).
-2. Download the Stelline plugin bundle [here](https://stelline.space).
-3. Add the bundle through the CyberEther plugin manager, as described in [installing plugins](https://cyberether.org/docs/installing-plugins).
+1. Download and install the latest CyberEther from the [official website](https://cyberether.org). Stelline needs a Linux build with CUDA.
+2. Open the **Start** tab and select **Plugins** next to the search field.
+3. Open **Stelline** and click **Install**, as described in [installing plugins](https://cyberether.org/docs/installing-plugins#installing-from-the-gallery).
 
-That's it. The bundle contains the plugin library, the manifest, and the example flowgraphs, so the blocks and examples appear in the flowgraph editor right away. Note that some blocks need extra host setup to actually run, as described in [host dependencies](/docs/host-dependencies).
+That's it. CyberEther downloads the bundle built for your CyberEther version and build, and keeps it updated. The bundle contains the plugin library, the manifest, and the example flowgraphs, so the blocks and examples appear in the flowgraph editor right away. Note that some blocks need extra host setup to actually run, as described in [host dependencies](/docs/host-dependencies).
 
-Stelline now includes all eight DSP blocks previously shipped in BLADE. If upgrading from BLADE, remove its bundle before loading Stelline to avoid duplicate registrations. Existing DSP block identifiers and configurations are unchanged.
+Stelline now includes all eight DSP blocks previously shipped in BLADE. If upgrading from BLADE, remove its bundle before loading Stelline. Every Stelline block identifier now starts with `stelline_`, so rename the `module` entries of existing flowgraphs, for example `beamformer` to `stelline_beamformer`. Block configurations are unchanged.
 
 ## Container Images
 
@@ -65,4 +65,4 @@ meson setup build
 meson compile -C build
 ```
 
-This produces `build/stelline.cep`, ready to be loaded by the CyberEther plugin manager. Userspace dependencies, including CyberEther itself, are resolved automatically as Meson subprojects, so only the host stack from [host dependencies](/docs/host-dependencies) has to be present on the machine.
+This produces `build/stelline-<version>-cyberether-<cyberether-version>-<build-id>.cep`, built for the exact CyberEther version and build it compiled against, ready to be installed from a file in CyberEther. Userspace dependencies, including CyberEther itself, are resolved automatically as Meson subprojects, so only the host stack from [host dependencies](/docs/host-dependencies) has to be present on the machine.

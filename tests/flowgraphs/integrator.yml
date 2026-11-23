@@ -55,7 +55,7 @@ graph:
         width: 180
         height: 0
   - name: cpu_dut
-    module: integrator
+    module: stelline_integrator
     device: cpu
     runtime: native
     provider: generic
@@ -73,7 +73,7 @@ graph:
         width: 180
         height: 0
   - name: cuda_dut
-    module: integrator
+    module: stelline_integrator
     device: cuda
     runtime: native
     provider: generic

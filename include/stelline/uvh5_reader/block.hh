@@ -13,7 +13,7 @@ struct Uvh5Reader : public Block::Config {
     bool loop = true;
     bool playing = true;
 
-    JST_BLOCK_TYPE(uvh5_reader);
+    JST_BLOCK_TYPE(stelline_uvh5_reader);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(filepath, batchSize, loop, playing);
     JST_BLOCK_DESCRIPTION(

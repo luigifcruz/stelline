@@ -40,20 +40,14 @@ jobs:
       queue: max
     permissions:
       contents: write
-    env:
-      CYBERETHER_VERSION: ${{ needs.cep.outputs.cyberether_version }}
     steps:
-      - uses: actions/download-artifact@v4.3.0
+      - uses: actions/download-artifact@v8.0.2
         with:
-          name: stelline-cep-ubuntu24-cuda
+          pattern: stelline-*.cep
           path: .dist/artifacts
+          merge-multiple: true
 
-      - name: Name release asset
-        run: |
-          mv .dist/artifacts/stelline.cep \
-            ".dist/artifacts/stelline-cyberether-${CYBERETHER_VERSION}.cep"
-
-      - name: Upload asset to existing Stelline release
+      - name: Upload assets to existing Stelline release
         if: ${{ inputs.cyberether_tag != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,8 +55,7 @@ jobs:
           STELLINE_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
-          asset=".dist/artifacts/stelline-cyberether-${CYBERETHER_VERSION}.cep"
-          gh release upload "${STELLINE_RELEASE_TAG}" "${asset}" --clobber
+          gh release upload "${STELLINE_RELEASE_TAG}" .dist/artifacts/*.cep --clobber
 
       - name: Release
         if: ${{ inputs.cyberether_tag == '' }}

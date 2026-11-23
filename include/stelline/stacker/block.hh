@@ -11,7 +11,7 @@ struct Stacker : public Block::Config {
     U64 copySizeThreshold = 512;
     U64 blockSize = 512;
 
-    JST_BLOCK_TYPE(stacker);
+    JST_BLOCK_TYPE(stelline_stacker);
     JST_BLOCK_DOMAIN("Stelline");
     JST_BLOCK_PARAMS(axis, ratio, copySizeThreshold, blockSize);
     JST_BLOCK_DESCRIPTION(
