@@ -19,7 +19,7 @@ project(
 plugin_id = 'stelline'
 plugin_title = 'Stelline'
 plugin_summary = 'GPU-accelerated radio astronomy blocks for the Allen Telescope Array.'
-plugin_author = 'The Contributors of Stelline'
+plugin_author = 'Stelline'
 plugin_license = 'MIT'
 plugin_description = import('fs').read('description.md').strip()
 
