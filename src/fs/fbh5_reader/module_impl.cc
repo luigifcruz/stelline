@@ -210,6 +210,10 @@ Result Fbh5ReaderImpl::reconfigure() {
     return Result::RECREATE;
 }
 
+Result Fbh5ReaderImpl::hasPendingCompute() {
+    return fbh5File.ds_data.D_id >= 0 && playing ? Result::SUCCESS : Result::TIMEOUT;
+}
+
 U64 Fbh5ReaderImpl::getCurrentBatchIndex() const {
     return currentBatchIndex.get();
 }

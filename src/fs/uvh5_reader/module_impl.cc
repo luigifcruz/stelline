@@ -228,6 +228,10 @@ Result Uvh5ReaderImpl::reconfigure() {
     return Result::RECREATE;
 }
 
+Result Uvh5ReaderImpl::hasPendingCompute() {
+    return uvh5File.DS_data_visdata.D_id >= 0 && playing ? Result::SUCCESS : Result::TIMEOUT;
+}
+
 U64 Uvh5ReaderImpl::getCurrentBatchIndex() const {
     return currentBatchIndex.get();
 }
