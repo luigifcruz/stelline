@@ -21,6 +21,7 @@ plugin_title = 'Stelline'
 plugin_summary = 'GPU-accelerated radio astronomy blocks for the Allen Telescope Array.'
 plugin_author = 'The Contributors of Stelline'
 plugin_license = 'MIT'
+plugin_description = import('fs').read('description.md').strip()
 
 #
 # CyberEther
@@ -170,6 +171,7 @@ plugin_bundle_args = [
     '--summary', plugin_summary,
     '--author', plugin_author,
     '--license', plugin_license,
+    '--description', plugin_description,
     '--version', meson.project_version(),
     '--cyberether', cyberether_version,
     '--build', cyberether_build_id,
@@ -182,7 +184,7 @@ endforeach
 custom_target(
     'stelline_cep',
     input: [plugin_module],
-    depend_files: plugin_examples,
+    depend_files: [plugin_examples, files('description.md')],
     output: '-'.join(plugin_id, meson.project_version(), 'cyberether', cyberether_version, cyberether_build_id) + '.cep',
     command: plugin_bundle_args,
     build_by_default: true,
