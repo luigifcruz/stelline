@@ -29,6 +29,7 @@ plugin_description = import('fs').read('description.md').strip()
 
 cyberether_dep = dependency(
     'jetstream',
+    version: '>=2.0.0',
     fallback: ['cyberether', 'libjetstream_dep'],
     required: true,
     default_options: [

@@ -36,6 +36,6 @@ The BLADE plugin is being retired, and its eight DSP blocks are now part of Stel
 
 ## Requirements
 
-Stelline requires [CyberEther](https://github.com/luigifcruz/CyberEther). Beyond that, requirements differ between blocks, so check the Requirements section of each block page. The [System Setup](/docs/considerations) category covers the host side in detail.
+Stelline requires a Linux CUDA build of [CyberEther](https://github.com/luigifcruz/CyberEther) 2.0.0 or newer. Beyond that, requirements differ between blocks, so check the Requirements section of each block page. The [System Setup](/docs/considerations) category covers the host side in detail.
 
 Check out the [installation](/docs/installation) page to get started!

@@ -11,7 +11,7 @@ Stelline plugins ship as CyberEther plugin bundles. The recommended way to insta
 
 Installing a plugin takes three steps:
 
-1. Download and install the latest CyberEther from the [official website](https://cyberether.org). Stelline needs a Linux build with CUDA.
+1. Download and install CyberEther 2.0.0 or newer from the [official website](https://cyberether.org). Stelline needs a Linux build with CUDA.
 2. Open the **Start** tab and select **Plugins** next to the search field.
 3. Open **Stelline** and click **Install**, as described in [installing plugins](https://cyberether.org/docs/installing-plugins#installing-from-the-gallery).
 

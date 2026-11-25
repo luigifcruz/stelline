@@ -4,7 +4,7 @@ A GPU-accelerated radio astronomy plugin for [CyberEther](https://cyberether.org
 
 Stelline is a CyberEther plugin from the [stelline.space](https://stelline.space) stack. It captures telescope voltage packets straight off the network into GPU memory with RDMA, processes them with the DSP blocks formerly provided by BLADE, and writes finished data products to disk in standard radio astronomy formats with GPUDirect Storage. The GPU data path runs from NIC through compute to NVMe without bouncing through host memory. The blocks currently target the [Allen Telescope Array](https://www.seti.org/ata).
 
-The DSP blocks provide channelization, beamforming, correlation, phasor generation, polarization conversion, detection, integration, and stacking. The plugin includes CPU implementations alongside CUDA implementations. The Phasor runs on CPU. Building Stelline still requires CUDA.
+The DSP blocks provide channelization, beamforming, correlation, phasor generation, polarization conversion, detection, integration, and stacking. The plugin includes CPU implementations alongside CUDA implementations. The Phasor runs on CPU. Building Stelline requires a Linux CUDA build of CyberEther 2.0.0 or newer.
 
 ## Documentation
 

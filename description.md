@@ -34,7 +34,7 @@ Stelline removes those copies. It captures voltage packets from the network card
 
 ## Requirements
 
-Stelline needs a Linux build of CyberEther with CUDA. Live capture needs an NVIDIA ConnectX network card, the writers need the GPUDirect Storage stack, and the Nexus Bridge needs credentials for the Nexus service. The DSP blocks also have CPU implementations, so offline pipelines that start from a UVH5 or FBH5 file run without that hardware.
+Stelline needs a Linux CUDA build of CyberEther 2.0.0 or newer. Live capture needs an NVIDIA ConnectX network card, the writers need the GPUDirect Storage stack, and the Nexus Bridge needs credentials for the Nexus service. The DSP blocks also have CPU implementations, so offline pipelines that start from a UVH5 or FBH5 file run without that hardware.
 
 ## Documentation
 
